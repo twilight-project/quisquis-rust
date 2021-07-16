@@ -1,0 +1,33 @@
+[package]
+name = "quisquis-rust"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "quisquislib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "quisquisbin"
+path = "src/bin.rs"
+
+[dependencies]
+hex = "*"
+merlin = { version = "2", default-features = false }
+bincode = "*"
+rand = "0.7"
+anyhow = "1.0"
+
+#curve25519-dalek = { version = "2", default-features = false, features = ["u64_backend", "serde"] }
+curve25519-dalek = { version = "3", default-features = false }
+[dependencies.ed25519-dalek]
+version = "1"
+
+
+
+[dependencies.bulletproofs]
+git = "https://github.com/dalek-cryptography/bulletproofs"
+branch = "develop"
+features = ["yoloproofs"]

@@ -2,7 +2,7 @@ use core::ops::Neg;
 use curve25519_dalek::scalar::Scalar;
 /// Represents a signed integer with absolute value in the 64-bit range.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd)]
-pub struct SignedInteger(i128);
+pub struct SignedInteger(i64);
 
 impl SignedInteger {
     /// Returns Some(x) if self is non-negative
@@ -23,7 +23,7 @@ impl SignedInteger {
 
 impl From<u64> for SignedInteger {
     fn from(u: u64) -> SignedInteger {
-        SignedInteger(u as i128)
+        SignedInteger(u as i64)
     }
 }
 

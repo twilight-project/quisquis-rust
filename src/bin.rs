@@ -10,6 +10,9 @@ use quisquislib::{
         ElGamalCommitment,
         signed_integer::SignedInteger
     },
+    accounts::{
+        Account
+    }
     
 };
 use curve25519_dalek::{
@@ -39,4 +42,7 @@ pub fn main() {
     let possscalar : Scalar = SignedInteger::into(sign_int);
     let negscalar : Scalar = SignedInteger::into(neg_sign_int);
     println!("Scalar = {:?}, Sign Int= {:?}", possscalar, negscalar);
+
+    let generate_account = Account::generate_account();
+    println!("generated account {:?}", generate_account);
 }

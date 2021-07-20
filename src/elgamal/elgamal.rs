@@ -1,9 +1,15 @@
 
 use curve25519_dalek::{
     ristretto::CompressedRistretto,
+    constants::RISTRETTO_BASEPOINT_TABLE,
     scalar::Scalar
 };
-use crate::ristretto::RistrettoPublicKey;
+use crate::{
+    ristretto::RistrettoPublicKey,
+    elgamal::{
+        signed_integer::SignedInteger
+    }
+};
 
 
 
@@ -22,14 +28,22 @@ impl ElGamalCommitment {
         }
     }
 
-	pub fn generate_commitment(p: &RistrettoPublicKey, rscalar: Scalar, bl: u64)  {
-
-        println!("hello");
-        
+	pub fn generate_commitment(p: &RistrettoPublicKey, rscalar: Scalar, bl: i64) -> ElGamalCommitment  {
 
 		// lets make c
-		// let c = &rscalar * &p.gr.decompress().unwrap();
-        // let grrsk = &rscalar * &p.grsk.decompress().unwrap();
-        // RistrettoPublicKey::new_from_pk(grr.compress(), grrsk.compress())
+		let c = &rscalar * &p.gr.decompress().unwrap();
+
+        let signed_int = SignedInteger::from(bl as u64);
+        let bl_scalar : Scalar = SignedInteger::into(signed_int);
+
+        //lets multiply balance scalar with the basepoint scalar
+        let gv = &bl_scalar * &RISTRETTO_BASEPOINT_TABLE;
+
+        let kh = &rscalar * &p.grsk.decompress().unwrap();
+
+        // lets make d
+        let d = &gv + & kh;
+
+        ElGamalCommitment::set_commitment(c.compress(), d.compress())
     }
 }

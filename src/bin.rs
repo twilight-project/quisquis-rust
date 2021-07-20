@@ -33,10 +33,10 @@ pub fn main() {
     println!("{:?}", generate_commitment); 
     
     let num = 10 as u64;
-    let signInt = SignedInteger::from(num);
-    let negSignInt = -signInt;
-    println!("int = {:?}, Sign Int = {:?}", signInt, negSignInt);
-    let possscalar : Scalar = SignedInteger::into(signInt);
-    let negscalar : Scalar = SignedInteger::into(negSignInt);
+    let sign_int = SignedInteger::from(num);
+    let neg_sign_int = -sign_int;
+    println!("int = {:?}, Sign Int = {:?}", sign_int, neg_sign_int);
+    let possscalar : Scalar = SignedInteger::into(sign_int);
+    let negscalar : Scalar = SignedInteger::into(neg_sign_int);
     println!("Scalar = {:?}, Sign Int= {:?}", possscalar, negscalar);
 }

@@ -32,8 +32,14 @@ pub fn main() {
     let verify_public_key_update = RistrettoPublicKey::verify_public_key_update(&updated_pk, &pk, random_scalar);
     println!("{:?}", verify_public_key_update);
 
-    let generate_commitment = ElGamalCommitment::generate_commitment(&pk, random_scalar, 12);
-    println!("{:?}", generate_commitment); 
+    let generate_commitmenta = ElGamalCommitment::generate_commitment(&pk, random_scalar, 12);
+    println!("{:?}", generate_commitmenta); 
+
+    let generate_commitmentb = ElGamalCommitment::generate_commitment(&pk, random_scalar, 12);
+    println!("{:?}", generate_commitmentb); 
+
+    let add_commitment = ElGamalCommitment::add_commitment(&generate_commitmenta, &generate_commitmentb);
+    println!("added commitments here {:?}", add_commitment); 
     
     let num = 10 as u64;
     let sign_int = SignedInteger::from(num);
@@ -43,6 +49,11 @@ pub fn main() {
     let negscalar : Scalar = SignedInteger::into(neg_sign_int);
     println!("Scalar = {:?}, Sign Int= {:?}", possscalar, negscalar);
 
-    let generate_account = Account::generate_account();
-    println!("generated account {:?}", generate_account);
+    let acc = Account::generate_account();
+    println!("generated account {:?}", acc);
+
+    let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+    let update_account = Account::update_account(acc.0, 16, updated_keys_scalar, acc.2);
+    println!("updated account {:?}", update_account);
 }

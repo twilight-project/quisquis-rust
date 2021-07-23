@@ -28,7 +28,7 @@ impl ElGamalCommitment {
         }
     }
 
-    // GenerateCommitment creates commitment over balance
+    // generate_commitment creates commitment over balance
     // c = k*g (where k is a random scalar)
     // d = vG + kh (where v is balance, G is base point, k is random scalar and h is grsk generated in pk)
 	pub fn generate_commitment(p: &RistrettoPublicKey, rscalar: Scalar, bl: i64) -> ElGamalCommitment  {
@@ -39,7 +39,7 @@ impl ElGamalCommitment {
         let signed_int = SignedInteger::from(bl as u64);
         let bl_scalar : Scalar = SignedInteger::into(signed_int);
 
-        //lets multiply balance scalar with the basepoint scalar
+        // lets multiply balance scalar with the basepoint scalar
         let gv = &bl_scalar * &RISTRETTO_BASEPOINT_TABLE;
 
         let kh = &rscalar * &p.grsk.decompress().unwrap();
@@ -50,7 +50,7 @@ impl ElGamalCommitment {
         ElGamalCommitment::set_commitment(c.compress(), d.compress())
     }
 
-    // addCommitments adds two commitments and return a commitment
+    // add_commitments adds two commitments and return a commitment
     pub fn add_commitment(a: &ElGamalCommitment, b: &ElGamalCommitment) -> ElGamalCommitment  {
 
         //Add c of first commitment with the c of second commitment
@@ -61,5 +61,6 @@ impl ElGamalCommitment {
 
         ElGamalCommitment::set_commitment(c.compress(), d.compress())
     }
+
 
 }

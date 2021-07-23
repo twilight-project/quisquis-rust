@@ -1,9 +1,13 @@
-use crate::keys::{SecretKey, PublicKey};
 use rand::{CryptoRng, Rng};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE,
     ristretto::CompressedRistretto,
     scalar::Scalar
+};
+
+use crate::{
+    ristretto::constants::BASE_PAIR_BTC_COMPRESSED,
+    keys::{SecretKey, PublicKey}
 };
 
 const SCALAR_LENGTH: usize = 32;
@@ -59,7 +63,7 @@ impl PublicKey for RistrettoPublicKey {
         PUBLIC_KEY_LENGTH
     }
 
-    // UpdateKeys multiplies pk with a random scalar r
+    // update_public_key multiplies pk with a random scalar r
     // returns UpdatedPublicKey and random scalar used
     fn update_public_key(p: &RistrettoPublicKey, rscalar: Scalar) -> RistrettoPublicKey {
         let grr = &rscalar * &p.gr.decompress().unwrap();
@@ -67,7 +71,7 @@ impl PublicKey for RistrettoPublicKey {
         RistrettoPublicKey::new_from_pk(grr.compress(), grrsk.compress())
     }
 
-    // VerifyKeysUpdate verifies if keypair is generated correctly g^r * sk = g^r^sk = h
+    // verify_public_key_update verifies if keypair is generated correctly g^r * sk = g^r^sk = h
     // returns boolean
     fn verify_public_key_update(u: &RistrettoPublicKey, p: &RistrettoPublicKey, rscalar: Scalar) -> bool {
 
@@ -79,5 +83,13 @@ impl PublicKey for RistrettoPublicKey {
             return false
         }
     }
+
+    // generate_base_ppk returns a base pk of ristretto
+    // it is a temp fix and is using constants.rs to retrieve fixed asset representation
+    // however, it is assumed logic of multi-asset base pks can be extended here later
+    fn generate_base_pk() -> RistrettoPublicKey{
+        RistrettoPublicKey::new_from_pk(BASE_PAIR_BTC_COMPRESSED[0], BASE_PAIR_BTC_COMPRESSED[1])
+    }
 }
+
 

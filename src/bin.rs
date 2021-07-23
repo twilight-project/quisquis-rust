@@ -26,11 +26,15 @@ pub fn main() {
     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
     println!("{:?}", sk);
     println!("{:?}", pk);
+
     let random_scalar = Scalar::random(&mut OsRng);
     let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
     println!("{:?}", updated_pk);
     let verify_public_key_update = RistrettoPublicKey::verify_public_key_update(&updated_pk, &pk, random_scalar);
     println!("{:?}", verify_public_key_update);
+
+    let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+    println!("generate base pk {:?}", generate_base_pk);
 
     let generate_commitmenta = ElGamalCommitment::generate_commitment(&pk, random_scalar, 12);
     println!("{:?}", generate_commitmenta); 
@@ -56,4 +60,13 @@ pub fn main() {
 
     let update_account = Account::update_account(acc.0, 16, updated_keys_scalar, acc.2);
     println!("updated account {:?}", update_account);
+
+    let rscalar = Scalar::random(&mut OsRng);
+
+    let create_delta_account = Account::create_delta_account(update_account, 16, rscalar);
+    println!("create_delta_account {:?}", create_delta_account);
+
+    let create_epsilon_account = Account::create_epsilon_account(16, rscalar, generate_base_pk);
+    println!("create_epsilon_account {:?}", create_epsilon_account);
+
 }

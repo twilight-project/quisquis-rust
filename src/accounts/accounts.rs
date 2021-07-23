@@ -53,16 +53,35 @@ impl Account {
 
         // lets first update the pk
         let updated_pk = RistrettoPublicKey::update_public_key(&a.pk, update_key_scalar);
-        println!("{:?}", updated_pk);
 
         // lets update the commitment
         let new_comm = ElGamalCommitment::generate_commitment(&a.pk, generate_commitment_scalar, bl);
-        println!("{:?}", new_comm);
 
         // lets add old and new commitments
         let updated_comm = ElGamalCommitment::add_commitment(&new_comm, &a.comm);
-        println!("added commitments here {:?}", updated_comm);
 
         Account::set_account(updated_pk, updated_comm)
+    }
+
+    // create_delta_account creates account delta
+    // takes account, vector bl (updated balance), rscalar
+    // returns Account Delta
+    pub fn create_delta_account(a: Account, bl: i64, rscalar: Scalar) -> Account {
+
+        // lets generate commitment on v for delta using Pk and r'
+        let comm_delta = ElGamalCommitment::generate_commitment(&a.pk, rscalar, bl);
+
+        Account::set_account(a.pk, comm_delta)
+    }
+
+    // create_epsilon_account creates account delta
+    // takes vector bl (updated balance), rscalar and base_pair generated with fixed-g
+    // returns Account Epsilon
+    pub fn create_epsilon_account(bl: i64, rscalar: Scalar, base_pk: RistrettoPublicKey) -> Account {
+
+        // lets generate commitment on v for epsilon using GP and r
+        let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl);
+
+        Account::set_account(base_pk, comm_epsilon)
     }
 }

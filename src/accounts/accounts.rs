@@ -31,7 +31,7 @@ impl Account {
         }
     }
 
-	pub fn generate_account() -> (RistrettoPublicKey, RistrettoSecretKey, ElGamalCommitment, Scalar)  {
+	pub fn generate_account() -> (Account, RistrettoSecretKey, Scalar)  {
 
         // lets create a new keypair
         let mut rng = rand::thread_rng();
@@ -39,12 +39,30 @@ impl Account {
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
         
         // lets get a random scalar
-        let random_scalar = Scalar::random(&mut OsRng);
+        let comm_scalar = Scalar::random(&mut OsRng);
 
         // lets generate a new commitment using pubkey
-        let comm = ElGamalCommitment::generate_commitment(&pk, random_scalar, 0);
-        println!("{:?}", comm); 
+        let comm = ElGamalCommitment::generate_commitment(&pk, comm_scalar, 0);
 
-        return (pk, sk, comm, random_scalar)
+        let account = Account::set_account(pk, comm);
+
+        return (account, sk, comm_scalar)
+    }
+
+    pub fn update_account(a: Account, bl: i64, update_key_scalar: Scalar, generate_commitment_scalar: Scalar) -> Account {
+
+        // lets first update the pk
+        let updated_pk = RistrettoPublicKey::update_public_key(&a.pk, update_key_scalar);
+        println!("{:?}", updated_pk);
+
+        // lets update the commitment
+        let new_comm = ElGamalCommitment::generate_commitment(&a.pk, generate_commitment_scalar, bl);
+        println!("{:?}", new_comm);
+
+        // lets add old and new commitments
+        let updated_comm = ElGamalCommitment::add_commitment(&new_comm, &a.comm);
+        println!("added commitments here {:?}", updated_comm);
+
+        Account::set_account(updated_pk, updated_comm)
     }
 }

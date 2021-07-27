@@ -6,7 +6,7 @@ use curve25519_dalek::{
 };
 
 use crate::{
-    ristretto::constants::BASE_PAIR_BTC_COMPRESSED,
+    ristretto::constants::BASE_PK_BTC_COMPRESSED,
     keys::{SecretKey, PublicKey}
 };
 
@@ -88,7 +88,7 @@ impl PublicKey for RistrettoPublicKey {
     // it is a temp fix and is using constants.rs to retrieve fixed asset representation
     // however, it is assumed logic of multi-asset base pks can be extended here later
     fn generate_base_pk() -> RistrettoPublicKey{
-        RistrettoPublicKey::new_from_pk(BASE_PAIR_BTC_COMPRESSED[0], BASE_PAIR_BTC_COMPRESSED[1])
+        RistrettoPublicKey::new_from_pk(BASE_PK_BTC_COMPRESSED[0], BASE_PK_BTC_COMPRESSED[1])
     }
 }
 

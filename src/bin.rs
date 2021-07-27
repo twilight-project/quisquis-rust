@@ -42,8 +42,8 @@ pub fn main() {
     let generate_commitmentb = ElGamalCommitment::generate_commitment(&pk, random_scalar, 12);
     println!("{:?}", generate_commitmentb); 
 
-    let add_commitment = ElGamalCommitment::add_commitment(&generate_commitmenta, &generate_commitmentb);
-    println!("added commitments here {:?}", add_commitment); 
+    let add_commitments = ElGamalCommitment::add_commitments(&generate_commitmenta, &generate_commitmentb);
+    println!("added commitments here {:?}", add_commitments); 
     
     let num = 10 as u64;
     let sign_int = SignedInteger::from(num);
@@ -66,15 +66,19 @@ pub fn main() {
     // lets get a random scalar
     let comm_scalar = Scalar::random(&mut OsRng);
 
-    let update_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
-    println!("updated account {:?}", update_account);
+    let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
+    println!("updated account {:?}", updated_account);
 
     let rscalar = Scalar::random(&mut OsRng);
 
-    let create_delta_account = Account::create_delta_account(update_account, 16, rscalar);
+    let create_delta_account = Account::create_delta_account(updated_account, 16, rscalar);
     println!("create_delta_account {:?}", create_delta_account);
 
     let create_epsilon_account = Account::create_epsilon_account(16, rscalar, generate_base_pk);
     println!("create_epsilon_account {:?}", create_epsilon_account);
+
+    let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account);
+    println!("updated_delta_account {:?}", updated_delta_account.unwrap());
+
 
 }

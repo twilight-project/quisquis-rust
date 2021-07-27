@@ -30,7 +30,7 @@ impl SecretKey for RistrettoSecretKey {
 }
 
 // ------- PublicKey ------- //
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct RistrettoPublicKey {
     pub(crate) gr: CompressedRistretto,
     pub(crate) grsk: CompressedRistretto,

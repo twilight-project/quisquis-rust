@@ -16,7 +16,7 @@ use crate::{
 use rand::rngs::OsRng;
 
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Account {
     pub(crate) pk: RistrettoPublicKey,
     pub(crate) comm: ElGamalCommitment,
@@ -53,7 +53,7 @@ impl Account {
         let new_comm = ElGamalCommitment::generate_commitment(&a.pk, generate_commitment_scalar, bl);
 
         // lets add old and new commitments
-        let updated_comm = ElGamalCommitment::add_commitment(&new_comm, &a.comm);
+        let updated_comm = ElGamalCommitment::add_commitments(&new_comm, &a.comm);
 
         Account::set_account(updated_pk, updated_comm)
     }
@@ -78,5 +78,20 @@ impl Account {
         let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl);
 
         Account::set_account(base_pk, comm_epsilon)
+    }
+
+    // update_delta_account takes updated_account and delta_account, multiplies their commitments
+    // returns updated delta account
+    pub fn update_delta_account(updated_account: Account, delta_account: Account) ->  Result<Account, &'static str> {
+
+        println!("{:?}", updated_account.pk.gr);
+        if updated_account.pk.gr == delta_account.pk.gr && updated_account.pk.grsk == delta_account.pk.grsk {
+            let new_comm = ElGamalCommitment::add_commitments(&updated_account.comm, &delta_account.comm);
+            let updated_delta_account = Account::set_account(updated_account.pk, new_comm);
+            Ok(updated_delta_account)
+        }else{
+            println!("err");
+            Err("pks are not equal")
+        }
     }
 }

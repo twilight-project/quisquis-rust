@@ -57,18 +57,13 @@ pub fn main() {
     let mut rng = rand::thread_rng();
     let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-    
-    // lets get a random scalar
-    let comm_scalar = Scalar::random(&mut OsRng);
-    // lets generate a new commitment using pubkey
-    let comm = ElGamalCommitment::generate_commitment(&pk, comm_scalar, 0);
 
-    let acc = Account::generate_account(pk, comm);
+    let acc = Account::generate_account(pk);
     println!("generated account {:?}", acc);
 
     let updated_keys_scalar = Scalar::random(&mut OsRng);
 
-    let update_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
+    let update_account = Account::update_account(acc.0, 16, updated_keys_scalar, acc.1);
     println!("updated account {:?}", update_account);
 
     let rscalar = Scalar::random(&mut OsRng);

@@ -92,4 +92,37 @@ impl PublicKey for RistrettoPublicKey {
     }
 }
 
+// ------- PublicKey Partial Eq, Eq ------- //
 
+impl PartialEq for RistrettoPublicKey {
+    fn eq(&self, other: &RistrettoPublicKey) -> bool {
+        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
+        // time comparision
+        self.gr == other.gr
+    }
+}
+
+impl Eq for RistrettoPublicKey {}
+
+// ------------------------------------------------------------------------
+// Tests
+// ------------------------------------------------------------------------
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rand::rngs::OsRng;
+    #[test]
+    fn update_key_test() {
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        
+        // If you want to save a pk at this stage and not broadcast it, you can do so here
+        // Use updated_pk below for further functions
+
+        let random_scalar = Scalar::random(&mut OsRng);
+        let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
+
+        assert_ne!(pk, updated_pk)
+    }
+}

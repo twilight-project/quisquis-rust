@@ -13,7 +13,7 @@ use crate::{
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct ElGamalCommitment {
     pub(crate) c: CompressedRistretto,
     pub(crate) d: CompressedRistretto,
@@ -51,7 +51,7 @@ impl ElGamalCommitment {
     }
 
     // add_commitments adds two commitments and return a commitment
-    pub fn add_commitment(a: &ElGamalCommitment, b: &ElGamalCommitment) -> ElGamalCommitment  {
+    pub fn add_commitments(a: &ElGamalCommitment, b: &ElGamalCommitment) -> ElGamalCommitment  {
 
         //Add c of first commitment with the c of second commitment
         let c = &a.c.decompress().unwrap() + &b.c.decompress().unwrap();

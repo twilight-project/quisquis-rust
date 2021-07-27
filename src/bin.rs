@@ -63,7 +63,10 @@ pub fn main() {
 
     let updated_keys_scalar = Scalar::random(&mut OsRng);
 
-    let update_account = Account::update_account(acc.0, 16, updated_keys_scalar, acc.1);
+    // lets get a random scalar
+    let comm_scalar = Scalar::random(&mut OsRng);
+
+    let update_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
     println!("updated account {:?}", update_account);
 
     let rscalar = Scalar::random(&mut OsRng);

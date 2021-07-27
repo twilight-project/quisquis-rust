@@ -31,7 +31,7 @@ impl Account {
         }
     }
 
-	pub fn generate_account(pk: RistrettoPublicKey) -> (Account, Scalar)  {
+	pub fn generate_account(pk: RistrettoPublicKey) -> Account  {
         
         // lets get a random scalar
         let comm_scalar = Scalar::random(&mut OsRng);
@@ -41,7 +41,7 @@ impl Account {
 
         let account = Account::set_account(pk, comm);
 
-        return (account, comm_scalar)
+        return account
     }
 
     pub fn update_account(a: Account, bl: i64, update_key_scalar: Scalar, generate_commitment_scalar: Scalar) -> Account {

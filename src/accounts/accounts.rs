@@ -31,22 +31,11 @@ impl Account {
         }
     }
 
-	pub fn generate_account() -> (Account, RistrettoSecretKey, Scalar)  {
-
-        // lets create a new keypair
-        let mut rng = rand::thread_rng();
-        let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
-        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-        
-        // lets get a random scalar
-        let comm_scalar = Scalar::random(&mut OsRng);
-
-        // lets generate a new commitment using pubkey
-        let comm = ElGamalCommitment::generate_commitment(&pk, comm_scalar, 0);
+	pub fn generate_account(pk: RistrettoPublicKey, comm: ElGamalCommitment) -> Account  {
 
         let account = Account::set_account(pk, comm);
 
-        return (account, sk, comm_scalar)
+        return account
     }
 
     pub fn update_account(a: Account, bl: i64, update_key_scalar: Scalar, generate_commitment_scalar: Scalar) -> Account {

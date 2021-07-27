@@ -53,12 +53,22 @@ pub fn main() {
     let negscalar : Scalar = SignedInteger::into(neg_sign_int);
     println!("Scalar = {:?}, Sign Int= {:?}", possscalar, negscalar);
 
-    let acc = Account::generate_account();
+    // lets create a new keypair
+    let mut rng = rand::thread_rng();
+    let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
+    let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
+    
+    // lets get a random scalar
+    let comm_scalar = Scalar::random(&mut OsRng);
+    // lets generate a new commitment using pubkey
+    let comm = ElGamalCommitment::generate_commitment(&pk, comm_scalar, 0);
+
+    let acc = Account::generate_account(pk, comm);
     println!("generated account {:?}", acc);
 
     let updated_keys_scalar = Scalar::random(&mut OsRng);
 
-    let update_account = Account::update_account(acc.0, 16, updated_keys_scalar, acc.2);
+    let update_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
     println!("updated account {:?}", update_account);
 
     let rscalar = Scalar::random(&mut OsRng);

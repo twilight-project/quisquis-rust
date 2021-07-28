@@ -57,10 +57,19 @@ impl ElGamalCommitment {
         let c = &a.c.decompress().unwrap() + &b.c.decompress().unwrap();
         
         //Add d of first commitment with the d of second commitment
-        let d = &a.d.decompress().unwrap() + &a.d.decompress().unwrap();
+        let d = &a.d.decompress().unwrap() + &b.d.decompress().unwrap();
 
         ElGamalCommitment::set_commitment(c.compress(), d.compress())
     }
 
-
 }
+
+// ------- ElGamalCommitment Partial Eq, Eq ------- //
+
+impl PartialEq for ElGamalCommitment{
+    fn eq(&self, other: &Self) -> bool {
+        (self.c == other.c && self.d == other.d)
+    }
+}
+
+impl Eq for ElGamalCommitment {}

@@ -84,14 +84,28 @@ impl Account {
     // returns updated delta account
     pub fn update_delta_account(updated_account: Account, delta_account: Account) ->  Result<Account, &'static str> {
 
-        println!("{:?}", updated_account.pk.gr);
         if updated_account.pk.gr == delta_account.pk.gr && updated_account.pk.grsk == delta_account.pk.grsk {
             let new_comm = ElGamalCommitment::add_commitments(&updated_account.comm, &delta_account.comm);
             let updated_delta_account = Account::set_account(updated_account.pk, new_comm);
             Ok(updated_delta_account)
         }else{
-            println!("err");
             Err("pks are not equal")
         }
+    }
+
+    // verify_delta_update verifies if account delta was updated correctly
+    pub fn verify_delta_update(updated_delta_account: Account, delta_account: Account, updated_input_account: Account) -> bool {
+
+        if updated_delta_account.pk.gr == delta_account.pk.gr && updated_delta_account.pk.gr == updated_input_account.pk.gr && delta_account.pk.gr == updated_input_account.pk.gr {
+            if updated_delta_account.pk.grsk == delta_account.pk.grsk && updated_delta_account.pk.grsk == updated_input_account.pk.grsk && delta_account.pk.grsk == updated_input_account.pk.grsk {
+                
+                // lets add delta_account and updated_input_account commitments
+                let added_comm = ElGamalCommitment::add_commitments(&delta_account.comm, &updated_input_account.comm);
+                if added_comm == updated_delta_account.comm {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }

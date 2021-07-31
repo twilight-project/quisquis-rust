@@ -63,6 +63,14 @@ impl PublicKey for RistrettoPublicKey {
         PUBLIC_KEY_LENGTH
     }
 
+    /// Serialize a public key as bytes.
+    fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(self.gr.as_bytes());
+        bytes.extend_from_slice(self.grsk.as_bytes());
+        bytes
+    }
+  
     // update_public_key multiplies pk with a random scalar r
     // returns UpdatedPublicKey and random scalar used
     fn update_public_key(p: &RistrettoPublicKey, rscalar: Scalar) -> RistrettoPublicKey {
@@ -126,3 +134,4 @@ mod test {
         assert_ne!(pk, updated_pk)
     }
 }
+

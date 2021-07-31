@@ -4,7 +4,8 @@ use quisquislib::{
     keys::{SecretKey, PublicKey},
     ristretto::{
         RistrettoSecretKey,
-        RistrettoPublicKey
+        RistrettoPublicKey,
+        address::Address
     },
     elgamal::{
         ElGamalCommitment,
@@ -13,9 +14,13 @@ use quisquislib::{
     accounts::{
         Account
     }
+
     
 };
 use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_TABLE,
+    ristretto::CompressedRistretto,
+    ristretto::RistrettoPoint,
     scalar::Scalar
 };
 use rand::rngs::OsRng;
@@ -26,7 +31,19 @@ pub fn main() {
     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
     println!("{:?}", sk);
     println!("{:?}", pk);
-
+    println!("{:?}", pk.as_bytes());
+    let net = quisquislib::ristretto::address::Network::default();
+    let addr = Address::standard(net,pk);
+   // println!("{:?}", addr.as_bs58());
+    println!("{:?}", addr.as_hex());
+    println!("{:?}", addr);
+    let addr_hex = addr.as_hex();
+//let decoded_hex = quisquislib::ristretto::address::hextobytes(&addr_hex);
+//println!("{:?}", decoded_hex);
+//let decoded_address = Address::from_bytes(&decoded_hex);
+//println!("{:?}", decoded_address);
+ccheck();
+/*
     let random_scalar = Scalar::random(&mut OsRng);
     let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
     println!("{:?}", updated_pk);
@@ -79,6 +96,30 @@ pub fn main() {
 
     let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account);
     println!("updated_delta_account {:?}", updated_delta_account.unwrap());
-
+*/
 
 }
+
+fn ccheck(){
+    let point = RistrettoPoint::random(&mut OsRng);
+    let scalar = Scalar::random(&mut OsRng);
+    let scalar_square = scalar * scalar;
+    let scalar_cube = scalar * scalar * scalar;
+    let scalar_quad = scalar * scalar * scalar * scalar;
+    let sp = point * scalar;
+    let spp = sp * scalar;
+    let ssp = point * scalar_square;
+    assert_eq!(ssp,spp);
+    if ssp.eq(&spp){
+        println!("Equal");}
+    else{
+    println!("Different");
+    }
+    let sppp = spp * scalar;
+    let sssp = point * scalar_cube;
+    assert_eq!(sssp,sppp);
+    let spppp = sppp * scalar;
+    let ssssp = point * scalar_quad;
+    assert_eq!(ssssp,spppp);
+
+}   

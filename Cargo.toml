@@ -20,6 +20,8 @@ merlin = { version = "2", default-features = false }
 bincode = "*"
 rand = "0.7"
 anyhow = "1.0"
+sha3 = "0.9.1"
+bs58 = "0.4.0"
 
 #curve25519-dalek = { version = "2", default-features = false, features = ["u64_backend", "serde"] }
 curve25519-dalek = { version = "3", default-features = false }

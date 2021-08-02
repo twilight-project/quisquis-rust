@@ -68,7 +68,7 @@ impl ElGamalCommitment {
 
 impl PartialEq for ElGamalCommitment{
     fn eq(&self, other: &Self) -> bool {
-        (self.c == other.c && self.d == other.d)
+        self.c == other.c && self.d == other.d
     }
 }
 

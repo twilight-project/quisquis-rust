@@ -1,13 +1,10 @@
 use curve25519_dalek::{
-    ristretto::CompressedRistretto,
-    constants::RISTRETTO_BASEPOINT_TABLE,
     scalar::Scalar
 };
 use crate::{
-    keys::{SecretKey, PublicKey},
+    keys::{PublicKey},
     ristretto::{
-        RistrettoPublicKey,
-        RistrettoSecretKey
+        RistrettoPublicKey
     },
     elgamal::{
         elgamal::ElGamalCommitment
@@ -31,6 +28,8 @@ impl Account {
         }
     }
 
+    /// generate_account creates a new account
+    /// returns PublicKey, SecretKey and a Commitment with 0 balance
 	pub fn generate_account(pk: RistrettoPublicKey) -> Account  {
         
         // lets get a random scalar
@@ -44,6 +43,8 @@ impl Account {
         return account
     }
 
+    // update_account updates an account by creating pk' and comm' with 0 balance
+    // returns acc'(pk', comm')
     pub fn update_account(a: Account, bl: i64, update_key_scalar: Scalar, generate_commitment_scalar: Scalar) -> Account {
 
         // lets first update the pk
@@ -109,3 +110,13 @@ impl Account {
         return false
     }
 }
+
+impl PartialEq for Account {
+    fn eq(&self, other: &Account) -> bool {
+        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
+        // time comparision
+        self.pk == other.pk && self.comm == other.comm
+    }
+}
+
+impl Eq for Account {}

@@ -94,3 +94,13 @@ mod test {
         assert!(comm.verify_commitment(&sk,16), "Invalid Commitment");
     }
 }
+
+// ------- ElGamalCommitment Partial Eq, Eq ------- //
+
+impl PartialEq for ElGamalCommitment{
+    fn eq(&self, other: &Self) -> bool {
+        self.c == other.c && self.d == other.d
+    }
+}
+
+impl Eq for ElGamalCommitment {}

@@ -5,7 +5,6 @@ use curve25519_dalek::{
     scalar::Scalar
 };
 use crate::{
-    keys::{SecretKey,PublicKey},
     ristretto::{
         RistrettoPublicKey,
         RistrettoSecretKey
@@ -73,8 +72,7 @@ impl ElGamalCommitment {
     }
 
     /// Decrypts commitment in the form G*v
-    pub fn decommit(self: &Self, pr: &RistrettoSecretKey, bl: i64) -> CompressedRistretto{
-        let bl_scalar = Scalar::from(bl as u64); 
+    pub fn decommit(self: &Self, pr: &RistrettoSecretKey) -> CompressedRistretto{
         (&self.d.decompress().unwrap() - &(&pr.0 * &self.c.decompress().unwrap())).compress()
      }
 }

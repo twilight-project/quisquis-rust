@@ -1,10 +1,9 @@
 use curve25519_dalek::{
     ristretto::CompressedRistretto,
-    constants::RISTRETTO_BASEPOINT_TABLE,
     scalar::Scalar
 };
 use crate::{
-    keys::{SecretKey, PublicKey},
+    keys::{PublicKey},
     ristretto::{
         RistrettoPublicKey,
         RistrettoSecretKey
@@ -51,9 +50,9 @@ impl Account {
 
     /// Decrypts the account balance and returns G*bl. Discrete log should be solved to extract bl 
     /// The function shall be used with extreme caution. Ensure that account is verifiable before calling this method
-    pub fn decrypt_account (self: &Self, sk: &RistrettoSecretKey, bl: i64)-> Result<CompressedRistretto, &'static str> {
+    pub fn decrypt_account_balance (self: &Self, sk: &RistrettoSecretKey, bl: i64)-> Result<CompressedRistretto, &'static str> {
         if self.verify_account(sk,bl) {
-            Ok(self.comm.decommit(sk,bl))
+            Ok(self.comm.decommit(sk))
         }
         else{
             Err("Invalid Account")
@@ -153,6 +152,6 @@ mod test {
         let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
 
         let bl_scalar = Scalar::from(16 as u64);
-        assert_eq!(updated_account.decrypt_account(&sk, 16).unwrap(), (&bl_scalar * &RISTRETTO_BASEPOINT_TABLE).compress());
+        assert_eq!(updated_account.decrypt_account_balance(&sk, 16).unwrap(), (&bl_scalar * &RISTRETTO_BASEPOINT_TABLE).compress());
     }
 }

@@ -4,8 +4,7 @@ use quisquislib::{
     keys::{SecretKey, PublicKey},
     ristretto::{
         RistrettoSecretKey,
-        RistrettoPublicKey,
-        address::Address
+        RistrettoPublicKey
     },
     elgamal::{
         ElGamalCommitment,
@@ -13,8 +12,8 @@ use quisquislib::{
     },
     accounts::{
         Account
-    }
-
+    },
+    util::address::{Address}
     
 };
 use curve25519_dalek::{
@@ -31,18 +30,26 @@ pub fn main() {
     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
     println!("{:?}", sk);
     println!("{:?}", pk);
-    println!("{:?}", pk.as_bytes());
-    let net = quisquislib::ristretto::address::Network::default();
-    let addr = Address::standard(net,pk);
-   // println!("{:?}", addr.as_bs58());
-    println!("{:?}", addr.as_hex());
-    println!("{:?}", addr);
-    let addr_hex = addr.as_hex();
-//let decoded_hex = quisquislib::ristretto::address::hextobytes(&addr_hex);
-//println!("{:?}", decoded_hex);
-//let decoded_address = Address::from_bytes(&decoded_hex);
-//println!("{:?}", decoded_address);
-ccheck();
+
+    let acc = Account::generate_account(pk);
+    println!("generated account {:?}", acc);
+
+    let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+    // lets get a random scalar
+    let comm_scalar = Scalar::random(&mut OsRng);
+
+    let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
+    println!("updated account {:?}", updated_account);
+
+    let rsk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+    //println!("Verify Balance {:?}", updated_account.verify_account_balance(&sk, 16));
+    
+    //println!("Verify KP {:?}", updated_account.pk.verify_keypair(&sk));
+    //self.pk.grsk == (&pr.0 * &self.pk.gr.decompress().unwrap()).compress()
+
+   // println!("G*0 {:?}", (&Scalar::zero() * &RISTRETTO_BASEPOINT_TABLE).compress());
+
 /*
     let random_scalar = Scalar::random(&mut OsRng);
     let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
@@ -70,6 +77,7 @@ ccheck();
     let negscalar : Scalar = SignedInteger::into(neg_sign_int);
     println!("Scalar = {:?}, Sign Int= {:?}", possscalar, negscalar);
 
+
     // lets create a new keypair
     let mut rng = rand::thread_rng();
     let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
@@ -96,6 +104,21 @@ ccheck();
 
     let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account);
     println!("updated_delta_account {:?}", updated_delta_account.unwrap());
+    
+    println!("{:?}", pk.as_bytes());
+    let net = quisquislib::ristretto::address::Network::default();
+    let addr = Address::standard(net,pk);
+   // println!("{:?}", addr.as_bs58());
+    println!("{:?}", addr.as_hex());
+    println!("{:?}", addr);
+    let addr_hex = addr.as_hex();
+
+    let decoded_hex = quisquislib::ristretto::address::hextobytes(&addr_hex);
+    println!("{:?}", decoded_hex);
+    let decoded_address = Address::from_bytes(&decoded_hex);
+    println!("{:?}", decoded_address);
+    
+    ccheck();   
 */
 
 }

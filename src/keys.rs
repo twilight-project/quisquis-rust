@@ -20,4 +20,6 @@ pub trait PublicKey {
     fn verify_public_key_update(u: &Self, p: &Self, rscalar: Scalar) -> bool;
 
     fn generate_base_pk() -> Self;
+
+    fn verify_keypair(self: &Self, privkey: &Self::K) -> bool; 
 }

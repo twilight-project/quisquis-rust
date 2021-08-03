@@ -211,7 +211,7 @@ fn slice_to_pkpoint(data: &[u8]) -> Result<CompressedRistretto, &'static str> {
    Ok(gr)
 
    
-
+}
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -221,18 +221,5 @@ mod test {
     #[test]
     fn hex_encoding_decoding_test() {
         
-        
-        
-        
-        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
-        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-        
-        // If you want to save a pk at this stage and not broadcast it, you can do so here
-        // Use updated_pk below for further functions
-
-        let random_scalar = Scalar::random(&mut OsRng);
-        let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
-
-        assert_ne!(pk, updated_pk)
     }
 }

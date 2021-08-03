@@ -1,4 +1,4 @@
-use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
+use curve25519_dalek::ristretto::{CompressedRistretto};
 
 // This is a temporary solution for declaring assets. It should be moved to a governance module
 // byte codes of static points on the curve are hard-coded as here - these were imported from rust - pedersengens function of bulletproofs

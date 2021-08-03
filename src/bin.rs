@@ -86,7 +86,7 @@ pub fn main() {
 
     let rscalar = Scalar::random(&mut OsRng);
 
-    let create_delta_account = Account::create_delta_account(updated_account, 16, rscalar);
+    let create_delta_account = Account::create_delta_account(updated_account, 5, rscalar);
     println!("create_delta_account {:?}", create_delta_account);
 
     let create_epsilon_account = Account::create_epsilon_account(16, rscalar, generate_base_pk);
@@ -106,5 +106,9 @@ pub fn main() {
     let decoded_address = Address::from_hex(&addr_hex);
     println!("{:?}", decoded_address);
     
-
+    let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account).unwrap();
+    println!("updated_delta_account {:?}", updated_delta_account);
+    
+    let updated_delta_account = Account::verify_delta_update(updated_delta_account, create_delta_account, updated_account);
+    println!("updated_delta_account {:?}", updated_delta_account);
 }

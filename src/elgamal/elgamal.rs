@@ -5,7 +5,10 @@ use curve25519_dalek::{
     scalar::Scalar
 };
 use crate::{
-    ristretto::RistrettoPublicKey,
+    ristretto::{
+        RistrettoPublicKey,
+        RistrettoSecretKey
+    },
     elgamal::{
         signed_integer::SignedInteger
     }
@@ -41,7 +44,7 @@ impl ElGamalCommitment {
 
         // lets multiply balance scalar with the basepoint scalar
         let gv = &bl_scalar * &RISTRETTO_BASEPOINT_TABLE;
-
+        println!("encrypt gv {:?}", gv.compress());
         let kh = &rscalar * &p.grsk.decompress().unwrap();
 
         // lets make d
@@ -62,6 +65,34 @@ impl ElGamalCommitment {
         ElGamalCommitment::set_commitment(c.compress(), d.compress())
     }
 
+    /// Verifies the commitment of balance for specific SecretKey 
+    pub fn verify_commitment(self: &Self, pr: &RistrettoSecretKey, bl: i64)-> bool{
+       let bl_scalar = Scalar::from(bl as u64); 
+       self.d == (&(&bl_scalar * &RISTRETTO_BASEPOINT_TABLE) + &(&pr.0 * &self.c.decompress().unwrap())).compress()
+    }
+
+    /// Decrypts commitment in the form G*v
+    pub fn decommit(self: &Self, pr: &RistrettoSecretKey) -> CompressedRistretto{
+        (&self.d.decompress().unwrap() - &(&pr.0 * &self.c.decompress().unwrap())).compress()
+     }
+}
+
+// ------------------------------------------------------------------------
+// Tests
+// ------------------------------------------------------------------------
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rand::rngs::OsRng;
+    #[test]
+    fn verify_commitment_test() {
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        let comm_scalar = Scalar::random(&mut OsRng);
+        let comm = ElGamalCommitment::generate_commitment(&pk,comm_scalar,16);
+        assert!(comm.verify_commitment(&sk,16), "Invalid Commitment");
+    }
 }
 
 // ------- ElGamalCommitment Partial Eq, Eq ------- //

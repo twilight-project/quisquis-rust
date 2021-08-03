@@ -1,4 +1,5 @@
 use curve25519_dalek::{
+    ristretto::CompressedRistretto,
     scalar::Scalar
 };
 use crate::{
@@ -42,6 +43,23 @@ impl Account {
 
         return account
     }
+    /// Verifies the account balance stored in commitment
+    /// Verifies the Private key and balance passed as input
+    pub fn verify_account (self: &Self, sk: &RistrettoSecretKey, bl: i64)-> bool {
+        self.pk.verify_keypair(sk) && self.comm.verify_commitment(sk,bl) 
+    }
+
+    /// Decrypts the account balance and returns G*bl. Discrete log should be solved to extract bl 
+    /// The function shall be used with extreme caution. Ensure that account is verifiable before calling this method
+    pub fn decrypt_account_balance (self: &Self, sk: &RistrettoSecretKey, bl: i64)-> Result<CompressedRistretto, &'static str> {
+        if self.verify_account(sk,bl) {
+            Ok(self.comm.decommit(sk))
+        }
+        else{
+            Err("Invalid Account")
+        }
+    }
+
 
     // update_account updates an account by creating pk' and comm' with 0 balance
     // returns acc'(pk', comm')
@@ -93,6 +111,51 @@ impl Account {
             Err("pks are not equal")
         }
     }
+}
+
+// ------------------------------------------------------------------------
+// Tests
+// ------------------------------------------------------------------------
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rand::rngs::OsRng;
+    #[test]
+    fn verify_account_test(){
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        //generate a Zero balance account
+        let acc = Account::generate_account(pk);
+
+        let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+        // lets get a random scalar
+        let comm_scalar = Scalar::random(&mut OsRng);
+
+        let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
+     
+        assert!(updated_account.verify_account(&sk, 16), "Invalid Account or Invalid Secret Key");
+    }
+
+    #[test]
+    fn decrypt_account_test(){
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        //generate a Zero balance account
+        let acc = Account::generate_account(pk);
+
+        let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+        // lets get a random scalar
+        let comm_scalar = Scalar::random(&mut OsRng);
+
+        let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
+
+        let bl_scalar = Scalar::from(16 as u64);
+        assert_eq!(updated_account.decrypt_account_balance(&sk, 16).unwrap(), (&bl_scalar * &RISTRETTO_BASEPOINT_TABLE).compress());
+    }
+}
 
     // verify_delta_update verifies if account delta was updated correctly
     pub fn verify_delta_update(updated_delta_account: Account, delta_account: Account, updated_input_account: Account) -> bool {

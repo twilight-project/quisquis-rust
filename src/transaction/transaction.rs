@@ -93,7 +93,7 @@ pub struct Sender {
 
 impl Sender {
 
-    pub fn generate_value_and_account_vector(tx_vector: Vec<Sender>) {
+    pub fn generate_value_and_account_vector(tx_vector: Vec<Sender>) -> Result<(Vec<i64>, Vec<Account>), &'static str> {
         
         if tx_vector.len() < 9 {
 
@@ -117,13 +117,16 @@ impl Sender {
 
             }
 
-            if senders_count < 9 && receivers_count < 9 {
+            if senders_count < 9 && receivers_count < 9 && senders_count+receivers_count <=9 {
                 value_vector.append(&mut receiver_amount_vector);
                 account_vector.append(&mut receiver_account_vector);
                 
-                println!("Sender vector = {:?}", value_vector);
-                println!("Account vector = {:?}", account_vector);
+                Ok((value_vector, account_vector))
+            }else{
+                Err("pks are not equal")
             }
+        }else{
+            Err("pks are not equal")
         }
     }
 
@@ -200,10 +203,12 @@ mod test {
             }
         );
 
-        Sender::generate_value_and_account_vector(tx_vector);
+        let result = Sender::generate_value_and_account_vector(tx_vector);
 
-        // let shuffled_vector = Transaction::generate_output_shuffle(account_vector.to_owned());
+        //println!("{:?}", result.unwrap().1);
 
-        // assert_ne!(account_vector, shuffled_vector)
+        let shuffled_vector = Transaction::generate_output_shuffle(result.as_ref().unwrap().1.clone());
+
+        assert_ne!(result.unwrap().1, shuffled_vector.0)
     }
 }

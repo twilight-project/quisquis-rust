@@ -94,30 +94,18 @@ pub struct Sender {
 impl Sender {
 
     pub fn generate_value_and_account_vector(tx_vector: Vec<Sender>) {
-
-        println!("amount {:?}", tx_vector.len());
         
         if tx_vector.len() < 9 {
 
-            let senders_count = tx_vector.iter().count();
+            let mut value_vector: Vec<i64> = tx_vector.iter().map(|s| s.total_amount).collect();
+            let mut account_vector: Vec<Account> = tx_vector.iter().map(|s| s.account).collect();
 
+            let senders_count: usize = tx_vector.iter().count();
             let mut receivers_count = 0;
-
-            let size: usize = 9;
-            let mut sender_amount_vector = Vec::new();
-            let mut sender_account_vector = Vec::new();
-            let mut receiver_amount_vector = Vec::new();
+            let mut receiver_amount_vector: Vec<i64> = Vec::new();
             let mut receiver_account_vector = Vec::new();
 
-            let mut value_vector = Vec::with_capacity(size);
-            let mut account_vector = Vec::with_capacity(size);
-
             for sender in tx_vector.iter() {
-
-                println!("Sender total amount: {:?}", sender.total_amount);
-
-                sender_amount_vector.push(sender.total_amount);
-                sender_account_vector.push(sender.account);
 
                 receivers_count += &sender.receivers.iter().count();
 
@@ -125,33 +113,15 @@ impl Sender {
                     receiver_amount_vector.push(rec.amount);
                     let receiver_account = Account::generate_account(rec.public_key);
                     receiver_account_vector.push(receiver_account);
-                    println!("Receiver amount: {:?}", rec.amount);
                 }
 
             }
 
             if senders_count < 9 && receivers_count < 9 {
-                for sender_amount in sender_amount_vector.iter(){
-                    value_vector.push(sender_amount);
-                }
-
-                for receiver_amount in receiver_amount_vector.iter(){
-                    value_vector.push(receiver_amount);
-                }
-
-                for sender_account in sender_account_vector.iter(){
-                    account_vector.push(sender_account);
-                }
+                value_vector.append(&mut receiver_amount_vector);
+                account_vector.append(&mut receiver_account_vector);
                 
-                for receiver_account in receiver_account_vector.iter(){
-                    account_vector.push(receiver_account);
-                }
-                
-                println!("Sender count = {:?}", senders_count);
-                println!("Receiver count = {:?}", receivers_count);
-                println!("Sender vector = {:?}", sender_amount_vector);
-                println!("Receiver vector = {:?}", receiver_amount_vector);
-                println!("Value vector = {:?}", value_vector);
+                println!("Sender vector = {:?}", value_vector);
                 println!("Account vector = {:?}", account_vector);
             }
         }
@@ -205,31 +175,6 @@ mod test {
 
         let mut tx_vector: Vec<Sender> = Vec::new();
 
-        // lets manually fill the sender_vector, 
-        // tx_vector = vec!(
-        //     Send{
-        //         account: bob_account_1,
-        //         receiver: Receiver{
-        //             amount: 5,
-        //             receiver: alice_account.pk
-        //         }
-        //     }, 
-        //     Send{
-        //         account: bob_account_2,
-        //         receiver: Receiver{
-        //             amount: 2,
-        //             receiver: fay_account.pk
-        //         }
-        //     },  
-        //     Send{
-        //         account: bob_account_2,
-        //         receiver: Receiver{
-        //             amount: 1,
-        //             receiver: jay_account.pk
-        //         }
-        //     }, 
-        // );
-
         tx_vector = vec!(
             Sender{
                 total_amount: 5,
@@ -255,35 +200,7 @@ mod test {
             }
         );
 
-        //println!("{:?}", tx_vector);
         Sender::generate_value_and_account_vector(tx_vector);
-
-        // // lets define an vector of values, first place will be for sender, then receiver followed by 7 decoy 0 values
-        // let value_vector: Vec<i64> = Transaction::generate_value_vector();
-
-        // // lets define a vector of accounts
-        // let mut account_vector: Vec<Account> = Vec::new();
-
-        // // lets create these accounts and associated keypairs
-
-        // for x in 0..9 {
-
-        //     let mut rng = rand::thread_rng();
-        //     let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
-        //     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-
-        //     let acc = Account::generate_account(pk);
-
-        //     let updated_keys_scalar = Scalar::random(&mut OsRng);
-
-        //     // lets get a random scalar
-        //     let comm_scalar = Scalar::random(&mut OsRng);
-
-        //     let updated_account = Account::update_account(acc, value_vector[x], updated_keys_scalar, comm_scalar);
-
-        //     account_vector.push(updated_account);
-
-        // }
 
         // let shuffled_vector = Transaction::generate_output_shuffle(account_vector.to_owned());
 

@@ -186,7 +186,7 @@ mod test {
 
     }
     #[test]
-    fn shuffle_output_test() {
+    fn shuffle_test() {
         // lets define a vector of accounts
         let mut account_vector: Vec<Account> = Vec::new();
 
@@ -200,7 +200,7 @@ mod test {
             account_vector.push(acc);
 
         }
-
+        // 1 for input , 2 for output
         let shuffle = {
             Shuffle::new(account_vector,1)
         };
@@ -215,14 +215,6 @@ mod test {
         let shuffled_updated: Vec<_> = shuffled_inputs.iter().zip(tau.iter()).map(|(acc, t)| Account::update_account(*acc, 0, *t, rho)).collect();
 
         assert_eq!(out, shuffled_updated)
-      // assert_ne!(inp, out)
-
-       /* println!("Permuted Vector {:?}",permutation);
-
-        let out_a = shuffled_outputs[0];
-        let in_shuf = inputs[permutation[0]];
-        let updated_account = Account::update_account(in_shuf, 0, tau[0], rho);
-        println!("Same Account {:?}",out_a==updated_account);*/
     
     }
 }

@@ -1,11 +1,13 @@
 use curve25519_dalek::{
     ristretto::CompressedRistretto,
+    constants::RISTRETTO_BASEPOINT_TABLE,
     scalar::Scalar
 };
 use crate::{
-    keys::{PublicKey},
+    keys::{PublicKey, SecretKey},
     ristretto::{
-        RistrettoPublicKey
+        RistrettoPublicKey,
+        RistrettoSecretKey
     },
     elgamal::{
         elgamal::ElGamalCommitment
@@ -111,7 +113,32 @@ impl Account {
             Err("pks are not equal")
         }
     }
+    // verify_delta_update verifies if account delta was updated correctly
+    pub fn verify_delta_update(updated_delta_account: Account, delta_account: Account, updated_input_account: Account) -> bool {
+
+        if updated_delta_account.pk.gr == delta_account.pk.gr && updated_delta_account.pk.gr == updated_input_account.pk.gr && delta_account.pk.gr == updated_input_account.pk.gr {
+            if updated_delta_account.pk.grsk == delta_account.pk.grsk && updated_delta_account.pk.grsk == updated_input_account.pk.grsk && delta_account.pk.grsk == updated_input_account.pk.grsk {
+                
+                // lets add delta_account and updated_input_account commitments
+                let added_comm = ElGamalCommitment::add_commitments(&delta_account.comm, &updated_input_account.comm);
+                if added_comm == updated_delta_account.comm {
+                    return true
+                }
+            }
+        }
+        return false
+    }
 }
+
+impl PartialEq for Account {
+    fn eq(&self, other: &Account) -> bool {
+        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
+        // time comparision
+        self.pk == other.pk && self.comm == other.comm
+    }
+}
+
+impl Eq for Account {}
 
 // ------------------------------------------------------------------------
 // Tests
@@ -157,29 +184,4 @@ mod test {
     }
 }
 
-    // verify_delta_update verifies if account delta was updated correctly
-    pub fn verify_delta_update(updated_delta_account: Account, delta_account: Account, updated_input_account: Account) -> bool {
-
-        if updated_delta_account.pk.gr == delta_account.pk.gr && updated_delta_account.pk.gr == updated_input_account.pk.gr && delta_account.pk.gr == updated_input_account.pk.gr {
-            if updated_delta_account.pk.grsk == delta_account.pk.grsk && updated_delta_account.pk.grsk == updated_input_account.pk.grsk && delta_account.pk.grsk == updated_input_account.pk.grsk {
-                
-                // lets add delta_account and updated_input_account commitments
-                let added_comm = ElGamalCommitment::add_commitments(&delta_account.comm, &updated_input_account.comm);
-                if added_comm == updated_delta_account.comm {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-}
-
-impl PartialEq for Account {
-    fn eq(&self, other: &Account) -> bool {
-        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
-        // time comparision
-        self.pk == other.pk && self.comm == other.comm
-    }
-}
-
-impl Eq for Account {}
+    

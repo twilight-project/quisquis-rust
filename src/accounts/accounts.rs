@@ -1,11 +1,14 @@
 use curve25519_dalek::{
-    ristretto::CompressedRistretto,
-    scalar::Scalar
+    ristretto::{CompressedRistretto,RistrettoPoint},  
+    constants::RISTRETTO_BASEPOINT_TABLE,
+    scalar::Scalar,
+    traits::IsIdentity
 };
 use crate::{
-    keys::{PublicKey},
+    keys::{PublicKey, SecretKey},
     ristretto::{
-        RistrettoPublicKey
+        RistrettoPublicKey,
+        RistrettoSecretKey
     },
     elgamal::{
         elgamal::ElGamalCommitment
@@ -111,7 +114,59 @@ impl Account {
             Err("pks are not equal")
         }
     }
+    // verify_delta_update verifies if account delta was updated correctly
+    pub fn verify_delta_update(updated_delta_account: Account, delta_account: Account, updated_input_account: Account) -> bool {
+
+        if updated_delta_account.pk.gr == delta_account.pk.gr && updated_delta_account.pk.gr == updated_input_account.pk.gr && delta_account.pk.gr == updated_input_account.pk.gr {
+            if updated_delta_account.pk.grsk == delta_account.pk.grsk && updated_delta_account.pk.grsk == updated_input_account.pk.grsk && delta_account.pk.grsk == updated_input_account.pk.grsk {
+                
+                // lets add delta_account and updated_input_account commitments
+                let added_comm = ElGamalCommitment::add_commitments(&delta_account.comm, &updated_input_account.comm);
+                if added_comm == updated_delta_account.comm {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    // generate_sum_and_negate_rscalar generates scalars for delta and epsilon function
+    // first 8 scalars are random, here returned in a vector
+    // last scalar is the sum and then neg of the first 8 random scalars, here returned as a scalar
+    pub fn generate_sum_and_negate_rscalar() -> (Vec<Scalar>, Scalar) {
+        let mut random_scalars: Vec<Scalar> = Vec::new();
+        for _x in 0..8 {
+            random_scalars.push(Scalar::random(&mut OsRng));
+        }
+        let sum: Scalar = random_scalars.iter().sum();
+        return (random_scalars, -sum)
+    }
+
+    // cheating_prover sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
+    // else returns false
+    pub fn cheating_prover(epsilon_accounts: Vec<Account>) -> bool{
+
+        let sum_c: RistrettoPoint = epsilon_accounts.iter().map(|s| s.comm.c.decompress().unwrap()).sum();
+        let sum_d: RistrettoPoint = epsilon_accounts.iter().map(|s| s.comm.d.decompress().unwrap()).sum();
+        
+        if !sum_c.is_identity() || !sum_d.is_identity(){
+            return false
+        }else{
+            return true
+        }
+        
+    }
 }
+
+impl PartialEq for Account {
+    fn eq(&self, other: &Account) -> bool {
+        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
+        // time comparision
+        self.pk == other.pk && self.comm == other.comm
+    }
+}
+
+impl Eq for Account {}
 
 // ------------------------------------------------------------------------
 // Tests
@@ -155,31 +210,40 @@ mod test {
         let bl_scalar = Scalar::from(16 as u64);
         assert_eq!(updated_account.decrypt_account_balance(&sk, 16).unwrap(), (&bl_scalar * &RISTRETTO_BASEPOINT_TABLE).compress());
     }
-}
 
-    // verify_delta_update verifies if account delta was updated correctly
-    pub fn verify_delta_update(updated_delta_account: Account, delta_account: Account, updated_input_account: Account) -> bool {
 
-        if updated_delta_account.pk.gr == delta_account.pk.gr && updated_delta_account.pk.gr == updated_input_account.pk.gr && delta_account.pk.gr == updated_input_account.pk.gr {
-            if updated_delta_account.pk.grsk == delta_account.pk.grsk && updated_delta_account.pk.grsk == updated_input_account.pk.grsk && delta_account.pk.grsk == updated_input_account.pk.grsk {
-                
-                // lets add delta_account and updated_input_account commitments
-                let added_comm = ElGamalCommitment::add_commitments(&delta_account.comm, &updated_input_account.comm);
-                if added_comm == updated_delta_account.comm {
-                    return true
-                }
+    
+    use crate::{
+        keys::PublicKey,
+        ristretto::RistrettoPublicKey
+    };
+    #[test]
+    fn test_epsilon_and_delta() {
+
+        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+
+        let rscalar_sum_neg = Account::generate_sum_and_negate_rscalar();
+
+        let mut rscalar : Scalar;
+        let mut epsilon_accounts: Vec<Account> = Vec::new();
+
+        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+
+        for i in 0..9 {
+
+            if i < 8 {
+                rscalar = rscalar_sum_neg.0[i];
+            }else{
+                rscalar = rscalar_sum_neg.1;
             }
-        }
-        return false
+
+            let create_epsilon_account = Account::create_epsilon_account(value_vector[i], rscalar, generate_base_pk);
+
+            epsilon_accounts.push(create_epsilon_account);
+            
+          }
+
+          let check = Account::cheating_prover(epsilon_accounts);
+          assert!(check);
     }
 }
-
-impl PartialEq for Account {
-    fn eq(&self, other: &Account) -> bool {
-        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
-        // time comparision
-        self.pk == other.pk && self.comm == other.comm
-    }
-}
-
-impl Eq for Account {}

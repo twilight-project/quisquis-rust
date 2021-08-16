@@ -13,9 +13,13 @@ pub trait PublicKey {
 
     fn key_length() -> usize;
 
+    fn as_bytes(&self) -> Vec<u8>;
+
     fn update_public_key(p: &Self, rscalar: Scalar) -> Self;
 
     fn verify_public_key_update(u: &Self, p: &Self, rscalar: Scalar) -> bool;
 
     fn generate_base_pk() -> Self;
+
+    fn verify_keypair(self: &Self, privkey: &Self::K) -> bool; 
 }

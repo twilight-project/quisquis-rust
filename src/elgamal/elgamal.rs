@@ -5,6 +5,7 @@ use curve25519_dalek::{
     scalar::Scalar
 };
 use crate::{
+    keys::{PublicKey, SecretKey},
     ristretto::{
         RistrettoPublicKey,
         RistrettoSecretKey
@@ -44,7 +45,7 @@ impl ElGamalCommitment {
 
         // lets multiply balance scalar with the basepoint scalar
         let gv = &bl_scalar * &RISTRETTO_BASEPOINT_TABLE;
-        println!("encrypt gv {:?}", gv.compress());
+      
         let kh = &rscalar * &p.grsk.decompress().unwrap();
 
         // lets make d

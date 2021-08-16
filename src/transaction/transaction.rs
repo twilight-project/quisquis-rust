@@ -123,10 +123,10 @@ impl Sender {
                 
                 Ok((value_vector, account_vector))
             }else{
-                Err("pks are not equal")
+                Err("senders and receivers count should be less than 9")
             }
         }else{
-            Err("pks are not equal")
+            Err("account count is more than 9")
         }
     }
 

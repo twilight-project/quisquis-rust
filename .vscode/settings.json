@@ -1,0 +1,4 @@
+{
+    "rust.build_bin": ""
+    "rust-client.rustupPath": "$HOME/.cargo/bin/rustup"
+}

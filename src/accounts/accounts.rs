@@ -237,13 +237,9 @@ mod test {
         }
     };
     #[test]
-    fn test_cheating_prover() {
+    fn cheating_prover_test() {
 
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
-
-        let rscalar_sum_neg = Account::generate_sum_and_negate_rscalar();
-
-        let mut rscalar : Scalar;
 
         let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
         let mut account_vector: Vec<Account> = Vec::new();

@@ -86,29 +86,29 @@ pub fn main() {
 
     let rscalar = Scalar::random(&mut OsRng);
 
-    let create_delta_account = Account::create_delta_account(updated_account, 5, rscalar);
-    println!("create_delta_account {:?}", create_delta_account);
+//     let create_delta_account = Account::create_delta_account(updated_account, 5, rscalar);
+//     println!("create_delta_account {:?}", create_delta_account);
 
-    let create_epsilon_account = Account::create_epsilon_account(16, rscalar, generate_base_pk);
-    println!("create_epsilon_account {:?}", create_epsilon_account);
+//     let create_epsilon_account = Account::create_epsilon_account(16, rscalar, generate_base_pk);
+//     println!("create_epsilon_account {:?}", create_epsilon_account);
 
-    let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account);
-    println!("updated_delta_account {:?}", updated_delta_account.unwrap());
+//     let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account);
+//     println!("updated_delta_account {:?}", updated_delta_account.unwrap());
     
-    println!("{:?}", pk.as_bytes());
-    let net = quisquislib::util::address::Network::default();
-    let addr = Address::standard(net,pk);
-   // println!("{:?}", addr.as_bs58());
-    println!("{:?}", addr.as_hex());
-    println!("{:?}", addr);
-    let addr_hex = addr.as_hex();
+//     println!("{:?}", pk.as_bytes());
+//     let net = quisquislib::util::address::Network::default();
+//     let addr = Address::standard(net,pk);
+//    // println!("{:?}", addr.as_bs58());
+//     println!("{:?}", addr.as_hex());
+//     println!("{:?}", addr);
+//     let addr_hex = addr.as_hex();
 
-    let decoded_address = Address::from_hex(&addr_hex);
-    println!("{:?}", decoded_address);
+//     let decoded_address = Address::from_hex(&addr_hex);
+//     println!("{:?}", decoded_address);
     
-    let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account).unwrap();
-    println!("updated_delta_account {:?}", updated_delta_account);
+//     let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account).unwrap();
+//     println!("updated_delta_account {:?}", updated_delta_account);
     
-    let updated_delta_account = Account::verify_delta_update(updated_delta_account, create_delta_account, updated_account);
-    println!("updated_delta_account {:?}", updated_delta_account);
+//     let updated_delta_account = Account::verify_delta_update(updated_delta_account, create_delta_account, updated_account);
+//     println!("updated_delta_account {:?}", updated_delta_account);
 }

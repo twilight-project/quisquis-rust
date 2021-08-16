@@ -80,26 +80,42 @@ impl Account {
         Account::set_account(updated_pk, updated_comm)
     }
 
-    // create_delta_account creates account delta
-    // takes account, vector bl (updated balance), rscalar
-    // returns Account Delta
-    pub fn create_delta_account(a: Account, bl: i64, rscalar: Scalar) -> Account {
+    // create_delta_and_epsilon_accounts creates account delta and account epsilon
+    // takes Accounts vector, bl (updated balance), base_pair generated with fixed-g
+    // returns Account Epsilon and Delta
+    pub fn create_delta_and_epsilon_accounts(a: Vec<Account>, bl: Vec<i64>, base_pk: RistrettoPublicKey) -> (Vec<Account>, Vec<Account>) {
 
-        // lets generate commitment on v for delta using Pk and r'
-        let comm_delta = ElGamalCommitment::generate_commitment(&a.pk, rscalar, bl);
+        let rscalar_sum_neg = Account::generate_sum_and_negate_rscalar();
+        let mut rscalar : Scalar;
+        let mut delta_account_vector: Vec<Account> = Vec::new();
+        let mut epsilon_account_vector: Vec<Account> = Vec::new();
 
-        Account::set_account(a.pk, comm_delta)
-    }
+        for i in 0..9 {
 
-    // create_epsilon_account creates account delta
-    // takes vector bl (updated balance), rscalar and base_pair generated with fixed-g
-    // returns Account Epsilon
-    pub fn create_epsilon_account(bl: i64, rscalar: Scalar, base_pk: RistrettoPublicKey) -> Account {
+            if i < 8 {
+                rscalar = rscalar_sum_neg.0[i];
+            }else{
+                rscalar = rscalar_sum_neg.1;
+            }
 
-        // lets generate commitment on v for epsilon using GP and r
-        let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl);
+            // lets generate commitment on v for delta using Pk and r'
+            let comm_delta = ElGamalCommitment::generate_commitment(&a[i].pk, rscalar, bl[i]);
 
-        Account::set_account(base_pk, comm_epsilon)
+            let account_delta = Account::set_account(a[i].pk, comm_delta);
+
+            delta_account_vector.push(account_delta);
+
+            // lets generate commitment on v for epsilon using GP and r
+            let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl[i]);
+
+            let account_epsilon = Account::set_account(base_pk, comm_epsilon);
+
+            epsilon_account_vector.push(account_epsilon);
+            
+        }
+
+        return (delta_account_vector, epsilon_account_vector)
+
     }
 
     // update_delta_account takes updated_account and delta_account, multiplies their commitments
@@ -214,36 +230,45 @@ mod test {
 
     
     use crate::{
-        keys::PublicKey,
-        ristretto::RistrettoPublicKey
+        keys::{PublicKey, SecretKey},
+        ristretto::{
+            RistrettoPublicKey,
+            RistrettoSecretKey
+        }
     };
     #[test]
-    fn test_epsilon_and_delta() {
+    fn test_cheating_prover() {
 
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
         let rscalar_sum_neg = Account::generate_sum_and_negate_rscalar();
 
         let mut rscalar : Scalar;
-        let mut epsilon_accounts: Vec<Account> = Vec::new();
 
         let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let mut account_vector: Vec<Account> = Vec::new();
 
         for i in 0..9 {
 
-            if i < 8 {
-                rscalar = rscalar_sum_neg.0[i];
-            }else{
-                rscalar = rscalar_sum_neg.1;
-            }
+            let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+    
+            let acc = Account::generate_account(pk);
 
-            let create_epsilon_account = Account::create_epsilon_account(value_vector[i], rscalar, generate_base_pk);
+            // lets get a random scalar to update the account
+            let updated_keys_scalar = Scalar::random(&mut OsRng);
 
-            epsilon_accounts.push(create_epsilon_account);
-            
+            // lets get a random scalar to update the commitments
+            let comm_scalar = Scalar::random(&mut OsRng);
+
+            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+
+            account_vector.push(updated_account);
+
           }
+          let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(account_vector, value_vector, generate_base_pk); 
 
-          let check = Account::cheating_prover(epsilon_accounts);
+          let check = Account::cheating_prover(delta_and_epsilon_accounts.1);
           assert!(check);
     }
 }

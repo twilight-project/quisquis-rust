@@ -28,6 +28,15 @@ impl SecretKey for RistrettoSecretKey {
         RistrettoSecretKey(Scalar::random(rng))
     }
 }
+// ------- PrivateKey Partial Eq, Eq ------- //
+
+impl PartialEq for RistrettoSecretKey {
+    fn eq(&self, other: &RistrettoSecretKey) -> bool {
+        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
+        // time comparision
+        self.0 == other.0 
+    }
+}
 
 // ------- PublicKey ------- //
 #[derive(Debug, Copy, Clone)]
@@ -63,6 +72,14 @@ impl PublicKey for RistrettoPublicKey {
         PUBLIC_KEY_LENGTH
     }
 
+    /// Serialize a public key as bytes.
+    fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(self.gr.as_bytes());
+        bytes.extend_from_slice(self.grsk.as_bytes());
+        bytes
+    }
+  
     // update_public_key multiplies pk with a random scalar r
     // returns UpdatedPublicKey and random scalar used
     fn update_public_key(p: &RistrettoPublicKey, rscalar: Scalar) -> RistrettoPublicKey {
@@ -90,6 +107,13 @@ impl PublicKey for RistrettoPublicKey {
     fn generate_base_pk() -> RistrettoPublicKey{
         RistrettoPublicKey::new_from_pk(BASE_PK_BTC_COMPRESSED[0], BASE_PK_BTC_COMPRESSED[1])
     }
+
+    /// Verify Public Key, Secret Key pair
+    fn verify_keypair(self: &Self, privkey: &Self::K) -> bool
+    {
+        self.grsk == (&privkey.0 * &self.gr.decompress().unwrap()).compress()    
+    }
+
 }
 
 // ------- PublicKey Partial Eq, Eq ------- //
@@ -98,7 +122,7 @@ impl PartialEq for RistrettoPublicKey {
     fn eq(&self, other: &RistrettoPublicKey) -> bool {
         // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
         // time comparision
-        self.gr == other.gr
+        self.gr == other.gr && self.grsk == other.grsk
     }
 }
 
@@ -125,4 +149,17 @@ mod test {
 
         assert_ne!(pk, updated_pk)
     }
+    #[test]
+    fn verify_keypair_test() {
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        
+        let _rsk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let random_scalar = Scalar::random(&mut OsRng);
+        let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
+
+        assert!(updated_pk.verify_keypair(&sk), "Invalid Key Pair")
+
+    }
 }
+

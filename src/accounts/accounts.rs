@@ -91,7 +91,8 @@ impl Account {
         let mut epsilon_account_vector: Vec<Account> = Vec::new();
 
         for i in 0..9 {
-
+            // we need to pass random scalars to first 8 accounts and for the last 
+            // we are doing the sum of first 8, negate and then pass it
             if i < 8 {
                 rscalar = rscalar_sum_neg.0[i];
             }else{
@@ -100,18 +101,13 @@ impl Account {
 
             // lets generate commitment on v for delta using Pk and r'
             let comm_delta = ElGamalCommitment::generate_commitment(&a[i].pk, rscalar, bl[i]);
-
             let account_delta = Account::set_account(a[i].pk, comm_delta);
-
             delta_account_vector.push(account_delta);
 
             // lets generate commitment on v for epsilon using GP and r
             let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl[i]);
-
             let account_epsilon = Account::set_account(base_pk, comm_epsilon);
-
             epsilon_account_vector.push(account_epsilon);
-            
         }
 
         return (delta_account_vector, epsilon_account_vector)

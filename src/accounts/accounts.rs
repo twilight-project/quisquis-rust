@@ -83,34 +83,26 @@ impl Account {
     // create_delta_and_epsilon_accounts creates account delta and account epsilon
     // takes Accounts vector, bl (updated balance), base_pair generated with fixed-g
     // returns Account Epsilon and Delta
-    pub fn create_delta_and_epsilon_accounts(a: Vec<Account>, bl: Vec<i64>, base_pk: RistrettoPublicKey) -> (Vec<Account>, Vec<Account>) {
+    pub fn create_delta_and_epsilon_accounts(a: Vec<Account>, bl: &Vec<i64>, base_pk: RistrettoPublicKey) -> (Vec<Account>, Vec<Account>, Vec<Scalar>) {
 
-        let rscalar_sum_neg = Account::generate_sum_and_negate_rscalar();
-        let mut rscalar : Scalar;
+        let rscalar = Account::generate_sum_and_negate_rscalar();
+        //let mut rscalar : Scalar;
         let mut delta_account_vector: Vec<Account> = Vec::new();
         let mut epsilon_account_vector: Vec<Account> = Vec::new();
 
         for i in 0..9 {
-            // we need to pass random scalars to first 8 accounts and for the last 
-            // we are doing the sum of first 8, negate and then pass it
-            if i < 8 {
-                rscalar = rscalar_sum_neg.0[i];
-            }else{
-                rscalar = rscalar_sum_neg.1;
-            }
-
             // lets generate commitment on v for delta using Pk and r'
-            let comm_delta = ElGamalCommitment::generate_commitment(&a[i].pk, rscalar, bl[i]);
+            let comm_delta = ElGamalCommitment::generate_commitment(&a[i].pk, rscalar[i], bl[i]);
             let account_delta = Account::set_account(a[i].pk, comm_delta);
             delta_account_vector.push(account_delta);
 
             // lets generate commitment on v for epsilon using GP and r
-            let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl[i]);
+            let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar[i], bl[i]);
             let account_epsilon = Account::set_account(base_pk, comm_epsilon);
             epsilon_account_vector.push(account_epsilon);
         }
 
-        return (delta_account_vector, epsilon_account_vector)
+        return (delta_account_vector, epsilon_account_vector, rscalar)
 
     }
 
@@ -145,13 +137,14 @@ impl Account {
     // generate_sum_and_negate_rscalar generates scalars for delta and epsilon function
     // first 8 scalars are random, here returned in a vector
     // last scalar is the sum and then neg of the first 8 random scalars, here returned as a scalar
-    pub fn generate_sum_and_negate_rscalar() -> (Vec<Scalar>, Scalar) {
+    pub fn generate_sum_and_negate_rscalar() -> Vec<Scalar> {
         let mut random_scalars: Vec<Scalar> = Vec::new();
         for _x in 0..8 {
             random_scalars.push(Scalar::random(&mut OsRng));
         }
         let sum: Scalar = random_scalars.iter().sum();
-        return (random_scalars, -sum)
+        random_scalars.push(-sum);
+        return random_scalars
     }
 
     // cheating_prover sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
@@ -258,7 +251,7 @@ mod test {
             account_vector.push(updated_account);
 
           }
-          let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(account_vector, value_vector, generate_base_pk); 
+          let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(account_vector, &value_vector, generate_base_pk); 
 
           let check = Account::cheating_prover(delta_and_epsilon_accounts.1);
           assert!(check);

@@ -1,61 +1,164 @@
 use rand::thread_rng;
 
-use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::MultiscalarMul;
+use curve25519_dalek::{
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_TABLE
+};
+
 use merlin::Transcript;
-use crate::transcript::TranscriptProtocol;
+use crate::accounts::TranscriptProtocol;
 
 use crate::{
-    accounts::Account
+    accounts::Account,
+    elgamal::{
+        signed_integer::SignedInteger
+    }
 };
 
 pub struct Prover<'a> {
     transcript: &'a mut Transcript,
-    scalars: Vec<Scalar>
+    scalars: Vec<Scalar>,
+    points: Vec<CompressedRistretto>,
+    point_labels: Vec<&'static [u8]>
 }
 
 impl<'a> Prover<'a> {
     /// Construct a new prover.  The `proof_label` disambiguates proof
     /// statements.
     pub fn new(proof_label: &'static [u8], transcript: &'a mut Transcript) -> Self {
-        //transcript.domain_sep(proof_label);
+        transcript.domain_sep(proof_label);
         Prover {
             transcript,
-            scalars: Vec::default()
+            scalars: Vec::default(),
+            points: Vec::default(),
+            point_labels: Vec::default()
         }
     }
 
     /// The compact and batchable proofs differ only by which data they store.
-    fn prove_impl(self)  {
+    fn prove_impl(self) -> (Self, merlin::TranscriptRng){
         // Construct a TranscriptRng
         let mut rng_builder = self.transcript.build_rng();
         for scalar in &self.scalars {
             rng_builder = rng_builder.rekey_with_witness_bytes(b"", scalar.as_bytes());
         }
         let mut transcript_rng = rng_builder.finalize(&mut thread_rng());
-
-        // Generate a blinding factor for each secret variable
-        let blindings = self
-            .scalars
-            .iter()
-            .map(|_| Scalar::random(&mut transcript_rng))
-            .collect::<Vec<Scalar>>();
+        return (self, transcript_rng)
     }
 
      /// Allocate and assign a secret variable with the given `label`.
      pub fn allocate_scalar(&mut self, label: &'static [u8], assignment: Scalar) {
-        //self.transcript.append_scalar_var(label);
+        self.transcript.append_scalar_var(label, &assignment);
         self.scalars.push(assignment);
-        //ScalarVar(self.scalars.len() - 1)
     }
 
+    /// Allocate and assign a public variable with the given `label`.
+    pub fn allocate_point(&mut self, label: &'static [u8], assignment: CompressedRistretto)  {
+        let compressed = self.transcript.append_point_var(label, &assignment);
+        self.points.push(assignment);
+        self.point_labels.push(label);
+    }
 
-    pub fn verify_delta_compact_prover(delta_accounts: Vec<Account>, epsilon_accounts: Vec<Account>){
+    pub fn verify_delta_compact_prover(delta_accounts: Vec<Account>, epsilon_accounts: Vec<Account>, rscalar: Vec<Scalar>, value_vector: Vec<i64>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>){
+        
+        let mut v_dash_vector: Vec<Scalar> = Vec::new();
+        let mut r1_dash_vector: Vec<Scalar> = Vec::new();
+        let mut r2_dash_vector: Vec<Scalar> = Vec::new();
+        let mut v_doubledash_vector: Vec<Scalar> = Vec::new();
+        
         let mut transcript = Transcript::new(b"VerifyDeltaCompact");
-        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
-        let var_x = prover.allocate_scalar(b"x", delta_accounts[1].pk.gr); //its a point, not a scalar
-        prover.prove_impl();
+
+        for i in 0..9{
+
+            let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+
+            let signed_int = SignedInteger::from(value_vector[i] as u64);
+            let v_dash : Scalar = SignedInteger::into(signed_int);
+
+            prover.allocate_scalar(b"v", v_dash);
+            prover.allocate_scalar(b"r", rscalar[i]);
+
+            prover.allocate_point(b"gr", delta_accounts[i].pk.gr);
+            prover.allocate_point(b"grsk", delta_accounts[i].pk.grsk); 
+            prover.allocate_point(b"commc", delta_accounts[i].comm.c); 
+            prover.allocate_point(b"commd", delta_accounts[i].comm.d);
+
+            prover.allocate_point(b"gr", epsilon_accounts[i].pk.gr);
+            prover.allocate_point(b"grsk", epsilon_accounts[i].pk.grsk); 
+            prover.allocate_point(b"commc", epsilon_accounts[i].comm.c); 
+            prover.allocate_point(b"commd", epsilon_accounts[i].comm.d); 
+            
+            let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+
+            // Generate three blinding factors
+            let r1_dash = Scalar::random(&mut transcript_rng);
+            let r2_dash = Scalar::random(&mut transcript_rng);
+            let v_doubledash = Scalar::random(&mut transcript_rng);
+
+            // collect blindings and v_dash scalar in vectors to create outputs later 
+            r1_dash_vector.push(r1_dash);
+            r2_dash_vector.push(r2_dash);
+            v_doubledash_vector.push(v_doubledash);
+            v_dash_vector.push(v_dash);
+
+            // lets create four points for the proof
+            // e_delta = g_delta ^ r1_dash
+            // f_delta = g ^ v_doubledash + h_delta ^ r1_dash
+            // e_epsilon = g_epsilon ^ r2_dash
+            // f_epsilon = g ^ v_doubledash + h_epsilon ^ r2_dash
+            // lets first create e_delta
+            let e_delta = &delta_accounts[i].pk.gr.decompress().unwrap() * &r1_dash;
+
+            // lets create f_delta
+            let gv_doubledash = &RISTRETTO_BASEPOINT_TABLE * &v_doubledash;
+            let h_delta_r1_dash = &delta_accounts[i].pk.grsk.decompress().unwrap() * &r1_dash;
+            let f_delta = gv_doubledash + h_delta_r1_dash;
+
+            // lets create e_epsilon
+            let e_epsilon = &epsilon_accounts[i].pk.gr.decompress().unwrap() * &r2_dash;
+
+            // lets create f_epsilon
+            let h_epsilon_r2_dash = &epsilon_accounts[i].pk.grsk.decompress().unwrap() * &r2_dash;
+            let f_epsilon = gv_doubledash + h_epsilon_r2_dash;
+
+            // lets append e_delta, f_delta, e_epsilon and f_epsilon to the transcript
+            prover.allocate_point(b"e_delta", e_delta.compress());
+            prover.allocate_point(b"f_delta", f_delta.compress());
+            prover.allocate_point(b"e_epsilon", e_epsilon.compress());
+            prover.allocate_point(b"f_epsilon", e_epsilon.compress());
+
+        }
+
+        // Obtain a scalar challenge
+        let x = transcript.get_challenge(b"chal");
+
+        // lets create the outputs
+        // zv = v_doubledash - x ^ v_dash (value vector v)
+        // zr1 = r1_dash - x ^ r (rscalar)
+        // zr2 = r2_dash - x ^ r (rscalar)
+
+        let mut zv_vector: Vec<Scalar> = Vec::new();
+        let mut zr1_vector: Vec<Scalar> = Vec::new();
+        let mut zr2_vector: Vec<Scalar> = Vec::new();
+
+        for i in 0..9 {
+            // lets create zv
+            let xv_dash = x + v_dash_vector[i];
+            let zv = v_doubledash_vector[i] - xv_dash;
+            zv_vector.push(zv);
+
+            // lets create zr1
+            let xr = x + rscalar[i];
+            let zr1 = r1_dash_vector[i] - xr;
+            zr1_vector.push(zr1);
+
+            // lets create zr2
+            let zr2 = r2_dash_vector[i] - xr;
+            zr2_vector.push(zr2);
+        }
+        
+        return (zv_vector, zr1_vector, zr2_vector)
     }
 }
 
@@ -101,8 +204,10 @@ mod test {
             account_vector.push(updated_account);
 
           }
-        let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(account_vector, value_vector, generate_base_pk);
+        let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(account_vector, &value_vector, generate_base_pk);
 
-        Prover::verify_delta_compact_prover(delta_and_epsilon_accounts.0, delta_and_epsilon_accounts.1);
+        let (zv_vector, zr1_vector, zr2_vector) = Prover::verify_delta_compact_prover(delta_accounts, epislon_accounts, rscalar, value_vector);
+
+        println!("{:?}{:?}{:?}", zv_vector, zr1_vector, zr2_vector);
     }
 }

@@ -6,3 +6,8 @@ pub use self::{
     accounts::Account,
     prover::Prover
 };
+
+pub mod transcript;
+
+
+pub use self::transcript::TranscriptProtocol;

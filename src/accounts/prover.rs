@@ -19,8 +19,7 @@ use crate::{
 pub struct Prover<'a> {
     transcript: &'a mut Transcript,
     scalars: Vec<Scalar>,
-    points: Vec<CompressedRistretto>,
-    point_labels: Vec<&'static [u8]>
+    points: Vec<CompressedRistretto>
 }
 
 impl<'a> Prover<'a> {
@@ -31,8 +30,7 @@ impl<'a> Prover<'a> {
         Prover {
             transcript,
             scalars: Vec::default(),
-            points: Vec::default(),
-            point_labels: Vec::default()
+            points: Vec::default()
         }
     }
 
@@ -43,7 +41,7 @@ impl<'a> Prover<'a> {
         for scalar in &self.scalars {
             rng_builder = rng_builder.rekey_with_witness_bytes(b"", scalar.as_bytes());
         }
-        let mut transcript_rng = rng_builder.finalize(&mut thread_rng());
+        let transcript_rng = rng_builder.finalize(&mut thread_rng());
         return (self, transcript_rng)
     }
 
@@ -57,10 +55,11 @@ impl<'a> Prover<'a> {
     pub fn allocate_point(&mut self, label: &'static [u8], assignment: CompressedRistretto)  {
         let compressed = self.transcript.append_point_var(label, &assignment);
         self.points.push(assignment);
-        self.point_labels.push(label);
     }
 
-    pub fn verify_delta_compact_prover(delta_accounts: Vec<Account>, epsilon_accounts: Vec<Account>, rscalar: Vec<Scalar>, value_vector: Vec<i64>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>){
+    // verify_delta_compact_prover generates proves values committed in delta_accounts and epsilon_accounts are the same
+    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.1
+    pub fn verify_delta_compact_prover(delta_accounts: &Vec<Account>, epsilon_accounts: &Vec<Account>, rscalar: &Vec<Scalar>, value_vector: &Vec<i64>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar){
         
         let mut v_dash_vector: Vec<Scalar> = Vec::new();
         let mut r1_dash_vector: Vec<Scalar> = Vec::new();
@@ -126,7 +125,7 @@ impl<'a> Prover<'a> {
             prover.allocate_point(b"e_delta", e_delta.compress());
             prover.allocate_point(b"f_delta", f_delta.compress());
             prover.allocate_point(b"e_epsilon", e_epsilon.compress());
-            prover.allocate_point(b"f_epsilon", e_epsilon.compress());
+            prover.allocate_point(b"f_epsilon", f_epsilon.compress());
 
         }
 
@@ -158,7 +157,7 @@ impl<'a> Prover<'a> {
             zr2_vector.push(zr2);
         }
         
-        return (zv_vector, zr1_vector, zr2_vector)
+        return (zv_vector, zr1_vector, zr2_vector, x)
     }
 }
 
@@ -206,8 +205,8 @@ mod test {
           }
         let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(account_vector, &value_vector, generate_base_pk);
 
-        let (zv_vector, zr1_vector, zr2_vector) = Prover::verify_delta_compact_prover(delta_accounts, epislon_accounts, rscalar, value_vector);
+        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epislon_accounts, &rscalar, &value_vector);
 
-        println!("{:?}{:?}{:?}", zv_vector, zr1_vector, zr2_vector);
+        println!("{:?}{:?}{:?}{:?}", zv_vector, zr1_vector, zr2_vector, x);
     }
 }

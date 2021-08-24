@@ -18,8 +18,7 @@ use crate::{
 
 pub struct Prover<'a> {
     transcript: &'a mut Transcript,
-    scalars: Vec<Scalar>,
-    points: Vec<CompressedRistretto>
+    scalars: Vec<Scalar>
 }
 
 impl<'a> Prover<'a> {
@@ -29,8 +28,7 @@ impl<'a> Prover<'a> {
         transcript.domain_sep(proof_label);
         Prover {
             transcript,
-            scalars: Vec::default(),
-            points: Vec::default()
+            scalars: Vec::default()
         }
     }
 
@@ -53,8 +51,12 @@ impl<'a> Prover<'a> {
 
     /// Allocate and assign a public variable with the given `label`.
     pub fn allocate_point(&mut self, label: &'static [u8], assignment: CompressedRistretto)  {
-        let compressed = self.transcript.append_point_var(label, &assignment);
-        self.points.push(assignment);
+        self.transcript.append_point_var(label, &assignment);
+    }
+
+    /// Allocate and assign an account with the given `label`.
+    pub fn allocate_account(&mut self, label: &'static [u8], account: Account)  {
+        self.transcript.append_account_var(label, &account);
     }
 
     // verify_delta_compact_prover generates proves values committed in delta_accounts and epsilon_accounts are the same
@@ -75,18 +77,11 @@ impl<'a> Prover<'a> {
             let signed_int = SignedInteger::from(value_vector[i] as u64);
             let v_dash : Scalar = SignedInteger::into(signed_int);
 
-            //prover.allocate_scalar(b"v", v_dash);
-            //prover.allocate_scalar(b"r", rscalar[i]);
+            prover.scalars.push(v_dash);
+            prover.scalars.push(rscalar[i]);
 
-            prover.allocate_point(b"gr", delta_accounts[i].pk.gr);
-            prover.allocate_point(b"grsk", delta_accounts[i].pk.grsk); 
-            prover.allocate_point(b"commc", delta_accounts[i].comm.c); 
-            prover.allocate_point(b"commd", delta_accounts[i].comm.d);
-
-            prover.allocate_point(b"gr", epsilon_accounts[i].pk.gr);
-            prover.allocate_point(b"grsk", epsilon_accounts[i].pk.grsk); 
-            prover.allocate_point(b"commc", epsilon_accounts[i].comm.c); 
-            prover.allocate_point(b"commd", epsilon_accounts[i].comm.d); 
+            prover.allocate_account(b"delta_account", delta_accounts[i]); 
+            prover.allocate_account(b"epsilon_account", epsilon_accounts[i]);
             
             let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
 

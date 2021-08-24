@@ -16,8 +16,7 @@ use crate::{
 
 pub struct Verifier<'a> {
     transcript: &'a mut Transcript,
-    scalars: Vec<Scalar>,
-    points: Vec<CompressedRistretto>
+    scalars: Vec<Scalar>
 }
 
 impl<'a> Verifier<'a> {
@@ -26,8 +25,7 @@ impl<'a> Verifier<'a> {
         transcript.domain_sep(proof_label);
         Verifier {
             transcript,
-            scalars: Vec::default(),
-            points: Vec::default()
+            scalars: Vec::default()
         }
     }
 
@@ -40,7 +38,11 @@ impl<'a> Verifier<'a> {
     /// Allocate and assign a public variable with the given `label`.
     pub fn allocate_point(&mut self, label: &'static [u8], assignment: CompressedRistretto)  {
         self.transcript.append_point_var(label, &assignment);
-        self.points.push(assignment);
+    }
+
+    /// Allocate and assign an account with the given `label`.
+    pub fn allocate_account(&mut self, label: &'static [u8], account: Account)  {
+        self.transcript.append_account_var(label, &account);
     }
 
     // verify_delta_compact_verifier verifies proves values committed in delta_accounts and epsilon_accounts are the same
@@ -53,15 +55,8 @@ impl<'a> Verifier<'a> {
 
             let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
 
-            verifier.allocate_point(b"gr", delta_accounts[i].pk.gr);
-            verifier.allocate_point(b"grsk", delta_accounts[i].pk.grsk); 
-            verifier.allocate_point(b"commc", delta_accounts[i].comm.c); 
-            verifier.allocate_point(b"commd", delta_accounts[i].comm.d);
-
-            verifier.allocate_point(b"gr", epsilon_accounts[i].pk.gr);
-            verifier.allocate_point(b"grsk", epsilon_accounts[i].pk.grsk); 
-            verifier.allocate_point(b"commc", epsilon_accounts[i].comm.c);
-            verifier.allocate_point(b"commd", epsilon_accounts[i].comm.d);
+            verifier.allocate_account(b"delta_account", delta_accounts[i]); 
+            verifier.allocate_account(b"epsilon_account", epsilon_accounts[i]);
 
             // lets create four points for the proof
             // e_delta = g_delta ^ zr1 ^ cdelta ^ x

@@ -65,28 +65,35 @@ impl<'a> Verifier<'a> {
 
             // lets create four points for the proof
             // e_delta = g_delta ^ zr1 ^ cdelta ^ x
-            // f_delta = g ^ zr + h_delta ^ zr + cdelta ^ x
+            // f_delta = g ^ zv + h_delta ^ zr + cdelta ^ x
             // e_epsilon = g_epsilon ^ zr2 + cepsilon ^ x
-            // f_epsilon = g ^ zr + h_epsilon ^ zr2 + cepsilon ^ x
+            // f_epsilon = g ^ zv + h_epsilon ^ zr2 + cepsilon ^ x
+
             // lets first create e_delta
-            let g_zr1 = &delta_accounts[i].pk.gr.decompress().unwrap() * &zr1_vector[i];
+            let gdelta_zr1 = &delta_accounts[i].pk.gr.decompress().unwrap() * &zr1_vector[i];
             let cdelta_x =  &delta_accounts[i].comm.c.decompress().unwrap() * x;
 
-            let e_delta = g_zr1 + cdelta_x;
+            let e_delta = gdelta_zr1 + cdelta_x;
 
             // lets create f_delta
             let g_zv = &RISTRETTO_BASEPOINT_TABLE * &zv_vector[i];
             let hdelta_zr1 = &delta_accounts[i].pk.grsk.decompress().unwrap() * &zr1_vector[i];
+
+            let ddelta_x =  &delta_accounts[i].comm.d.decompress().unwrap() * x;
             
-            let f_delta = g_zv + hdelta_zr1 + cdelta_x;
+            let f_delta = g_zv + hdelta_zr1 + ddelta_x;
+
+            let cepsilon_x =  &epsilon_accounts[i].comm.c.decompress().unwrap() * x;
 
             // lets create e_epsilon
             let g_zr2 = &epsilon_accounts[i].pk.gr.decompress().unwrap() * &zr2_vector[i];
-            let e_epsilon = g_zr2 + cdelta_x;
+            let e_epsilon = g_zr2 + cepsilon_x;
+
+            let depsilon_x =  &epsilon_accounts[i].comm.d.decompress().unwrap() * x;
 
             // lets create f_epsilon
             let h_epsilon_zr2 = &epsilon_accounts[i].pk.grsk.decompress().unwrap() * &zr2_vector[i];
-            let f_epsilon = g_zv + h_epsilon_zr2;
+            let f_epsilon = g_zv + h_epsilon_zr2 + depsilon_x;
 
             // lets append e_delta, f_delta, e_epsilon and f_epsilon to the transcript
             verifier.allocate_point(b"e_delta", e_delta.compress());

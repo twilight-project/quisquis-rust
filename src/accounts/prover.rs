@@ -75,8 +75,8 @@ impl<'a> Prover<'a> {
             let signed_int = SignedInteger::from(value_vector[i] as u64);
             let v_dash : Scalar = SignedInteger::into(signed_int);
 
-            prover.allocate_scalar(b"v", v_dash);
-            prover.allocate_scalar(b"r", rscalar[i]);
+            //prover.allocate_scalar(b"v", v_dash);
+            //prover.allocate_scalar(b"r", rscalar[i]);
 
             prover.allocate_point(b"gr", delta_accounts[i].pk.gr);
             prover.allocate_point(b"grsk", delta_accounts[i].pk.grsk); 
@@ -143,12 +143,12 @@ impl<'a> Prover<'a> {
 
         for i in 0..9 {
             // lets create zv
-            let xv_dash = x + v_dash_vector[i];
+            let xv_dash = x * v_dash_vector[i];
             let zv = v_doubledash_vector[i] - xv_dash;
             zv_vector.push(zv);
 
             // lets create zr1
-            let xr = x + rscalar[i];
+            let xr = x * rscalar[i];
             let zr1 = r1_dash_vector[i] - xr;
             zr1_vector.push(zr1);
 

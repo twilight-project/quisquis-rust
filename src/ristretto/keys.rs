@@ -72,7 +72,7 @@ impl PublicKey for RistrettoPublicKey {
         PUBLIC_KEY_LENGTH
     }
 
-    /// Serialize a public key as bytes.
+    /// as_bytes convert a public key to bytes
     fn as_bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(self.gr.as_bytes());

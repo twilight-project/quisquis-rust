@@ -1,5 +1,6 @@
 use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
+use crate::accounts::Account;
 use merlin::Transcript;
 
 /// Extension trait to the Merlin transcript API that allows committing scalars and points and
@@ -13,6 +14,9 @@ pub trait TranscriptProtocol {
 
     /// Append a point variable to the transcript, for use by a prover.
     fn append_point_var(&mut self, label: &'static [u8], point: &CompressedRistretto);
+
+    /// Append a point variable to the transcript, for use by a prover, this is QuisQuis specific.
+    fn append_account_var(&mut self, label: &'static [u8], account: &Account);
 
     /// Get a scalar challenge from the transcript.
     fn get_challenge(&mut self, label: &'static [u8]) -> Scalar;
@@ -30,6 +34,14 @@ impl TranscriptProtocol for Transcript {
     fn append_point_var(&mut self, label: &'static [u8], point: &CompressedRistretto) {
         self.append_message(b"ptvar", label);
         self.append_message(b"val", point.as_bytes());
+    }
+
+    fn append_account_var(&mut self, label: &'static [u8], account: &Account){
+        self.append_message(b"acvar", label);
+        self.append_message(b"gr", account.pk.gr.as_bytes());
+        self.append_message(b"grsk", account.pk.grsk.as_bytes());
+        self.append_message(b"commc", account.comm.c.as_bytes());
+        self.append_message(b"commd", account.comm.d.as_bytes());
     }
 
     fn get_challenge(&mut self, label: &'static [u8]) -> Scalar {

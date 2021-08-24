@@ -134,18 +134,6 @@ impl Account {
         return false
     }
 
-    // generate_sum_and_negate_rscalar generates scalars for delta and epsilon function
-    // first 8 scalars are random, here returned in a vector
-    // last scalar is the sum and then neg of the first 8 random scalars, here returned as a scalar
-    pub fn generate_sum_and_negate_rscalar() -> Vec<Scalar> {
-        let mut random_scalars: Vec<Scalar> = Vec::new();
-        for _x in 0..8 {
-            random_scalars.push(Scalar::random(&mut OsRng));
-        }
-        let sum: Scalar = random_scalars.iter().sum();
-        random_scalars.push(-sum);
-        return random_scalars
-    }
 
     // cheating_prover sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
     // else returns false
@@ -158,9 +146,25 @@ impl Account {
             return false
         }else{
             return true
-        }
-        
+        }   
     }
+
+
+    ///////////////////////////////////////////// Misc. Methods /////////////////////////////////////////////
+
+    // generate_sum_and_negate_rscalar generates scalars for delta and epsilon function
+    // first 8 scalars are random, here returned in a vector
+    // last scalar is the sum and then neg of the first 8 random scalars, here returned as a scalar
+    pub fn generate_sum_and_negate_rscalar() -> Vec<Scalar> {
+        let mut random_scalars: Vec<Scalar> = Vec::new();
+        for _x in 0..8 {
+            random_scalars.push(Scalar::random(&mut OsRng));
+        }
+        let sum: Scalar = random_scalars.iter().sum();
+        random_scalars.push(-sum);
+        return random_scalars
+    }
+    
 }
 
 impl PartialEq for Account {

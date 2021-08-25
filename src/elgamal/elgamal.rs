@@ -78,6 +78,16 @@ impl ElGamalCommitment {
      }
 }
 
+// ------- ElGamalCommitment Partial Eq, Eq ------- //
+
+impl PartialEq for ElGamalCommitment{
+    fn eq(&self, other: &Self) -> bool {
+        self.c == other.c && self.d == other.d
+    }
+}
+
+impl Eq for ElGamalCommitment {}
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -96,12 +106,4 @@ mod test {
     }
 }
 
-// ------- ElGamalCommitment Partial Eq, Eq ------- //
 
-impl PartialEq for ElGamalCommitment{
-    fn eq(&self, other: &Self) -> bool {
-        self.c == other.c && self.d == other.d
-    }
-}
-
-impl Eq for ElGamalCommitment {}

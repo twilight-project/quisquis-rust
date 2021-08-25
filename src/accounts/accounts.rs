@@ -83,7 +83,7 @@ impl Account {
     // create_delta_and_epsilon_accounts creates account delta and account epsilon
     // takes Accounts vector, bl (updated balance), base_pair generated with fixed-g
     // returns Account Epsilon and Delta
-    pub fn create_delta_and_epsilon_accounts(a: Vec<Account>, bl: &Vec<i64>, base_pk: RistrettoPublicKey) -> (Vec<Account>, Vec<Account>, Vec<Scalar>) {
+    pub fn create_delta_and_epsilon_accounts(a: &Vec<Account>, bl: &Vec<i64>, base_pk: RistrettoPublicKey) -> (Vec<Account>, Vec<Account>, Vec<Scalar>) {
 
         let rscalar = Account::generate_sum_and_negate_rscalar();
         //let mut rscalar : Scalar;
@@ -106,33 +106,63 @@ impl Account {
 
     }
 
-    // update_delta_account takes updated_account and delta_account, multiplies their commitments
-    // returns updated delta account
-    pub fn update_delta_account(updated_account: Account, delta_account: Account) ->  Result<Account, &'static str> {
+    // update_delta_accounts takes vectors of updated_accounts and delta_accounts, multiplies their commitments
+    // returns updated delta accounts
+    pub fn update_delta_accounts(updated_accounts: &Vec<Account>, delta_accounts: &Vec<Account>) ->  Result<Vec<Account>, &'static str> 
+    {
 
-        if updated_account.pk.gr == delta_account.pk.gr && updated_account.pk.grsk == delta_account.pk.grsk {
-            let new_comm = ElGamalCommitment::add_commitments(&updated_account.comm, &delta_account.comm);
-            let updated_delta_account = Account::set_account(updated_account.pk, new_comm);
-            Ok(updated_delta_account)
+        if updated_accounts.iter().zip(delta_accounts.iter()).all(|(u, d)| u.pk.eq(&d.pk)){
+            Ok(
+                updated_accounts.iter().zip(delta_accounts.iter())
+                .map(|(updated_account, delta_account)|
+                    Account::set_account(
+                        updated_account.pk, 
+                        ElGamalCommitment::add_commitments(&updated_account.comm, &delta_account.comm)
+                    )
+                ).collect::<Vec<_>>()
+            )
         }else{
             Err("pks are not equal")
         }
     }
     // verify_delta_update verifies if account delta was updated correctly
-    pub fn verify_delta_update(updated_delta_account: Account, delta_account: Account, updated_input_account: Account) -> bool {
+    pub fn verify_delta_update(updated_delta_accounts: &Vec<Account>, delta_accounts: &Vec<Account>, updated_input_accounts: &Vec<Account>) -> Result<bool>, &'static str> 
+    {
 
-        if updated_delta_account.pk.gr == delta_account.pk.gr && updated_delta_account.pk.gr == updated_input_account.pk.gr && delta_account.pk.gr == updated_input_account.pk.gr {
-            if updated_delta_account.pk.grsk == delta_account.pk.grsk && updated_delta_account.pk.grsk == updated_input_account.pk.grsk && delta_account.pk.grsk == updated_input_account.pk.grsk {
-                
-                // lets add delta_account and updated_input_account commitments
-                let added_comm = ElGamalCommitment::add_commitments(&delta_account.comm, &updated_input_account.comm);
-                if added_comm == updated_delta_account.comm {
-                    return true
-                }
-            }
+        if updated_delta_accounts.iter().zip(delta_accounts.iter()).all(|(u, d)| u.pk.eq(&d.pk)) && updated_delta_accounts.iter().zip(updated_input_accounts.iter()).all(|(u, i)| u.pk.eq(&i.pk)){
+            println!("hello");
+            Ok(
+                ElGamalCommitment::add_commitments(&delta_account.comm, &updated_input_account.comm)
+            )
+        }else{
+            Err("pks are not equal")
         }
-        return false
+            //Ok(
+                // updated_accounts.iter().zip(delta_accounts.iter())
+                // .map(|(updated_account, delta_account)|
+                //     Account::set_account(
+                //         updated_account.pk, 
+                //         ElGamalCommitment::add_commitments(&updated_account.comm, &delta_account.comm)
+                //     )
+                // ).collect::<Vec<_>>();
+            //)
+        // }else{
+        //     Err("pks are not equal")
+        // }
+
+        // if updated_delta_account.pk.gr == delta_account.pk.gr && updated_delta_account.pk.gr == updated_input_account.pk.gr && delta_account.pk.gr == updated_input_account.pk.gr {
+        //     if updated_delta_account.pk.grsk == delta_account.pk.grsk && updated_delta_account.pk.grsk == updated_input_account.pk.grsk && delta_account.pk.grsk == updated_input_account.pk.grsk {
+                
+        //         // lets add delta_account and updated_input_account commitments
+        //         let added_comm = ElGamalCommitment::add_commitments(&delta_account.comm, &updated_input_account.comm);
+        //         if added_comm == updated_delta_account.comm {
+        //             return true
+        //         }
+        //     }
+        // }
+        // return false
     }
+
 
 
     // cheating_prover sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
@@ -255,9 +285,44 @@ mod test {
             account_vector.push(updated_account);
 
           }
-          let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(account_vector, &value_vector, generate_base_pk); 
+          let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk); 
 
           let check = Account::cheating_prover(delta_and_epsilon_accounts.1);
           assert!(check);
+    }
+
+    #[test]
+    fn update_delta_account_test() {
+        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+
+        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let mut account_vector: Vec<Account> = Vec::new();
+
+        for i in 0..9 {
+
+            let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+    
+            let acc = Account::generate_account(pk);
+
+            // lets get a random scalar to update the account
+            let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+            // lets get a random scalar to update the commitments
+            let comm_scalar = Scalar::random(&mut OsRng);
+
+            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+
+            account_vector.push(updated_account);
+
+          }
+          let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
+
+          let updated_delta_accounts = Account::update_delta_accounts(&account_vector, &delta_and_epsilon_accounts.0);
+
+          for i in 0..9 {
+            let updated_delta_account = Account::verify_delta_update(&updated_delta_accounts.as_ref().unwrap(), &delta_and_epsilon_accounts.0, &account_vector);
+            println!("updated_delta_account {:?}", updated_delta_account);
+          }
     }
 }

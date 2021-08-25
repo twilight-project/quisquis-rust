@@ -101,9 +101,6 @@ impl<'a> Verifier<'a> {
         // Obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
 
-        println!("{:?}", x);
-        println!("{:?}", verify_x);
-
         if x == &verify_x{
             return true
         }else{
@@ -155,7 +152,7 @@ mod test {
             account_vector.push(updated_account);
 
           }
-        let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(account_vector, &value_vector, generate_base_pk);
+        let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
 
         let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epislon_accounts, &rscalar, &value_vector);
 

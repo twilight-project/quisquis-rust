@@ -154,6 +154,10 @@ impl<'a> Prover<'a> {
         
         return (zv_vector, zr1_vector, zr2_vector, x)
     }
+
+    pub fn verify_update_account_prover(){
+
+    }
 }
 
 
@@ -198,7 +202,46 @@ mod test {
             account_vector.push(updated_account);
 
           }
-        let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(account_vector, &value_vector, generate_base_pk);
+        let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
+
+        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epislon_accounts, &rscalar, &value_vector);
+
+        println!("{:?}{:?}{:?}{:?}", zv_vector, zr1_vector, zr2_vector, x);
+    }
+
+    #[test]
+    fn verify_update_account_prover_test(){
+        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+
+        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let mut account_vector: Vec<Account> = Vec::new();
+
+        for i in 0..9 {
+
+            let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+    
+            let acc = Account::generate_account(pk);
+
+            // lets get a random scalar to update the account
+            let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+            // lets get a random scalar to update the commitments
+            let comm_scalar = Scalar::random(&mut OsRng);
+
+            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+
+            account_vector.push(updated_account);
+
+          }
+
+        let create_delta_account = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
+        println!("create_delta_account {:?}", create_delta_account);
+
+        // let updated_delta_account = Account::update_delta_accounts(account_vector, create_delta_account.0);
+        // println!("updated_delta_account {:?}", updated_delta_account.unwrap());
+          
+        let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
 
         let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epislon_accounts, &rscalar, &value_vector);
 

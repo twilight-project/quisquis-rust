@@ -9,6 +9,7 @@ use crate::{
     ristretto::constants::BASE_PK_BTC_COMPRESSED,
     keys::{SecretKey, PublicKey}
 };
+use core::ops::Mul;
 
 const SCALAR_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
@@ -83,9 +84,7 @@ impl PublicKey for RistrettoPublicKey {
     // update_public_key multiplies pk with a random scalar r
     // returns UpdatedPublicKey and random scalar used
     fn update_public_key(p: &RistrettoPublicKey, rscalar: Scalar) -> RistrettoPublicKey {
-        let grr = &rscalar * &p.gr.decompress().unwrap();
-        let grrsk = &rscalar * &p.grsk.decompress().unwrap();
-        RistrettoPublicKey::new_from_pk(grr.compress(), grrsk.compress())
+        *p * &rscalar
     }
 
     // verify_public_key_update verifies if keypair is generated correctly g^r * sk = g^r^sk = h
@@ -127,6 +126,16 @@ impl PartialEq for RistrettoPublicKey {
 }
 
 impl Eq for RistrettoPublicKey {}
+
+impl<'b> Mul<&'b Scalar> for RistrettoPublicKey {
+    type Output = RistrettoPublicKey;
+    /// Scalar to point multiplication: compute `scalar * self`.
+    fn mul(self, scalar: &'b Scalar) -> RistrettoPublicKey {
+        let grr = scalar * self.gr.decompress().unwrap();
+        let grrsk = scalar * self.grsk.decompress().unwrap();
+        RistrettoPublicKey::new_from_pk(grr.compress(), grrsk.compress())
+    }
+}
 
 // ------------------------------------------------------------------------
 // Tests

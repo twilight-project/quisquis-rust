@@ -155,7 +155,25 @@ impl<'a> Prover<'a> {
         return (zv_vector, zr1_vector, zr2_vector, x)
     }
 
-    pub fn verify_update_account_prover(){
+
+    // verify_update_account_prover confirms if anonymity set in delta accounts was updated correctly
+    pub fn verify_update_account_prover(updated_input_accounts: &Vec<Account>, updated_delta_accounts: &Vec<Account>, delta_rscalar: &Vec<Scalar>){
+
+        let commc_commd = updated_input_accounts.iter().zip(updated_delta_accounts.iter()).map(|(i, d)|
+            d.comm - i.comm
+        ).collect::<Vec<_>>();
+
+        let pkdelta_r = updated_delta_accounts.iter().zip(delta_rscalar.iter()).map(|(d, r)|
+            d.pk * r
+        ).collect::<Vec<_>>();
+
+        if commc_commd.iter().zip(pkdelta_r.iter()).all(|(comm, pk)| 
+            comm.c == pk.gr && comm.d == pk.grsk
+        ){
+            println!("true");
+        }else{
+            println!("false");
+        }
 
     }
 }
@@ -214,7 +232,7 @@ mod test {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
         let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
-        let mut account_vector: Vec<Account> = Vec::new();
+        let mut updated_accounts: Vec<Account> = Vec::new();
 
         for i in 0..9 {
 
@@ -231,20 +249,15 @@ mod test {
 
             let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
 
-            account_vector.push(updated_account);
+            updated_accounts.push(updated_account);
 
           }
 
-        let create_delta_account = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
-        println!("create_delta_account {:?}", create_delta_account);
+        let (delta_accounts, _, rscalars) = Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, generate_base_pk);
 
-        // let updated_delta_account = Account::update_delta_accounts(account_vector, create_delta_account.0);
-        // println!("updated_delta_account {:?}", updated_delta_account.unwrap());
+        let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
           
-        let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
-
-        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epislon_accounts, &rscalar, &value_vector);
-
-        println!("{:?}{:?}{:?}{:?}", zv_vector, zr1_vector, zr2_vector, x);
+        let verify_update_proof = Prover::verify_update_account_prover(&updated_accounts, &updated_delta_accounts.unwrap(), &rscalars);
+        
     }
 }

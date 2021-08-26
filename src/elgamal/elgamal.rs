@@ -14,6 +14,7 @@ use crate::{
         signed_integer::SignedInteger
     }
 };
+use core::ops::Sub;
 
 
 
@@ -78,7 +79,7 @@ impl ElGamalCommitment {
      }
 }
 
-// ------- ElGamalCommitment Partial Eq, Eq ------- //
+// ------- ElGamalCommitment Partial Eq, Eq, Sub ------- //
 
 impl PartialEq for ElGamalCommitment{
     fn eq(&self, other: &Self) -> bool {
@@ -87,6 +88,19 @@ impl PartialEq for ElGamalCommitment{
 }
 
 impl Eq for ElGamalCommitment {}
+
+impl Sub<ElGamalCommitment> for ElGamalCommitment {
+    type Output = ElGamalCommitment;
+
+    fn sub(self, other: ElGamalCommitment) -> ElGamalCommitment {
+        let c = &self.c.decompress().unwrap() - &other.c.decompress().unwrap();
+        let d = &self.d.decompress().unwrap() - &other.d.decompress().unwrap();
+        ElGamalCommitment::set_commitment(
+            c.compress(), d.compress()
+        )
+    }
+}
+
 
 // ------------------------------------------------------------------------
 // Tests

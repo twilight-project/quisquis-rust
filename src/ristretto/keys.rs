@@ -9,7 +9,7 @@ use crate::{
     ristretto::constants::BASE_PK_BTC_COMPRESSED,
     keys::{SecretKey, PublicKey}
 };
-use core::ops::Mul;
+use core::ops::{Add,Mul};
 
 const SCALAR_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
@@ -115,7 +115,7 @@ impl PublicKey for RistrettoPublicKey {
 
 }
 
-// ------- PublicKey Partial Eq, Eq ------- //
+// ------- PublicKey Partial Eq, Eq, Add, Mul ------- //
 
 impl PartialEq for RistrettoPublicKey {
     fn eq(&self, other: &RistrettoPublicKey) -> bool {
@@ -127,13 +127,23 @@ impl PartialEq for RistrettoPublicKey {
 
 impl Eq for RistrettoPublicKey {}
 
+impl<'a, 'b> Add<&'b RistrettoPublicKey> for &'a RistrettoPublicKey {
+    type Output = RistrettoPublicKey;
+
+    fn add(self, other: &'b RistrettoPublicKey) -> RistrettoPublicKey {
+        let grr = &self.gr.decompress().unwrap() - &other.gr.decompress().unwrap();
+        let grsk = &self.grsk.decompress().unwrap() - &other.grsk.decompress().unwrap();
+        RistrettoPublicKey::new_from_pk(grr.compress(), grsk.compress())
+    }
+}
+
 impl<'b> Mul<&'b Scalar> for RistrettoPublicKey {
     type Output = RistrettoPublicKey;
     /// Scalar to point multiplication: compute `scalar * self`.
     fn mul(self, scalar: &'b Scalar) -> RistrettoPublicKey {
         let grr = scalar * self.gr.decompress().unwrap();
-        let grrsk = scalar * self.grsk.decompress().unwrap();
-        RistrettoPublicKey::new_from_pk(grr.compress(), grrsk.compress())
+        let grsk = scalar * self.grsk.decompress().unwrap();
+        RistrettoPublicKey::new_from_pk(grr.compress(), grsk.compress())
     }
 }
 

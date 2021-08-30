@@ -158,8 +158,7 @@ impl<'a> Prover<'a> {
 
 
     // verify_update_account_prover confirms if anonymity set in delta accounts was updated correctly
-    pub fn verify_update_account_prover_with_iterators(updated_input_accounts: &Vec<Account>, updated_delta_accounts: &Vec<Account>, delta_rscalar: &Vec<Scalar>){
-        let before = Instant::now();
+    pub fn verify_update_account_prover(updated_input_accounts: &Vec<Account>, updated_delta_accounts: &Vec<Account>, delta_rscalar: &Vec<Scalar>) -> (Scalar, Vec<Scalar>){
         // check if (c,d)/c,d) = pkdelta_r
         // lets do c-c and d-d for the commitments in both updated_input and updated_delta account vectors
         let check_delta = updated_input_accounts.iter().zip(updated_delta_accounts.iter()).map(|(i, d)|
@@ -175,8 +174,8 @@ impl<'a> Prover<'a> {
         ).collect::<Vec<_>>();
 
         // now check if the updated commitments are equal to pkdelta_r, collect them in a vector
-        // that is the anonymity set
-        let anonymity_set = check_delta.iter().zip(pkdelta_r.iter()).filter(|(cd, pk)| 
+        // t(hat is the anonymity set
+        let anonymity_set = check_delta.iter().enumerate().zip(pkdelta_r.iter()).filter(|((i, cd), pk)| 
             cd.comm.c == pk.gr && cd.comm.d == pk.grsk 
         ).collect::<Vec<_>>();
 
@@ -194,8 +193,8 @@ impl<'a> Prover<'a> {
         // lets multiply s_scalar with the g of updated_input and the h of updated_delta accounts
         let updated_input_with_s_scalar = anonymity_set.iter().map(|i|
             Account{
-                pk: i.0.pk * &s_scalar, 
-                comm: i.0.comm
+                pk: i.0.1.pk * &s_scalar, 
+                comm: i.0.1.comm
             }
             
         ).collect::<Vec<_>>();
@@ -203,73 +202,19 @@ impl<'a> Prover<'a> {
         for account in updated_input_with_s_scalar.iter(){
             prover.allocate_account(b"delta_account", *account); 
         }
-        println!("Elapsed time: {:.2?}", before.elapsed());
+
         // Obtain a scalar challenge
         let x = transcript.get_challenge(b"chal");
 
-
-        // THIS IS WRONG HERE
-        let z = delta_rscalar.iter().map(|rscalar| s_scalar - (x * rscalar)).collect::<Vec<_>>();
-
-        println!("{:?}", z);
-        
-        // ){
-        //     println!("true");
-        // }else{
-        //     println!("false");
-        // }
-
-    }
-
-    pub fn verify_update_account_prover_with_forloop(updated_input_accounts: &Vec<Account>, updated_delta_accounts: &Vec<Account>, delta_rscalar: &Vec<Scalar>){
-        let before = Instant::now();
-
-        let mut transcript = Transcript::new(b"VerifyUpdateAcct");
         let mut z_vector: Vec<Scalar> = Vec::new();
-        let mut s_scalar_vector: Vec<Scalar> = Vec::new();
 
-        for i in 0..9 {
-            let updated_comm = updated_delta_accounts[i].comm - updated_input_accounts[i].comm;
-
-            let mut account = Account{
-                pk: updated_delta_accounts[i].pk, 
-                comm: updated_comm
-            };
-
-            let pkdelta_r = updated_delta_accounts[i].pk * &delta_rscalar[i];
-
-            if account.comm.c == pkdelta_r.gr && account.comm.d == pkdelta_r.grsk{
-
-                // lets create random scalar s with the transcript
-                
-                let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-
-                prover.scalars = delta_rscalar.to_vec();
-
-                let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
-
-                // Generate a single blinding factor
-                let s_scalar = Scalar::random(&mut transcript_rng);
-                s_scalar_vector.push(s_scalar);
-
-                account.pk = account.pk * &s_scalar;
-                
-                prover.allocate_account(b"delta_account", account); 
-            }
-        }
-        println!("Elapsed time: {:.2?}", before.elapsed());
-        // Obtain a scalar challenge
-        let x = transcript.get_challenge(b"chal");
-
-        for i in 0..7{
-            let z = s_scalar_vector[i] - (x + delta_rscalar[i]);
-            z_vector.push(z);
+        // lets do z = s - xrdelta
+        for i in anonymity_set.iter() {
+            z_vector.push(s_scalar - (x * delta_rscalar[i.0.0]));
         }
 
-        println!("{:?}", z_vector);
-        
-
-        }
+        return (x, z_vector)
+    }
     
 }
 
@@ -352,8 +297,8 @@ mod test {
 
         let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
           
-        let verify_update_proof = Prover::verify_update_account_prover_with_iterators(&updated_accounts, &updated_delta_accounts.as_ref().unwrap(), &rscalars);
-        let verify_update_proof_with_forloop = Prover::verify_update_account_prover_with_forloop(&updated_accounts, &updated_delta_accounts.unwrap(), &rscalars);
+        let verify_update_proof = Prover::verify_update_account_prover(&updated_accounts, &updated_delta_accounts.as_ref().unwrap(), &rscalars);
         
+        println!("{:?}", verify_update_proof);
     }
 }

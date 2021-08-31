@@ -80,6 +80,24 @@ impl Account {
         Account::set_account(updated_pk, updated_comm)
     }
 
+
+    // verify_update_account verifies if an account was updated properly
+    pub fn verify_account_update(updated_input_accounts: &Vec<Account>, accounts: &Vec<Account>, updated_keys_scalar: &Vec<Scalar>, generate_commitment_scalar: &Vec<Scalar>) -> bool{
+        
+        let mut updated_accounts: Vec<Account> = Vec::new();
+        for i in 0..9 {
+            updated_accounts.push(Account::update_account(accounts[i], 0, updated_keys_scalar[i], generate_commitment_scalar[i]));
+        }
+        
+        if updated_accounts.iter().zip(updated_input_accounts.iter()).all(|(u, i)|
+            u.eq(&i)
+        ){
+            return true
+        }else{
+            return false
+        }
+    }
+
     // create_delta_and_epsilon_accounts creates account delta and account epsilon
     // takes Accounts vector, bl (updated balance), base_pair generated with fixed-g
     // returns Account Epsilon and Delta
@@ -148,10 +166,9 @@ impl Account {
     }
 
 
-
-    // cheating_prover sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
+    // verify_delta_identity_check sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
     // else returns false
-    pub fn cheating_prover(epsilon_accounts: Vec<Account>) -> bool{
+    pub fn verify_delta_identity_check(epsilon_accounts: Vec<Account>) -> bool{
 
         let sum_c: RistrettoPoint = epsilon_accounts.iter().map(|s| s.comm.c.decompress().unwrap()).sum();
         let sum_d: RistrettoPoint = epsilon_accounts.iter().map(|s| s.comm.d.decompress().unwrap()).sum();
@@ -244,7 +261,7 @@ mod test {
         }
     };
     #[test]
-    fn cheating_prover_test() {
+    fn verify_delta_identity_check_test() {
 
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
@@ -272,7 +289,7 @@ mod test {
         
           let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk); 
 
-        let check = Account::cheating_prover(delta_and_epsilon_accounts.1);
+        let check = Account::verify_delta_identity_check(delta_and_epsilon_accounts.1);
           
         assert!(check);
     }
@@ -309,5 +326,40 @@ mod test {
         let check = Account::verify_delta_update(&updated_delta_accounts.as_ref().unwrap(), &delta_and_epsilon_accounts.0, &account_vector);
         
         assert!(check.unwrap());
+    }
+
+    #[test]
+    fn verify_account_update_test() {
+
+        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let mut account_vector: Vec<Account> = Vec::new();
+        let mut updated_account_vector: Vec<Account> = Vec::new();
+        let mut updated_keys_scalar_vector: Vec<Scalar> = Vec::new();
+        let mut generate_commitment_scalar_vector: Vec<Scalar> = Vec::new();
+
+        for i in 0..9 {
+
+            let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+    
+            let acc = Account::generate_account(pk);
+            account_vector.push(acc);
+
+            // lets get a random scalar to update the account
+            let updated_keys_scalar = Scalar::random(&mut OsRng);
+            updated_keys_scalar_vector.push(updated_keys_scalar);
+
+            // lets get a random scalar to update the commitments
+            let comm_scalar = Scalar::random(&mut OsRng);
+            generate_commitment_scalar_vector.push(comm_scalar);
+
+            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+
+            updated_account_vector.push(updated_account);
+        }
+        
+        let check = Account::verify_account_update(&updated_account_vector, &account_vector, &updated_keys_scalar_vector, &generate_commitment_scalar_vector);
+        
+        assert!(check);
     }
 }

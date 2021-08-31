@@ -239,10 +239,17 @@ mod test {
         let (delta_accounts, _, rscalars) = Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, generate_base_pk);
 
         let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
-          
-        let (x, z_vector) = Prover::verify_update_account_prover(&updated_accounts, &updated_delta_accounts.as_ref().unwrap(), &rscalars);
 
-        let check = Verifier::verify_update_account_verifier(&updated_accounts, &updated_delta_accounts.as_ref().unwrap(), &z_vector, &x);
+        // sending anonymity set as we know it at this point
+        let updated_accounts_slice = &updated_accounts[1..9];
+
+        let updated_delta_accounts_slice = &updated_delta_accounts.as_ref().unwrap()[1..9];
+
+        let rscalars_slice = &rscalars[1..9];
+          
+        let (x, z_vector) = Prover::verify_update_account_prover(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &rscalars_slice.to_vec());
+
+        let check = Verifier::verify_update_account_verifier(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &z_vector, &x);
 
         assert!(check);
     }

@@ -191,16 +191,26 @@ impl<'a> Prover<'a> {
         let s_scalar = Scalar::random(&mut transcript_rng);
 
         // lets multiply s_scalar with the g of updated_input and the h of updated_delta accounts
-        let updated_input_with_s_scalar = anonymity_set.iter().map(|i|
-            Account{
-                pk: i.0.1.pk * &s_scalar, 
-                comm: i.0.1.comm
-            }
+        let updated_input_pk_with_s_scalar = anonymity_set.iter().map(|i|
+                i.0.1.pk * &s_scalar
             
         ).collect::<Vec<_>>();
 
-        for account in updated_input_with_s_scalar.iter(){
-            prover.allocate_account(b"delta_account", *account); 
+
+        // lets do x <- H(pk_input || pk_output || a)
+        // pk_input is in updated_input_accounts
+        // pk_output is in updated_delta_accounts
+        // a is updated_input_pk_with_s_scalar )
+        for (input, output) in updated_input_accounts.iter().zip(updated_delta_accounts.iter()){
+            prover.allocate_point(b"inputgr", input.pk.gr);
+            prover.allocate_point(b"inputgrsk", input.pk.grsk);
+            prover.allocate_point(b"outputgr", output.pk.gr);
+            prover.allocate_point(b"outputgrsk", output.pk.grsk);  
+        }
+
+        for pk in updated_input_pk_with_s_scalar.iter(){
+            prover.allocate_point(b"commitmentgr", pk.gr);
+            prover.allocate_point(b"commitmentgrsk", pk.grsk);  
         }
 
         // Obtain a scalar challenge

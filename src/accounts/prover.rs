@@ -179,6 +179,10 @@ impl<'a> Prover<'a> {
             cd.comm.c == pk.gr && cd.comm.d == pk.grsk 
         ).collect::<Vec<_>>();
 
+        let anonymity_set_index: Vec<_> = anonymity_set.iter().map(|i| i.0.0).collect();
+
+        println!("{:?}", anonymity_set_index);
+
         // lets create random scalar s with the transcript
         let mut transcript = Transcript::new(b"VerifyUpdateAcct");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
@@ -196,16 +200,15 @@ impl<'a> Prover<'a> {
             
         ).collect::<Vec<_>>();
 
-
         // lets do x <- H(pk_input || pk_output || a)
         // pk_input is in updated_input_accounts
         // pk_output is in updated_delta_accounts
         // a is updated_input_pk_with_s_scalar )
-        for (input, output) in updated_input_accounts.iter().zip(updated_delta_accounts.iter()){
-            prover.allocate_point(b"inputgr", input.pk.gr);
-            prover.allocate_point(b"inputgrsk", input.pk.grsk);
-            prover.allocate_point(b"outputgr", output.pk.gr);
-            prover.allocate_point(b"outputgrsk", output.pk.grsk);  
+        for i in anonymity_set_index {
+            prover.allocate_point(b"inputgr", updated_input_accounts[i].pk.gr);
+            prover.allocate_point(b"inputgrsk", updated_input_accounts[i].pk.grsk);
+            prover.allocate_point(b"outputgr", updated_delta_accounts[i].pk.gr);
+            prover.allocate_point(b"outputgrsk", updated_delta_accounts[i].pk.grsk);  
         }
 
         for pk in updated_input_pk_with_s_scalar.iter(){

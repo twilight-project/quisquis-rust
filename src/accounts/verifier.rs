@@ -109,9 +109,9 @@ impl<'a> Verifier<'a> {
     }
 
     // verify_update_account_verifier verifies delta accounts were updated correctly
-    pub fn verify_update_account_verifier(updated_input_accounts: &Vec<Account>, updated_delta_accounts: &Vec<Account>, z_vector: &Vec<Scalar>, x: &Scalar){
+    pub fn verify_update_account_verifier(updated_input_accounts: &Vec<Account>, updated_delta_accounts: &Vec<Account>, z_vector: &Vec<Scalar>, x: &Scalar) -> bool{
 
-        let divided_comms = updated_input_accounts.iter().zip(updated_delta_accounts.iter()).map(|(i, d)|
+        let a = updated_input_accounts.iter().zip(updated_delta_accounts.iter()).map(|(i, d)|
                 d.comm - i.comm
         ).collect::<Vec<_>>();
 
@@ -121,19 +121,40 @@ impl<'a> Verifier<'a> {
         ).collect::<Vec<_>>();
 
 
-        let alpha: Vec<_> = divided_comms.iter().map(|i| i * x).collect();
+        let alpha: Vec<_> = a.iter().map(|i| i * x).collect();
 
-        let e = alpha.iter().zip(pkinput_z.iter()).flat_map(|(a, p)|
-            [a.c.decompress().unwrap() + p.gr.decompress().unwrap(), a.d.decompress().unwrap() + p.grsk.decompress().unwrap()]
+        // e = (pk_input * z) + a * c
+        let e = alpha.iter().zip(pkinput_z.iter()).map(|(a, p)|
+            (a.c.decompress().unwrap() + p.gr.decompress().unwrap(), a.d.decompress().unwrap() + p.grsk.decompress().unwrap())
         ).collect::<Vec<_>>();
 
         let mut transcript = Transcript::new(b"VerifyUpdateAcct");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
 
-        for i in 0..9 {
-            verifier.allocate_account(b"input_account", updated_input_accounts[i]);
-            verifier.allocate_account(b"delta_account", updated_delta_accounts[i]);
-        };
+        // lets do x <- H(pk_input || pk_output || e)
+        // pk_input is in updated_input_accounts
+        // pk_output is in updated_delta_accounts
+        for (input, output) in updated_input_accounts.iter().zip(updated_delta_accounts.iter()){
+            verifier.allocate_point(b"inputgr", input.pk.gr);
+            verifier.allocate_point(b"inputgrsk", input.pk.grsk);
+            verifier.allocate_point(b"outputgr", output.pk.gr);
+            verifier.allocate_point(b"outputgrsk", output.pk.grsk);  
+        }
+
+        for pk in e.iter(){
+            verifier.allocate_point(b"commitmentgr", pk.0.compress());
+            verifier.allocate_point(b"commitmentgrsk", pk.1.compress());  
+        }
+
+        // Obtain a scalar challenge
+        let verify_x = transcript.get_challenge(b"chal");
+
+        if x == &verify_x{
+            return true
+        }else{
+            return false
+        }
+
     }
 }
 
@@ -220,9 +241,9 @@ mod test {
         let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
           
         let (x, z_vector) = Prover::verify_update_account_prover(&updated_accounts, &updated_delta_accounts.as_ref().unwrap(), &rscalars);
-        
-        println!("{:?}{:?}", x, z_vector);
 
-        Verifier::verify_update_account_verifier(&updated_accounts, &updated_delta_accounts.as_ref().unwrap(), &z_vector, &x);
+        let check = Verifier::verify_update_account_verifier(&updated_accounts, &updated_delta_accounts.as_ref().unwrap(), &z_vector, &x);
+
+        assert!(check);
     }
 }

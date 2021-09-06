@@ -9,6 +9,7 @@ use crate::{
     ristretto::constants::BASE_PK_BTC_COMPRESSED,
     keys::{SecretKey, PublicKey}
 };
+use core::ops::{Add,Mul};
 
 const SCALAR_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
@@ -72,7 +73,7 @@ impl PublicKey for RistrettoPublicKey {
         PUBLIC_KEY_LENGTH
     }
 
-    /// Serialize a public key as bytes.
+    /// as_bytes convert a public key to bytes
     fn as_bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(self.gr.as_bytes());
@@ -83,9 +84,7 @@ impl PublicKey for RistrettoPublicKey {
     // update_public_key multiplies pk with a random scalar r
     // returns UpdatedPublicKey and random scalar used
     fn update_public_key(p: &RistrettoPublicKey, rscalar: Scalar) -> RistrettoPublicKey {
-        let grr = &rscalar * &p.gr.decompress().unwrap();
-        let grrsk = &rscalar * &p.grsk.decompress().unwrap();
-        RistrettoPublicKey::new_from_pk(grr.compress(), grrsk.compress())
+        *p * &rscalar
     }
 
     // verify_public_key_update verifies if keypair is generated correctly g^r * sk = g^r^sk = h
@@ -116,7 +115,7 @@ impl PublicKey for RistrettoPublicKey {
 
 }
 
-// ------- PublicKey Partial Eq, Eq ------- //
+// ------- PublicKey Partial Eq, Eq, Add, Mul ------- //
 
 impl PartialEq for RistrettoPublicKey {
     fn eq(&self, other: &RistrettoPublicKey) -> bool {
@@ -127,6 +126,26 @@ impl PartialEq for RistrettoPublicKey {
 }
 
 impl Eq for RistrettoPublicKey {}
+
+impl<'a, 'b> Add<&'b RistrettoPublicKey> for &'a RistrettoPublicKey {
+    type Output = RistrettoPublicKey;
+
+    fn add(self, other: &'b RistrettoPublicKey) -> RistrettoPublicKey {
+        let grr = &self.gr.decompress().unwrap() - &other.gr.decompress().unwrap();
+        let grsk = &self.grsk.decompress().unwrap() - &other.grsk.decompress().unwrap();
+        RistrettoPublicKey::new_from_pk(grr.compress(), grsk.compress())
+    }
+}
+
+impl<'b> Mul<&'b Scalar> for RistrettoPublicKey {
+    type Output = RistrettoPublicKey;
+    /// Scalar to point multiplication: compute `scalar * self`.
+    fn mul(self, scalar: &'b Scalar) -> RistrettoPublicKey {
+        let grr = scalar * self.gr.decompress().unwrap();
+        let grsk = scalar * self.grsk.decompress().unwrap();
+        RistrettoPublicKey::new_from_pk(grr.compress(), grsk.compress())
+    }
+}
 
 // ------------------------------------------------------------------------
 // Tests

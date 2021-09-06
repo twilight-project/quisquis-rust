@@ -1,17 +1,21 @@
 use curve25519_dalek::{
-    ristretto::{CompressedRistretto},
+    ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
-    constants::RISTRETTO_BASEPOINT_TABLE
+    constants::RISTRETTO_BASEPOINT_TABLE,
+    traits::VartimeMultiscalarMul
 };
 
 use merlin::Transcript;
 use crate::accounts::TranscriptProtocol;
+use itertools::interleave;
 
 use crate::{
     accounts::Account,
     elgamal::{
-        signed_integer::SignedInteger
-    }
+        signed_integer::SignedInteger,
+        elgamal::ElGamalCommitment
+    },
+    ristretto::RistrettoPublicKey
 };
 
 pub struct Verifier<'a> {
@@ -43,6 +47,14 @@ impl<'a> Verifier<'a> {
     /// Allocate and assign an account with the given `label`.
     pub fn allocate_account(&mut self, label: &'static [u8], account: Account)  {
         self.transcript.append_account_var(label, &account);
+    }
+
+    pub fn multiscalar_multiplication(combined_scalars: &Vec<Scalar>, point: &Vec<CompressedRistretto>) -> Option<RistrettoPoint>{
+
+        RistrettoPoint::optional_multiscalar_mul(
+                    combined_scalars,
+                    point.iter().map(|pt| pt.decompress()),
+                )
     }
 
     // verify_delta_compact_verifier verifies proves values committed in delta_accounts and epsilon_accounts are the same
@@ -111,22 +123,23 @@ impl<'a> Verifier<'a> {
     // verify_update_account_verifier verifies delta accounts were updated correctly
     pub fn verify_update_account_verifier(updated_input_accounts: &Vec<Account>, updated_delta_accounts: &Vec<Account>, z_vector: &Vec<Scalar>, x: &Scalar) -> bool{
 
+
         let a = updated_input_accounts.iter().zip(updated_delta_accounts.iter()).map(|(i, d)|
                 d.comm - i.comm
         ).collect::<Vec<_>>();
 
-        // lets create pkinput_z that is the collection of all input account pks with z multiplied
-        let pkinput_z = updated_input_accounts.iter().zip(z_vector.iter()).map(|(i, z)|
-            i.pk * z
-        ).collect::<Vec<_>>();
+        let mut e11: Vec<CompressedRistretto> = Vec::new();
+        let mut e12: Vec<CompressedRistretto> = Vec::new();
 
+        for i in 0..7 {
+            let combined_scalars = vec![z_vector[i], *x];
+            let point = vec![updated_input_accounts[i].pk.gr, a[i].c];
+            e11.push(Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress());
 
-        let alpha: Vec<_> = a.iter().map(|i| i * x).collect();
-
-        // e = (pk_input * z) + a * c
-        let e = alpha.iter().zip(pkinput_z.iter()).map(|(a, p)|
-            (a.c.decompress().unwrap() + p.gr.decompress().unwrap(), a.d.decompress().unwrap() + p.grsk.decompress().unwrap())
-        ).collect::<Vec<_>>();
+            let combined_scalars = vec![z_vector[i], *x];
+            let point = vec![updated_input_accounts[i].pk.grsk, a[i].d];
+            e12.push(Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress());
+        }
 
         let mut transcript = Transcript::new(b"VerifyUpdateAcct");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
@@ -141,13 +154,16 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"outputgrsk", output.pk.grsk);  
         }
 
-        for pk in e.iter(){
-            verifier.allocate_point(b"commitmentgr", pk.0.compress());
-            verifier.allocate_point(b"commitmentgrsk", pk.1.compress());  
+        for i in 0..7{
+            verifier.allocate_point(b"commitmentgr", e11[i]);
+            verifier.allocate_point(b"commitmentgrsk", e12[i]);
         }
 
         // Obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
+
+        println!("{:?}", x);
+        println!("{:?}", verify_x);
 
         if x == &verify_x{
             return true

@@ -181,8 +181,6 @@ impl<'a> Prover<'a> {
 
         let anonymity_set_index: Vec<_> = anonymity_set.iter().map(|i| i.0.0).collect();
 
-        println!("{:?}", anonymity_set_index);
-
         // lets create random scalar s with the transcript
         let mut transcript = Transcript::new(b"VerifyUpdateAcct");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);

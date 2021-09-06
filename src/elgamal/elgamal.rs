@@ -14,6 +14,7 @@ use crate::{
         signed_integer::SignedInteger
     }
 };
+use core::ops::{Sub, Mul};
 
 
 
@@ -78,6 +79,41 @@ impl ElGamalCommitment {
      }
 }
 
+// ------- ElGamalCommitment Partial Eq, Eq, Sub, Mul ------- //
+
+impl PartialEq for ElGamalCommitment{
+    fn eq(&self, other: &Self) -> bool {
+        self.c == other.c && self.d == other.d
+    }
+}
+
+impl Eq for ElGamalCommitment {}
+
+impl Sub<ElGamalCommitment> for ElGamalCommitment {
+    type Output = ElGamalCommitment;
+
+    fn sub(self, other: ElGamalCommitment) -> ElGamalCommitment {
+        let c = &self.c.decompress().unwrap() - &other.c.decompress().unwrap();
+        let d = &self.d.decompress().unwrap() - &other.d.decompress().unwrap();
+        ElGamalCommitment::set_commitment(
+            c.compress(), d.compress()
+        )
+    }
+}
+
+impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCommitment {
+    type Output = ElGamalCommitment;
+    /// Scalar multiplication: compute `scalar * self`.
+    fn mul(self, scalar: &'b Scalar) -> ElGamalCommitment {
+        let c = scalar * &self.c.decompress().unwrap();
+        let d = scalar * &self.d.decompress().unwrap();
+        ElGamalCommitment::set_commitment(
+            c.compress(), d.compress()
+        )
+    }
+}
+
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -96,12 +132,4 @@ mod test {
     }
 }
 
-// ------- ElGamalCommitment Partial Eq, Eq ------- //
 
-impl PartialEq for ElGamalCommitment{
-    fn eq(&self, other: &Self) -> bool {
-        self.c == other.c && self.d == other.d
-    }
-}
-
-impl Eq for ElGamalCommitment {}

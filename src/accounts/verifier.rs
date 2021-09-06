@@ -1,7 +1,7 @@
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
-    constants::RISTRETTO_BASEPOINT_TABLE,
+    constants::RISTRETTO_BASEPOINT_COMPRESSED,
     traits::VartimeMultiscalarMul
 };
 
@@ -76,38 +76,30 @@ impl<'a> Verifier<'a> {
             // e_epsilon = g_epsilon ^ zr2 + cepsilon ^ x
             // f_epsilon = g ^ zv + h_epsilon ^ zr2 + cepsilon ^ x
 
-            // lets first create e_delta
-            let gdelta_zr1 = &delta_accounts[i].pk.gr.decompress().unwrap() * &zr1_vector[i];
-            let cdelta_x =  &delta_accounts[i].comm.c.decompress().unwrap() * x;
-
-            let e_delta = gdelta_zr1 + cdelta_x;
+            let combined_scalars = vec![zr1_vector[i], *x];
+            let point = vec![delta_accounts[i].pk.gr, delta_accounts[i].comm.c];
+            let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
             // lets create f_delta
-            let g_zv = &RISTRETTO_BASEPOINT_TABLE * &zv_vector[i];
-            let hdelta_zr1 = &delta_accounts[i].pk.grsk.decompress().unwrap() * &zr1_vector[i];
-
-            let ddelta_x =  &delta_accounts[i].comm.d.decompress().unwrap() * x;
-            
-            let f_delta = g_zv + hdelta_zr1 + ddelta_x;
-
-            let cepsilon_x =  &epsilon_accounts[i].comm.c.decompress().unwrap() * x;
+            let combined_scalars = vec![zr1_vector[i], *x, zv_vector[i]];
+            let point = vec![delta_accounts[i].pk.grsk, delta_accounts[i].comm.d, RISTRETTO_BASEPOINT_COMPRESSED];
+            let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
             // lets create e_epsilon
-            let g_zr2 = &epsilon_accounts[i].pk.gr.decompress().unwrap() * &zr2_vector[i];
-            let e_epsilon = g_zr2 + cepsilon_x;
-
-            let depsilon_x =  &epsilon_accounts[i].comm.d.decompress().unwrap() * x;
+            let combined_scalars = vec![zr2_vector[i], *x];
+            let point = vec![epsilon_accounts[i].pk.gr, epsilon_accounts[i].comm.c];
+            let e_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
             // lets create f_epsilon
-            let h_epsilon_zr2 = &epsilon_accounts[i].pk.grsk.decompress().unwrap() * &zr2_vector[i];
-            let f_epsilon = g_zv + h_epsilon_zr2 + depsilon_x;
+            let combined_scalars = vec![zr2_vector[i], *x, zv_vector[i]];
+            let point = vec![epsilon_accounts[i].pk.grsk, epsilon_accounts[i].comm.d, RISTRETTO_BASEPOINT_COMPRESSED];
+            let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
             // lets append e_delta, f_delta, e_epsilon and f_epsilon to the transcript
-            verifier.allocate_point(b"e_delta", e_delta.compress());
-            verifier.allocate_point(b"f_delta", f_delta.compress());
-            verifier.allocate_point(b"e_epsilon", e_epsilon.compress());
-            verifier.allocate_point(b"f_epsilon", f_epsilon.compress());
-
+            verifier.allocate_point(b"e_delta", e_delta);
+            verifier.allocate_point(b"f_delta", f_delta);
+            verifier.allocate_point(b"e_epsilon", e_epsilon);
+            verifier.allocate_point(b"f_epsilon", f_epsilon);
         }
 
         // Obtain a scalar challenge
@@ -161,9 +153,6 @@ impl<'a> Verifier<'a> {
 
         // Obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
-
-        println!("{:?}", x);
-        println!("{:?}", verify_x);
 
         if x == &verify_x{
             return true

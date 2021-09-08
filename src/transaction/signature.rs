@@ -1,6 +1,5 @@
-use core::iter;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::ristretto::CompressedRistretto;
+use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use std::fmt;
 
@@ -63,7 +62,7 @@ impl VerificationKey {
 }
 
 
-
+#[allow(non_snake_case)]
 /// A Schnorr signature.
 #[derive(Copy, Clone)]
 pub struct Signature {
@@ -72,7 +71,7 @@ pub struct Signature {
     /// Nonce commitment
     pub R: CompressedRistretto,
 }
-
+#[allow(non_snake_case)]
 impl Signature {
     /// Creates a signature for a single private key and single message
     pub fn sign(transcript: &mut Transcript, pubkey: VerificationKey, privkey: Scalar) -> Signature {
@@ -89,11 +88,11 @@ impl Signature {
         let R = (&pubkey.g.decompress().unwrap() * &r).compress();
 
         let c = {
-            transcript.zkschnorr_domain_sep();
-            transcript.append_point(b"G", &pubkey.g);
-            transcript.append_point(b"H", &pubkey.h);
-            transcript.append_point(b"R", &R);
-            transcript.challenge_scalar(b"c")
+            transcript.domain_sep(b"zkschnorr");
+            transcript.append_point_var(b"G", &pubkey.g);
+            transcript.append_point_var(b"H", &pubkey.h);
+            transcript.append_point_var(b"R", &R);
+            transcript.get_challenge(b"c")
         };
 
         let s = r + c * privkey;
@@ -112,11 +111,11 @@ impl Signature {
         // Make c = H(pubkey, R, m)
         // The message has already been fed into the transcript
         let c = {
-            transcript.zkschnorr_domain_sep();
-            transcript.append_point(b"G", &pubkey.g);
-            transcript.append_point(b"H", &pubkey.h);
-            transcript.append_point(b"R", &self.R);
-            transcript.challenge_scalar(b"c")
+            transcript.domain_sep(b"zkschnorr");
+            transcript.append_point_var(b"G", &pubkey.g);
+            transcript.append_point_var(b"H", &pubkey.h);
+            transcript.append_point_var(b"R", &self.R);
+            transcript.get_challenge(b"c")
         };
         // Form the final linear combination:
         // `s * pubkey_g = R + c * pubkey_h`
@@ -174,7 +173,7 @@ impl fmt::Debug for Signature {
 }
 
 //Signature Tests
-
+#[allow(non_snake_case)]
 #[test]
 fn sign_and_verify_single() {
     let privkey = Scalar::from(1u64);
@@ -199,7 +198,7 @@ fn sign_and_verify_single() {
         .verify(&mut Transcript::new(b"invalid transcript"), X)
         .is_err());
 }
-
+#[allow(non_snake_case)]
 #[test]
 fn sign_and_verify_single_msg() {
     let privkey = Scalar::from(1u64);

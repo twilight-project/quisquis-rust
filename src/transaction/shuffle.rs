@@ -2,15 +2,7 @@ use curve25519_dalek::{
     scalar::Scalar
 };
 use crate::{
-    keys::{SecretKey, PublicKey},
-    accounts::Account,
-    ristretto::{
-        RistrettoPublicKey,
-        RistrettoSecretKey
-    },
-    elgamal::{
-        elgamal::ElGamalCommitment
-    }
+    accounts::Account
 };
 
 use rand::rngs::OsRng;
@@ -148,6 +140,13 @@ impl ShuffleProof {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        keys::{PublicKey, SecretKey},
+        ristretto::{
+            RistrettoPublicKey,
+            RistrettoSecretKey
+        }
+    };
     #[test]
     fn permutation_matrix_test() {
         let perm = Permutation::new(&mut OsRng, N);
@@ -167,7 +166,7 @@ mod test {
  
          // lets create these accounts and associated keypairs
  
-         for as_row_major in 0..9 {
+         for _ in 0..9 {
              let mut rng = rand::thread_rng();
              let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
              let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);

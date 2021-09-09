@@ -13,7 +13,7 @@ use quisquislib::{
     accounts::{
         Account
     },
-    util::address::{Address}
+    //util::address::{Address}
     
 };
 use curve25519_dalek::{
@@ -84,7 +84,7 @@ pub fn main() {
     let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
     println!("updated account {:?}", updated_account);
 
-    let rscalar = Scalar::random(&mut OsRng);
+    //let rscalar = Scalar::random(&mut OsRng);
 
 //     let create_delta_account = Account::create_delta_account(updated_account, 5, rscalar);
 //     println!("create_delta_account {:?}", create_delta_account);

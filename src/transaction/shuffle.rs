@@ -61,7 +61,7 @@ pub struct Shuffle {
 
 impl Shuffle {
     pub fn new(
-        inputs: Vec<Account>,   //Accounts to be shuffled
+        inputs: &Vec<Account>,   //Accounts to be shuffled
         shuffle: u32      // 1 -> Input shuffle, 2-> Output shuffle
     ) -> Result<Self, &'static str> {
         let len = inputs.len();
@@ -201,7 +201,7 @@ mod test {
         }
         // 1 for input , 2 for output
         let shuffle = {
-            Shuffle::new(account_vector,1)
+            Shuffle::new(&account_vector,1)
         };
         let inp = shuffle.as_ref().unwrap().inputs.as_row_major();
         let out = shuffle.as_ref().unwrap().outputs.as_row_major();

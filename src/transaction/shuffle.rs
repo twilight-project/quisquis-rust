@@ -120,6 +120,24 @@ impl Shuffle {
         &self.pi
     }
 
+    pub fn get_rho(&self) -> &Scalar {
+        &self.rho
+    }
+
+    pub fn get_tau(&self) -> &Array2D<Scalar> {
+        &self.shuffled_tau
+    }
+
+    pub fn get_inputs_vector(&self) -> Vec<Account> {
+        self.inputs.as_row_major()
+    }
+
+    pub fn get_outputs_vector(&self) -> Vec<Account> {
+        self.outputs.as_row_major()
+    }
+
+    
+
     //pub fn gen_proof(&self,)
         
 }

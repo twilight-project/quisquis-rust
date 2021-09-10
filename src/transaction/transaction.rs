@@ -267,4 +267,30 @@ mod test {
 
         // assert_ne!(result.unwrap().1, shuffled_vector.0)
     }
+
+    #[test]
+    fn shuffle_get_test() {
+        use crate::{
+            transaction::shuffle::{Shuffle}
+        };
+        // lets define a vector of accounts
+        let mut account_vector: Vec<Account> = Vec::new();
+ 
+        // lets create these accounts and associated keypairs
+
+        for _ in 0..9 {
+            let mut rng = rand::thread_rng();
+            let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
+            let acc = Account::generate_account(pk);
+            account_vector.push(acc);
+
+        }
+        let shuffle = {
+            Shuffle::new(account_vector,1)
+        };
+        let acc = shuffle.unwrap().get_inputs_vector();
+        println!("{:?}", acc);
+
+    }
 }

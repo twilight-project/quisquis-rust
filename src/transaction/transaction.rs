@@ -5,7 +5,8 @@ use crate::{
     keys::{SecretKey, PublicKey},
     accounts::{
         Account,
-        Prover
+        Prover,
+        Verifier
     },
     transaction::shuffle::Shuffle,
     ristretto::{
@@ -149,61 +150,59 @@ impl Sender {
 
     }
 
-    pub fn create_transaction(value_vector: &Vec<i64>, account_vector: &Vec<Account>, anonymity_account_diff: usize) -> (Vec<Account>, Vec<Account>) {
+    // create_transaction creates a quisquis transaction
+    pub fn create_transaction(value_vector: &Vec<i64>, account_vector: &Vec<Account>, anonymity_account_diff: usize) -> Result<(Vec<Account>, Vec<Account>, Vec<Account>), &'static str> {
 
-        //create vectors to hold random scalars
-        let mut update_key_random_scalar_vector: Vec<Scalar> = Vec::new();
-        let mut update_key_again_random_scalar_vector: Vec<Scalar> = Vec::new();
-
-        let generate_commitment_scalar = Scalar::random(&mut OsRng);
-        let generate_commitment_again_scalar = Scalar::random(&mut OsRng);
-
-        let mut updated_account_vector: Vec<Account> = Vec::new();
-        let mut updated_again_account_vector: Vec<Account> = Vec::new();
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
-        //1. update account
-        for i in 0..9{
-            let update_keys_scalar = Scalar::random(&mut OsRng);
-            update_key_random_scalar_vector.push(update_keys_scalar);
-            updated_account_vector.push(Account::update_account(account_vector[i], value_vector[i], update_keys_scalar, generate_commitment_scalar));
-        }
-
-        //Shuffle accounts
-        let first_shuffle = Shuffle::new(&updated_account_vector, 1);
+        //1. update & shuffle accounts
+        let first_shuffle = Shuffle::new(&account_vector, 1);
 
         //2. create delta_and_epsilon_accounts
         let (delta_accounts, epsilon_accounts, delta_rscalar) = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
 
-        // generate proofs - dleq, dlog, signature, cheating_prover
-        let verify_delta_compact_prover = Prover::verify_delta_compact_prover(&delta_accounts, &epsilon_accounts, &delta_rscalar, value_vector);
-        
+        // generate proofs dleq proof
+        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epsilon_accounts, &delta_rscalar, value_vector);
 
-        //3. Update delta_accounts
-        let updated_delta_accounts = Account::update_delta_accounts(&account_vector, &delta_accounts);
-        
-        // sending anonymity set as we know it at this point
-        // lets say we have sender+receier = 5
-        // the difference we have is => 9 - 5 = 4
-        // if we have add one to the 4, that will start the slice range from 5..9
-        let anonymity_index = anonymity_account_diff + 1; 
-        let updated_accounts_slice = &updated_account_vector[anonymity_index..9];
-        let updated_delta_accounts_slice = &updated_delta_accounts.as_ref().unwrap()[anonymity_index..9];
-        let rscalars_slice = &delta_rscalar[anonymity_index..9];
+        // verify dleq proof
+        let verify_delta_compact_proof = Verifier::verify_delta_compact_verifier(&delta_accounts, &epsilon_accounts, &zv_vector, &zr1_vector, &zr2_vector, &x);
 
-        let verify_update_account_prover = Prover::verify_update_account_prover(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &rscalars_slice.to_vec());
+        if verify_delta_compact_proof == true {
 
-        //4. update account again
-        for i in 0..9{
-            let update_keys_again_scalar = Scalar::random(&mut OsRng);
-            update_key_again_random_scalar_vector.push(update_keys_again_scalar);
-            updated_again_account_vector.push(Account::update_account(account_vector[i], value_vector[i], update_keys_again_scalar, generate_commitment_again_scalar));
+            //3. update delta_accounts
+            let updated_delta_accounts = Account::update_delta_accounts(&account_vector, &delta_accounts);
+            
+            // sending anonymity set as we know it at this point
+            // lets say we have sender+receier = 5
+            // the difference we have is => 9 - 5 = 4
+            // if we have add one to the 4, that will start the slice range from 5..9
+            let anonymity_index = anonymity_account_diff + 1;
+            let updated_account_vector = first_shuffle.unwrap().get_outputs_vector();
+            let updated_accounts_slice = &updated_account_vector[anonymity_index..9];
+            let updated_delta_accounts_slice = &updated_delta_accounts.as_ref().unwrap()[anonymity_index..9];
+            let rscalars_slice = &delta_rscalar[anonymity_index..9];
+
+            // generate proofs dlog proof
+            let (x, z_vector) = Prover::verify_update_account_prover(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &rscalars_slice.to_vec());
+
+            println!("{:?}", value_vector);
+
+            let verify_update_account_proof = Verifier::verify_update_account_verifier(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &z_vector, &x);
+
+            if verify_update_account_proof == true {
+
+                //Shuffle accounts
+                let second_shuffle = Shuffle::new(&updated_delta_accounts.unwrap(), 2);
+
+                let updated_again_account_vector = second_shuffle.unwrap().get_outputs_vector();
+
+                Ok((updated_again_account_vector, delta_accounts, epsilon_accounts))
+            }else{
+                Err("dlog proof failed")
+            }
+        }else{
+            Err("dleq proof failed")
         }
-
-         //Shuffle accounts
-         let second_shuffle = Shuffle::new(&updated_again_account_vector, 2);
-
-         return (first_shuffle.unwrap(), second_shuffle.unwrap())
     }
 
 }
@@ -217,7 +216,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn anonymity_and_shuffle_test() {
+    fn create_transaction_test() {
         // lets say bob wants to sent 5 tokens to alice from his one account and 2 from his other account to fay
         // and 1 token to jay
 
@@ -259,13 +258,11 @@ mod test {
             }
         );
 
-        let result = Sender::generate_value_and_account_vector(tx_vector);
+        let (value_vector, account_vector, diff) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
 
-        //println!("{:?}", result.unwrap().1);
+        let transaction = Sender::create_transaction(&value_vector, &account_vector, diff);
 
-        // let shuffled_vector = Transaction::generate_output_shuffle(result.as_ref().unwrap().1.clone());
-
-        // assert_ne!(result.unwrap().1, shuffled_vector.0)
+        println!("{:?}", transaction);
     }
 
     #[test]
@@ -287,7 +284,7 @@ mod test {
 
         }
         let shuffle = {
-            Shuffle::new(account_vector,1)
+            Shuffle::new(&account_vector,1)
         };
         let acc = shuffle.unwrap().get_inputs_vector();
         println!("{:?}", acc);

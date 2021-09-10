@@ -179,6 +179,8 @@ impl<'a> Prover<'a> {
             cd.comm.c == pk.gr && cd.comm.d == pk.grsk 
         ).collect::<Vec<_>>();
 
+        //println!("{:?}", anonymity_set);
+
         let anonymity_set_index: Vec<_> = anonymity_set.iter().map(|i| i.0.0).collect();
 
         // lets create random scalar s with the transcript

@@ -157,9 +157,10 @@ impl Sender {
 
         //1. update & shuffle accounts
         let first_shuffle = Shuffle::new(&account_vector, 1);
+        let updated_accounts = first_shuffle.unwrap().get_outputs_vector();
 
         //2. create delta_and_epsilon_accounts
-        let (delta_accounts, epsilon_accounts, delta_rscalar) = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
+        let (delta_accounts, epsilon_accounts, delta_rscalar) = Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, generate_base_pk);
 
         // generate proofs dleq proof
         let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epsilon_accounts, &delta_rscalar, value_vector);
@@ -170,22 +171,20 @@ impl Sender {
         if verify_delta_compact_proof == true {
 
             //3. update delta_accounts
-            let updated_delta_accounts = Account::update_delta_accounts(&account_vector, &delta_accounts);
+            let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
             
             // sending anonymity set as we know it at this point
             // lets say we have sender+receier = 5
             // the difference we have is => 9 - 5 = 4
             // if we have add one to the 4, that will start the slice range from 5..9
             let anonymity_index = anonymity_account_diff + 1;
-            let updated_account_vector = first_shuffle.unwrap().get_outputs_vector();
-            let updated_accounts_slice = &updated_account_vector[anonymity_index..9];
+            
+            let updated_accounts_slice = &updated_accounts[anonymity_index..9];
             let updated_delta_accounts_slice = &updated_delta_accounts.as_ref().unwrap()[anonymity_index..9];
             let rscalars_slice = &delta_rscalar[anonymity_index..9];
 
             // generate proofs dlog proof
             let (x, z_vector) = Prover::verify_update_account_prover(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &rscalars_slice.to_vec());
-
-            println!("{:?}", value_vector);
 
             let verify_update_account_proof = Verifier::verify_update_account_verifier(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &z_vector, &x);
 
@@ -259,6 +258,18 @@ mod test {
         );
 
         let (value_vector, account_vector, diff) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
+
+        // let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        // let mut account_vector: Vec<Account> = Vec::new();
+
+        // for i in 0..9 {
+
+        //     let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        //     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+    
+        //     let acc = Account::generate_account(pk);
+        //     account_vector.push(acc);
+        // }
 
         let transaction = Sender::create_transaction(&value_vector, &account_vector, diff);
 

@@ -123,7 +123,7 @@ impl<'a> Verifier<'a> {
         let mut e11: Vec<CompressedRistretto> = Vec::new();
         let mut e12: Vec<CompressedRistretto> = Vec::new();
 
-        for i in 0..7 {
+        for i in 0..z_vector.iter().count() {
             let combined_scalars = vec![z_vector[i], *x];
             let point = vec![updated_input_accounts[i].pk.gr, a[i].c];
             e11.push(Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress());
@@ -146,7 +146,7 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"outputgrsk", output.pk.grsk);  
         }
 
-        for i in 0..7{
+        for i in 0..z_vector.iter().count(){
             verifier.allocate_point(b"commitmentgr", e11[i]);
             verifier.allocate_point(b"commitmentgrsk", e12[i]);
         }

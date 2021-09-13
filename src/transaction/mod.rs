@@ -6,5 +6,4 @@ pub use self::{
     transaction::Transaction,
     shuffle::Permutation,
     signature::{Signature, VerificationKey, SigningKey}
-
 };

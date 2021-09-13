@@ -1,20 +1,15 @@
-use curve25519_dalek::{
-    scalar::Scalar
-};
+
 use crate::{
-    keys::{SecretKey, PublicKey},
-    accounts::Account,
-    ristretto::{
-        RistrettoPublicKey,
-        RistrettoSecretKey
+    keys::{PublicKey},
+    accounts::{
+        Account,
+        Prover,
+        Verifier
     },
-    elgamal::{
-        elgamal::ElGamalCommitment
-    }
+    transaction::shuffle::Shuffle,
+    ristretto::RistrettoPublicKey
 };
 
-use rand::rngs::OsRng;
-use rand::Rng;
 
 #[derive(Debug, Clone)]
 pub struct Transaction {
@@ -56,25 +51,25 @@ impl Transaction {
         return value_vector
     }
 
-    /// generate_output_shuffle generates the second shuffle
-    pub fn generate_output_shuffle(mut account_vector: Vec<Account>) -> (Vec<Account>, Vec<usize>)  {
+    // generate_output_shuffle generates the second shuffle
+    // pub fn generate_output_shuffle(mut account_vector: Vec<Account>) -> (Vec<Account>, Vec<usize>)  {
 
-        let size: usize = 9;
-        let mut shuffled_vector = Vec::with_capacity(size);
-        let mut permutation = Vec::with_capacity(size);
+    //     let size: usize = 9;
+    //     let mut shuffled_vector = Vec::with_capacity(size);
+    //     let mut permutation = Vec::with_capacity(size);
 
-        let mut rng = OsRng;
+    //     let mut rng = OsRng;
 
-        for i in 0..size {
-            let k = rng.gen_range(i, size);
-            let j = account_vector[k];
-            permutation[i] = k;
-            account_vector[k] = account_vector[i];
-            shuffled_vector.push(j);
-        }
+    //     for i in 0..size {
+    //         let k = rng.gen_range(i, size);
+    //         let j = account_vector[k];
+    //         permutation[i] = k;
+    //         account_vector[k] = account_vector[i];
+    //         shuffled_vector.push(j);
+    //     }
 
-        return (shuffled_vector, permutation)
-    }
+    //     return (shuffled_vector, permutation)
+    // }
 
 }
 
@@ -93,7 +88,7 @@ pub struct Sender {
 
 impl Sender {
 
-    pub fn generate_value_and_account_vector(tx_vector: Vec<Sender>) -> Result<(Vec<i64>, Vec<Account>), &'static str> {
+    pub fn generate_value_and_account_vector(tx_vector: Vec<Sender>) -> Result<(Vec<i64>, Vec<Account>, usize), &'static str> {
         
         if tx_vector.len() < 9 {
 
@@ -118,15 +113,84 @@ impl Sender {
             }
 
             if senders_count < 9 && receivers_count < 9 && senders_count+receivers_count <=9 {
+
                 value_vector.append(&mut receiver_amount_vector);
                 account_vector.append(&mut receiver_account_vector);
+
+                // lets create anonymity set - these are randomly generated on the fly
+                // note that all these secret keys are made and then destroyed in the process
+                // this anonymity set may need to come from the blockchain state itself in the future
+
+                let diff = 9 - (senders_count+receivers_count);
+
+                if diff >= 1 {
+                    for _ in 0..diff {
+                        value_vector.push(0);
+                        account_vector.push(Account::generate_random_account_with_value(0));
+                    }
+                }
                 
-                Ok((value_vector, account_vector))
+                Ok((value_vector, account_vector, diff))
             }else{
                 Err("senders and receivers count should be less than 9")
             }
         }else{
             Err("account count is more than 9")
+        }
+
+    }
+
+    // create_transaction creates a quisquis transaction
+    pub fn create_transaction(value_vector: &Vec<i64>, account_vector: &Vec<Account>, anonymity_account_diff: usize) -> Result<(Vec<Account>, Vec<Account>, Vec<Account>), &'static str> {
+
+        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+
+        //1. update & shuffle accounts
+        let first_shuffle = Shuffle::input_shuffle(&account_vector);
+        let updated_accounts = first_shuffle.unwrap().get_outputs_vector();
+
+        //2. create delta_and_epsilon_accounts
+        let (delta_accounts, epsilon_accounts, delta_rscalar) = Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, generate_base_pk);
+
+        // generate proofs dleq proof
+        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epsilon_accounts, &delta_rscalar, value_vector);
+
+        // verify dleq proof
+        let verify_delta_compact_proof = Verifier::verify_delta_compact_verifier(&delta_accounts, &epsilon_accounts, &zv_vector, &zr1_vector, &zr2_vector, &x);
+
+        if verify_delta_compact_proof == true {
+
+            //3. update delta_accounts
+            let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
+            
+            // sending anonymity set as we know it at this point
+            // lets say we have sender+receier = 5
+            // the difference we have is => 9 - 5 = 4
+            // if we have add one to the 4, that will start the slice range from 5..9
+            let anonymity_index = anonymity_account_diff + 1;
+            
+            let updated_accounts_slice = &updated_accounts[anonymity_index..9];
+            let updated_delta_accounts_slice = &updated_delta_accounts.as_ref().unwrap()[anonymity_index..9];
+            let rscalars_slice = &delta_rscalar[anonymity_index..9];
+
+            // generate proofs dlog proof
+            let (x, z_vector) = Prover::verify_update_account_prover(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &rscalars_slice.to_vec());
+
+            let verify_update_account_proof = Verifier::verify_update_account_verifier(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &z_vector, &x);
+
+            if verify_update_account_proof == true {
+
+                //Shuffle accounts
+                let second_shuffle = Shuffle::output_shuffle(&updated_delta_accounts.unwrap());
+
+                let updated_again_account_vector = second_shuffle.unwrap().get_outputs_vector();
+
+                Ok((updated_again_account_vector, delta_accounts, epsilon_accounts))
+            }else{
+                Err("dlog proof failed")
+            }
+        }else{
+            Err("dleq proof failed")
         }
     }
 
@@ -140,39 +204,19 @@ impl Sender {
 mod test {
     use super::*;
 
-    fn test_generate_account(amount: i64) -> Account{
-        let mut rng = rand::thread_rng();
-        let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
-        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-
-        let acc = Account::generate_account(pk);
-
-        let updated_keys_scalar = Scalar::random(&mut OsRng);
-
-        // lets get a random scalar
-        let comm_scalar = Scalar::random(&mut OsRng);
-
-        let updated_account = Account::update_account(acc, amount, updated_keys_scalar, comm_scalar);
-        
-        return updated_account
-    }
-
     #[test]
-    fn anonymity_and_shuffle_test() {
+    fn create_transaction_test() {
         // lets say bob wants to sent 5 tokens to alice from his one account and 2 from his other account to fay
         // and 1 token to jay
-        let send_amount_1 = 5; // alice
-        let send_amount_2 = 2; // fay
-        let send_amount_3 = 1; // jay
 
         // lets create sender accounts to send these amounts from
-        let bob_account_1 = test_generate_account(10);
-        let bob_account_2 = test_generate_account(20);
+        let bob_account_1 = Account::generate_random_account_with_value(10);
+        let bob_account_2 = Account::generate_random_account_with_value(20);
 
         // lets create receiver accounts
-        let alice_account = test_generate_account(10);
-        let fay_account = test_generate_account(20);
-        let jay_account = test_generate_account(20);
+        let alice_account = Account::generate_random_account_with_value(10);
+        let fay_account = Account::generate_random_account_with_value(20);
+        let jay_account = Account::generate_random_account_with_value(20);
 
         // so we have 2 senders and 3 receivers, rest will be the anonymity set
 
@@ -203,12 +247,54 @@ mod test {
             }
         );
 
-        let result = Sender::generate_value_and_account_vector(tx_vector);
+        let (value_vector, account_vector, diff) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
 
-        //println!("{:?}", result.unwrap().1);
+        // let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        // let mut account_vector: Vec<Account> = Vec::new();
 
-        let shuffled_vector = Transaction::generate_output_shuffle(result.as_ref().unwrap().1.clone());
+        // for i in 0..9 {
 
-        assert_ne!(result.unwrap().1, shuffled_vector.0)
+        //     let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        //     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+    
+        //     let acc = Account::generate_account(pk);
+        //     account_vector.push(acc);
+        // }
+
+        let transaction = Sender::create_transaction(&value_vector, &account_vector, diff);
+
+        println!("{:?}", transaction);
+    }
+
+    #[test]
+    fn shuffle_get_test() {
+        //use crate::{
+          //  transaction::shuffle::{Shuffle}
+        //};
+        use crate::{
+            keys::{PublicKey,SecretKey },
+            transaction::shuffle::Shuffle,
+            ristretto::{RistrettoPublicKey,RistrettoSecretKey}
+        };
+        // lets define a vector of accounts
+        let mut account_vector: Vec<Account> = Vec::new();
+ 
+        // lets create these accounts and associated keypairs
+
+        for _ in 0..9 {
+            let mut rng = rand::thread_rng();
+            let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
+            let acc = Account::generate_account(pk);
+            account_vector.push(acc);
+
+        }
+        println!("{:?}", account_vector);
+        let shuffle = {
+            Shuffle::input_shuffle(&account_vector)
+        };
+        let acc = shuffle.unwrap().get_outputs_vector();
+        println!("{:?}", acc);
+
     }
 }

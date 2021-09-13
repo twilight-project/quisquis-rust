@@ -10,6 +10,4 @@ pub use self::{
 };
 
 pub mod transcript;
-
-
 pub use self::transcript::TranscriptProtocol;

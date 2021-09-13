@@ -7,16 +7,9 @@ use curve25519_dalek::{
 
 use merlin::Transcript;
 use crate::accounts::TranscriptProtocol;
-use itertools::interleave;
+//use itertools::interleave;
 
-use crate::{
-    accounts::Account,
-    elgamal::{
-        signed_integer::SignedInteger,
-        elgamal::ElGamalCommitment
-    },
-    ristretto::RistrettoPublicKey
-};
+use crate::{accounts::Account};
 
 pub struct Verifier<'a> {
     transcript: &'a mut Transcript,
@@ -123,7 +116,7 @@ impl<'a> Verifier<'a> {
         let mut e11: Vec<CompressedRistretto> = Vec::new();
         let mut e12: Vec<CompressedRistretto> = Vec::new();
 
-        for i in 0..7 {
+        for i in 0..z_vector.iter().count() {
             let combined_scalars = vec![z_vector[i], *x];
             let point = vec![updated_input_accounts[i].pk.gr, a[i].c];
             e11.push(Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress());
@@ -146,7 +139,7 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"outputgrsk", output.pk.grsk);  
         }
 
-        for i in 0..7{
+        for i in 0..z_vector.iter().count(){
             verifier.allocate_point(b"commitmentgr", e11[i]);
             verifier.allocate_point(b"commitmentgrsk", e12[i]);
         }

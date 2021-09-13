@@ -1,6 +1,6 @@
 use curve25519_dalek::{
     ristretto::{CompressedRistretto,RistrettoPoint},  
-    constants::RISTRETTO_BASEPOINT_TABLE,
+   // constants::RISTRETTO_BASEPOINT_TABLE,
     scalar::Scalar,
     traits::IsIdentity
 };
@@ -195,6 +195,25 @@ impl Account {
         random_scalars.push(-sum);
         return random_scalars
     }
+
+    // generate_random_account_with_value generates a random account with a given value
+    // this function is being used to produce tests and for anonymity account generation
+    pub fn generate_random_account_with_value(amount: i64) -> Account{
+        let mut rng = rand::thread_rng();
+        let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
+
+        let acc = Account::generate_account(pk);
+
+        let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+        // lets get a random scalar
+        let comm_scalar = Scalar::random(&mut OsRng);
+
+        let updated_account = Account::update_account(acc, amount, updated_keys_scalar, comm_scalar);
+        
+        return updated_account
+    }
     
 }
 
@@ -260,6 +279,7 @@ mod test {
             RistrettoSecretKey
         }
     };
+    use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
     #[test]
     fn verify_delta_identity_check_test() {
 

@@ -1,7 +1,7 @@
 
 use curve25519_dalek::{
     ristretto::CompressedRistretto,
-    constants::RISTRETTO_BASEPOINT_TABLE,
+   constants::RISTRETTO_BASEPOINT_TABLE,
     scalar::Scalar
 };
 use crate::{
@@ -15,8 +15,6 @@ use crate::{
     }
 };
 use core::ops::{Sub, Mul};
-
-
 
 #[derive(Debug, Copy, Clone)]
 pub struct ElGamalCommitment {
@@ -117,13 +115,13 @@ impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCommitment {
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
-
+/*
 #[cfg(test)]
 mod test {
-    use super::*;
-    use rand::rngs::OsRng;
+    
     #[test]
     fn verify_commitment_test() {
+        use rand::rngs::OsRng;
         let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
         let comm_scalar = Scalar::random(&mut OsRng);
@@ -131,5 +129,5 @@ mod test {
         assert!(comm.verify_commitment(&sk,16), "Invalid Commitment");
     }
 }
-
+*/
 

@@ -7,16 +7,9 @@ use curve25519_dalek::{
 
 use merlin::Transcript;
 use crate::accounts::TranscriptProtocol;
-use itertools::interleave;
+//use itertools::interleave;
 
-use crate::{
-    accounts::Account,
-    elgamal::{
-        signed_integer::SignedInteger,
-        elgamal::ElGamalCommitment
-    },
-    ristretto::RistrettoPublicKey
-};
+use crate::{accounts::Account};
 
 pub struct Verifier<'a> {
     transcript: &'a mut Transcript,

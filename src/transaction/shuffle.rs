@@ -60,51 +60,75 @@ pub struct Shuffle {
 
 
 impl Shuffle {
-    pub fn new(
+    // generate random values for Permutation and Scalars
+    fn random_initialization(len: usize) -> (Permutation, Vec<Scalar>, Scalar){
+        //Create a new random permutation Matrix 
+        let pi = {
+            Permutation::new(&mut OsRng, len)
+        };
+        
+        //Create Random tau used for updating the Account Pks
+        let tau: Vec<_> = (0..len).map(|_| Scalar::random(&mut OsRng)).collect();
+        
+        //Create Random rho used for updating the Account Commitments
+        let rho = Scalar::random(&mut OsRng);
+        (pi, tau, rho)
+    }
+
+
+    pub fn input_shuffle(
         inputs: &Vec<Account>,   //Accounts to be shuffled
-        shuffle: u32      // 1 -> Input shuffle, 2-> Output shuffle
+    ) -> Result<Self, &'static str> {
+        let len = inputs.len();
+        if len == 0 {
+            return Err("Error::EmptyShuffle");
+        }
+        //Get random inital values
+        let (mut pi, tau, rho) = Self::random_initialization(len);
+
+        //Convert Matrix to Vector in row major order
+        let permutation =  pi.perm_matrix.as_row_major();
+
+        //shuffle Input accounts randomly using permutation matrix
+        let shuffled_accounts: Vec<_> = (0..len).map(|i| inputs[permutation[i]].clone()).collect();    
+        
+        //Invert the permutation Matrix for Inputs shuffle
+        pi.set(pi.invert_permutation());
+            
+        //Input accounts == input` in this case. updating input accounts with tau and rho
+        let updated_inputs: Vec<_> = inputs.iter().zip(tau.iter()).map(|(acc, t)| Account::update_account(*acc, 0, *t, rho)).collect();
+            
+        //Convert to a 2D array representation
+        let outputs = Array2D::from_row_major(&updated_inputs, ROWS,COLUMNS);
+        let inputs = Array2D::from_row_major(&shuffled_accounts, ROWS,COLUMNS);
+        let shuffled_tau = Array2D::from_row_major(&tau, ROWS,COLUMNS);
+        
+        return Ok(Self {inputs, outputs, shuffled_tau, rho, pi });      
+    }
+
+    pub fn output_shuffle(
+        inputs: &Vec<Account>,   //Accounts to be shuffled
     ) -> Result<Self, &'static str> {
         let len = inputs.len();
         if len == 0 {
             return Err("Error::EmptyShuffle");
         }
 
-        let mut pi = {
-            Permutation::new(&mut OsRng, len)
-        };
-
-        let tau: Vec<_> = (0..len).map(|_| Scalar::random(&mut OsRng)).collect();
-        let rho = Scalar::random(&mut OsRng);
+        //Get random inital values
+        let (pi, tau, rho) = Self::random_initialization(len);
         let permutation =  pi.perm_matrix.as_row_major();
 
         //shuffle Inputs
         let shuffled_accounts: Vec<_> = (0..len).map(|i| inputs[permutation[i]].clone()).collect();
         
-        //if Input account shuffle according to QuisQuis
-        if shuffle == 1{
-            
-            //Invert the permutation for Inputs shuffle
-            pi.set(pi.invert_permutation());
-            
-             //Input accounts == input` in this case. updating inputs with tau and rho
-            let updated_inputs: Vec<_> = inputs.iter().zip(tau.iter()).map(|(acc, t)| Account::update_account(*acc, 0, *t, rho)).collect();
-            
-            //Convert to a 2D array representation
-            let outputs = Array2D::from_row_major(&updated_inputs, ROWS,COLUMNS);
-            let inputs = Array2D::from_row_major(&shuffled_accounts, ROWS,COLUMNS);
-            let shuffled_tau = Array2D::from_row_major(&tau, ROWS,COLUMNS);
-            return Ok(Self {inputs, outputs, shuffled_tau, rho, pi });
-        }
-        else if shuffle == 2{
-            //Shuffled and Updated Accounts
-            let shuffled_outputs: Vec<_> = shuffled_accounts.iter().zip(tau.iter()).map(|(acc, t)| Account::update_account(*acc, 0, *t, rho)).collect();
-            //Convert to a 2D array representation
-            let outputs = Array2D::from_row_major(&shuffled_outputs, ROWS,COLUMNS);
-            let inputs = Array2D::from_row_major(&inputs, ROWS,COLUMNS);
-            let shuffled_tau = Array2D::from_row_major(&tau, ROWS,COLUMNS);
-            return Ok(Self {inputs, outputs, shuffled_tau, rho, pi });
-        }
-        return Err("Error::Invalid Shuffle Selection");
+        //Shuffled and Updated Accounts
+        let shuffled_outputs: Vec<_> = shuffled_accounts.iter().zip(tau.iter()).map(|(acc, t)| Account::update_account(*acc, 0, *t, rho)).collect();
+        
+        //Convert to a 2D array representation
+        let outputs = Array2D::from_row_major(&shuffled_outputs, ROWS,COLUMNS);
+        let inputs = Array2D::from_row_major(&inputs, ROWS,COLUMNS);
+        let shuffled_tau = Array2D::from_row_major(&tau, ROWS,COLUMNS);
+        return Ok(Self {inputs, outputs, shuffled_tau, rho, pi });
 
     }
 
@@ -219,7 +243,7 @@ mod test {
         }
         // 1 for input , 2 for output
         let shuffle = {
-            Shuffle::new(&account_vector,1)
+            Shuffle::output_shuffle(&account_vector)
         };
         let inp = shuffle.as_ref().unwrap().inputs.as_row_major();
         let out = shuffle.as_ref().unwrap().outputs.as_row_major();

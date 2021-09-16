@@ -136,7 +136,7 @@ impl Sender {
                 if diff >= 1 {
                     for _ in 0..diff {
                         value_vector.push(0);
-                        account_vector.push(Account::generate_random_account_with_value(0));
+                        account_vector.push(Account::generate_random_account_with_value(0).0);
                     }
                 }
                 
@@ -220,13 +220,13 @@ mod test {
         // and 1 token to jay
 
         // lets create sender accounts to send these amounts from
-        let bob_account_1 = Account::generate_random_account_with_value(10);
-        let bob_account_2 = Account::generate_random_account_with_value(20);
+        let bob_account_1 = Account::generate_random_account_with_value(10).0;
+        let bob_account_2 = Account::generate_random_account_with_value(20).0;
 
         // lets create receiver accounts
-        let alice_account = Account::generate_random_account_with_value(10);
-        let fay_account = Account::generate_random_account_with_value(20);
-        let jay_account = Account::generate_random_account_with_value(20);
+        let alice_account = Account::generate_random_account_with_value(10).0;
+        let fay_account = Account::generate_random_account_with_value(20).0;
+        let jay_account = Account::generate_random_account_with_value(20).0;
 
         // so we have 2 senders and 3 receivers, rest will be the anonymity set
 
@@ -258,18 +258,6 @@ mod test {
         );
 
         let (value_vector, account_vector, diff) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
-
-        // let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
-        // let mut account_vector: Vec<Account> = Vec::new();
-
-        // for i in 0..9 {
-
-        //     let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
-        //     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-    
-        //     let acc = Account::generate_account(pk);
-        //     account_vector.push(acc);
-        // }
 
         let transaction = Sender::create_transaction(&value_vector, &account_vector, diff);
 

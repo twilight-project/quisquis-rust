@@ -1,8 +1,8 @@
 use rand::thread_rng;
-use std::time::Instant;
+//use std::time::Instant;
 
 use curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
+    ristretto::CompressedRistretto,
     scalar::Scalar,
     constants::RISTRETTO_BASEPOINT_TABLE
 };
@@ -174,7 +174,6 @@ impl<'a> Prover<'a> {
                 comm: d.comm - i.comm
             }
         ).collect::<Vec<_>>();
-
         // lets create pkdelta_r that is the collection of all delta account pks with r multiplied
         let pkdelta_r = updated_delta_accounts.iter().zip(delta_rscalar.iter()).map(|(d, r)|
             d.pk * r
@@ -182,7 +181,7 @@ impl<'a> Prover<'a> {
 
         // now check if the updated commitments are equal to pkdelta_r, collect them in a vector
         // t(hat is the anonymity set
-        let anonymity_set = check_delta.iter().enumerate().zip(pkdelta_r.iter()).filter(|((i, cd), pk)| 
+        let anonymity_set = check_delta.iter().enumerate().zip(pkdelta_r.iter()).filter(|((_i, cd), pk)| 
             cd.comm.c == pk.gr && cd.comm.d == pk.grsk 
         ).collect::<Vec<_>>();
 

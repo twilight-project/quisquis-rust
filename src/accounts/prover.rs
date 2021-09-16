@@ -13,9 +13,16 @@ use crate::accounts::TranscriptProtocol;
 use crate::{
     accounts::Account,
     elgamal::{
-        signed_integer::SignedInteger
+        signed_integer::SignedInteger,
+        elgamal::ElGamalCommitment
+    },
+    ristretto::{
+        RistrettoPublicKey,
+        RistrettoSecretKey
     }
 };
+
+use rand::rngs::OsRng;
 
 pub struct Prover<'a> {
     transcript: &'a mut Transcript,
@@ -125,7 +132,7 @@ impl<'a> Prover<'a> {
 
         }
 
-        // Obtain a scalar challenge
+        // obtain a scalar challenge
         let x = transcript.get_challenge(b"chal");
 
         // lets create the outputs
@@ -214,7 +221,7 @@ impl<'a> Prover<'a> {
             prover.allocate_point(b"commitmentgrsk", pk.grsk);  
         }
 
-        // Obtain a scalar challenge
+        // obtain a scalar challenge
         let x = transcript.get_challenge(b"chal");
 
         let mut z_vector: Vec<Scalar> = Vec::new();
@@ -225,6 +232,68 @@ impl<'a> Prover<'a> {
         }
 
         return (x, z_vector)
+    }
+
+    // verify_account_prover creates a signature for the sender account
+    // it proves the sender has secretkey and enough balance
+    pub fn verify_account_prover(updated_delta_account: Account, base_pk: RistrettoPublicKey, bl: i64, sk: &RistrettoSecretKey) -> (Scalar, Scalar, Scalar, Scalar){
+
+        let rscalar = Scalar::random(&mut OsRng);
+        // lets first create a new epsilon account using the passed balance
+        let epsilon_account = Account::create_epsilon_account(base_pk, rscalar, bl);
+
+        let mut transcript = Transcript::new(b"VerifyAccountProver");
+
+        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+
+        let signed_int = SignedInteger::from(bl as u64);
+        let v_dash : Scalar = SignedInteger::into(signed_int);
+
+        prover.scalars.push(v_dash);
+        prover.scalars.push(rscalar);
+
+        prover.allocate_account(b"delta_account", updated_delta_account); 
+        prover.allocate_account(b"epsilon_account", epsilon_account);
+        
+        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+
+        // Generate three blinding factors
+        let rv = Scalar::random(&mut transcript_rng);
+        let rsk = Scalar::random(&mut transcript_rng);
+        let rdash = Scalar::random(&mut transcript_rng);
+
+        let e1 = updated_delta_account.pk.gr.decompress().unwrap() * rsk;
+
+        // lets generate f1
+        let g_rv = &RISTRETTO_BASEPOINT_TABLE * &rv;
+        let c_rsk = updated_delta_account.comm.c.decompress().unwrap() * rsk;
+        let f1 = g_rv + c_rsk;
+
+        let e2 = &RISTRETTO_BASEPOINT_TABLE * &rdash;
+
+        // lets generate f2
+        let h_rdash = updated_delta_account.pk.grsk.decompress().unwrap() * rdash;
+
+        let f2 = g_rv + h_rdash;
+
+        prover.allocate_point(b"e1", e1.compress());
+        prover.allocate_point(b"f1", f1.compress());
+        prover.allocate_point(b"e2", e2.compress());
+        prover.allocate_point(b"f2", f2.compress());
+
+        // obtain a scalar challenge
+        let x = transcript.get_challenge(b"chal");
+
+        let xv_dash = x * v_dash;
+        let zv = rv - xv_dash;
+
+        let x_sk = x * sk.0;
+        let zsk = rsk - x_sk;
+
+        let x_rscalar = x * rscalar;
+        let zr = rdash - x_rscalar;
+
+        return (zv, zsk, zr, x)
     }
     
 }
@@ -318,5 +387,36 @@ mod test {
         let verify_update_proof = Prover::verify_update_account_prover(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &rscalars_slice.to_vec());
         
         println!("{:?}", verify_update_proof);
+    }
+
+    #[test]
+    fn verify_account_prover_test(){
+        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+
+        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let mut updated_accounts: Vec<Account> = Vec::new();
+        let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
+
+        for i in 0..9 {
+
+            let (updated_account, sk) = Account::generate_random_account_with_value(10);
+
+            updated_accounts.push(updated_account);
+
+            // lets save the first sk as sender's sk as we discard the rest
+            if i == 0 {
+                sender_sk.push(sk);
+            }
+
+          }
+
+        let (delta_accounts, _, rscalars) = Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, generate_base_pk);
+
+        let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
+
+        // we need to verify that the sender has enough balance and posesses the sk
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(updated_delta_accounts.unwrap()[0], generate_base_pk, 5, &sender_sk[0]);
+        
+        println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
     }
 }

@@ -1,25 +1,15 @@
-use curve25519_dalek::{
-    scalar::Scalar
-};
+
 use crate::{
-    keys::{SecretKey, PublicKey},
+    keys::{PublicKey},
     accounts::{
         Account,
         Prover,
         Verifier
     },
     transaction::shuffle::Shuffle,
-    ristretto::{
-        RistrettoPublicKey,
-        RistrettoSecretKey
-    },
-    elgamal::{
-        elgamal::ElGamalCommitment
-    }
+    ristretto::RistrettoPublicKey
 };
 
-use rand::rngs::OsRng;
-use rand::Rng;
 
 #[derive(Debug, Clone)]
 pub struct Transaction {
@@ -156,7 +146,7 @@ impl Sender {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
         //1. update & shuffle accounts
-        let first_shuffle = Shuffle::new(&account_vector, 1);
+        let first_shuffle = Shuffle::input_shuffle(&account_vector);
         let updated_accounts = first_shuffle.unwrap().get_outputs_vector();
 
         //2. create delta_and_epsilon_accounts
@@ -191,7 +181,7 @@ impl Sender {
             if verify_update_account_proof == true {
 
                 //Shuffle accounts
-                let second_shuffle = Shuffle::new(&updated_delta_accounts.unwrap(), 2);
+                let second_shuffle = Shuffle::output_shuffle(&updated_delta_accounts.unwrap());
 
                 let updated_again_account_vector = second_shuffle.unwrap().get_outputs_vector();
 
@@ -266,8 +256,13 @@ mod test {
 
     #[test]
     fn shuffle_get_test() {
+        //use crate::{
+          //  transaction::shuffle::{Shuffle}
+        //};
         use crate::{
-            transaction::shuffle::{Shuffle}
+            keys::{PublicKey,SecretKey },
+            transaction::shuffle::Shuffle,
+            ristretto::{RistrettoPublicKey,RistrettoSecretKey}
         };
         // lets define a vector of accounts
         let mut account_vector: Vec<Account> = Vec::new();
@@ -282,10 +277,11 @@ mod test {
             account_vector.push(acc);
 
         }
+        println!("{:?}", account_vector);
         let shuffle = {
-            Shuffle::new(&account_vector,1)
+            Shuffle::input_shuffle(&account_vector)
         };
-        let acc = shuffle.unwrap().get_inputs_vector();
+        let acc = shuffle.unwrap().get_outputs_vector();
         println!("{:?}", acc);
 
     }

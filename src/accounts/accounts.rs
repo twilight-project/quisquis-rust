@@ -1,6 +1,6 @@
 use curve25519_dalek::{
     ristretto::{CompressedRistretto,RistrettoPoint},  
-    constants::RISTRETTO_BASEPOINT_TABLE,
+   // constants::RISTRETTO_BASEPOINT_TABLE,
     scalar::Scalar,
     traits::IsIdentity
 };
@@ -285,6 +285,7 @@ mod test {
             RistrettoSecretKey
         }
     };
+    use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
     #[test]
     fn verify_delta_identity_check_test() {
 

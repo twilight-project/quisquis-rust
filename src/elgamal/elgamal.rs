@@ -1,17 +1,20 @@
 
 use curve25519_dalek::{
     ristretto::CompressedRistretto,
-    constants::RISTRETTO_BASEPOINT_TABLE,
+   constants::RISTRETTO_BASEPOINT_TABLE,
     scalar::Scalar
 };
 use crate::{
-    ristretto::RistrettoPublicKey,
+    keys::{PublicKey, SecretKey},
+    ristretto::{
+        RistrettoPublicKey,
+        RistrettoSecretKey
+    },
     elgamal::{
         signed_integer::SignedInteger
     }
 };
-
-
+use core::ops::{Sub, Mul};
 
 #[derive(Debug, Copy, Clone)]
 pub struct ElGamalCommitment {
@@ -41,7 +44,7 @@ impl ElGamalCommitment {
 
         // lets multiply balance scalar with the basepoint scalar
         let gv = &bl_scalar * &RISTRETTO_BASEPOINT_TABLE;
-
+      
         let kh = &rscalar * &p.grsk.decompress().unwrap();
 
         // lets make d
@@ -62,9 +65,19 @@ impl ElGamalCommitment {
         ElGamalCommitment::set_commitment(c.compress(), d.compress())
     }
 
+    /// Verifies the commitment of balance for specific SecretKey 
+    pub fn verify_commitment(self: &Self, pr: &RistrettoSecretKey, bl: i64)-> bool{
+       let bl_scalar = Scalar::from(bl as u64); 
+       self.d == (&(&bl_scalar * &RISTRETTO_BASEPOINT_TABLE) + &(&pr.0 * &self.c.decompress().unwrap())).compress()
+    }
+
+    /// Decrypts commitment in the form G*v
+    pub fn decommit(self: &Self, pr: &RistrettoSecretKey) -> CompressedRistretto{
+        (&self.d.decompress().unwrap() - &(&pr.0 * &self.c.decompress().unwrap())).compress()
+     }
 }
 
-// ------- ElGamalCommitment Partial Eq, Eq ------- //
+// ------- ElGamalCommitment Partial Eq, Eq, Sub, Mul ------- //
 
 impl PartialEq for ElGamalCommitment{
     fn eq(&self, other: &Self) -> bool {
@@ -73,3 +86,48 @@ impl PartialEq for ElGamalCommitment{
 }
 
 impl Eq for ElGamalCommitment {}
+
+impl Sub<ElGamalCommitment> for ElGamalCommitment {
+    type Output = ElGamalCommitment;
+
+    fn sub(self, other: ElGamalCommitment) -> ElGamalCommitment {
+        let c = &self.c.decompress().unwrap() - &other.c.decompress().unwrap();
+        let d = &self.d.decompress().unwrap() - &other.d.decompress().unwrap();
+        ElGamalCommitment::set_commitment(
+            c.compress(), d.compress()
+        )
+    }
+}
+
+impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCommitment {
+    type Output = ElGamalCommitment;
+    /// Scalar multiplication: compute `scalar * self`.
+    fn mul(self, scalar: &'b Scalar) -> ElGamalCommitment {
+        let c = scalar * &self.c.decompress().unwrap();
+        let d = scalar * &self.d.decompress().unwrap();
+        ElGamalCommitment::set_commitment(
+            c.compress(), d.compress()
+        )
+    }
+}
+
+
+// ------------------------------------------------------------------------
+// Tests
+// ------------------------------------------------------------------------
+/*
+#[cfg(test)]
+mod test {
+    
+    #[test]
+    fn verify_commitment_test() {
+        use rand::rngs::OsRng;
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        let comm_scalar = Scalar::random(&mut OsRng);
+        let comm = ElGamalCommitment::generate_commitment(&pk,comm_scalar,16);
+        assert!(comm.verify_commitment(&sk,16), "Invalid Commitment");
+    }
+}
+*/
+

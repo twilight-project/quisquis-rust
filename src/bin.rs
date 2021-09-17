@@ -12,7 +12,8 @@ use quisquislib::{
     },
     accounts::{
         Account
-    }
+    },
+    //util::address::{Address}
     
 };
 use curve25519_dalek::{
@@ -26,6 +27,19 @@ pub fn main() {
     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
     println!("{:?}", sk);
     println!("{:?}", pk);
+
+    let acc = Account::generate_account(pk);
+    println!("generated account {:?}", acc);
+
+    let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+    // lets get a random scalar
+    let comm_scalar = Scalar::random(&mut OsRng);
+
+    let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
+    println!("updated account {:?}", updated_account);
+
+    let _rsk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
 
     let random_scalar = Scalar::random(&mut OsRng);
     let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
@@ -53,6 +67,7 @@ pub fn main() {
     let negscalar : Scalar = SignedInteger::into(neg_sign_int);
     println!("Scalar = {:?}, Sign Int= {:?}", possscalar, negscalar);
 
+
     // lets create a new keypair
     let mut rng = rand::thread_rng();
     let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
@@ -69,17 +84,31 @@ pub fn main() {
     let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
     println!("updated account {:?}", updated_account);
 
-    let rscalar = Scalar::random(&mut OsRng);
+    //let rscalar = Scalar::random(&mut OsRng);
 
-    let create_delta_account = Account::create_delta_account(updated_account, 5, rscalar);
-    println!("create_delta_account {:?}", create_delta_account);
+//     let create_delta_account = Account::create_delta_account(updated_account, 5, rscalar);
+//     println!("create_delta_account {:?}", create_delta_account);
 
-    let create_epsilon_account = Account::create_epsilon_account(16, rscalar, generate_base_pk);
-    println!("create_epsilon_account {:?}", create_epsilon_account);
+//     let create_epsilon_account = Account::create_epsilon_account(16, rscalar, generate_base_pk);
+//     println!("create_epsilon_account {:?}", create_epsilon_account);
 
-    let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account).unwrap();
-    println!("updated_delta_account {:?}", updated_delta_account);
+//     let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account);
+//     println!("updated_delta_account {:?}", updated_delta_account.unwrap());
     
-    let updated_delta_account = Account::verify_delta_update(updated_delta_account, create_delta_account, updated_account);
-    println!("updated_delta_account {:?}", updated_delta_account);
+//     println!("{:?}", pk.as_bytes());
+//     let net = quisquislib::util::address::Network::default();
+//     let addr = Address::standard(net,pk);
+//    // println!("{:?}", addr.as_bs58());
+//     println!("{:?}", addr.as_hex());
+//     println!("{:?}", addr);
+//     let addr_hex = addr.as_hex();
+
+//     let decoded_address = Address::from_hex(&addr_hex);
+//     println!("{:?}", decoded_address);
+    
+//     let updated_delta_account = Account::update_delta_account(updated_account, create_delta_account).unwrap();
+//     println!("updated_delta_account {:?}", updated_delta_account);
+    
+//     let updated_delta_account = Account::verify_delta_update(updated_delta_account, create_delta_account, updated_account);
+//     println!("updated_delta_account {:?}", updated_delta_account);
 }

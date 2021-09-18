@@ -6,9 +6,11 @@ use curve25519_dalek::{
     scalar::Scalar,
     constants::RISTRETTO_BASEPOINT_TABLE
 };
-
+use bulletproofs::r1cs::*;
+use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
-use crate::accounts::TranscriptProtocol;
+use crate::accounts::{TranscriptProtocol, RangeProof};
+
 
 use crate::{
     accounts::Account,
@@ -21,6 +23,7 @@ use crate::{
         RistrettoSecretKey
     }
 };
+
 
 use rand::rngs::OsRng;
 
@@ -294,10 +297,28 @@ impl<'a> Prover<'a> {
 
         return (zv, zsk, zr, x)
     }
+
+pub fn range_proof_prover(val: u64, epsilon_blinding: Scalar, n: usize) -> Result<RangeProof, R1CSError> {
+    // Common
+    let pc_gens = PedersenGens::default();
+    let bp_gens = BulletproofGens::new(128, 1);
+
+    // Prover's scope
     
+    // Prover makes a `ConstraintSystem` instance representing a range proof gadget
+    let mut prover_transcript = Transcript::new(b"RangeProof");
+    
+    let mut prover = bulletproofs::r1cs::Prover::new(&pc_gens, &mut prover_transcript);
+    // Commit to the val as variable 
+    let (com, var) = prover.commit(val.into(), epsilon_blinding);
+    // Create range proof using R1CS constraint system       
+    RangeProof::range_proof(&mut prover, var.into(), Some(val), n)?;
+
+    let proof = prover.prove(&bp_gens)?;
+    let rangeproof = RangeProof::new(proof,com);
+    Ok(rangeproof)
 }
-
-
+}
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------

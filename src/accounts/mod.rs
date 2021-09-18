@@ -1,12 +1,13 @@
 pub mod accounts;
 pub mod prover;
 pub mod verifier;
-
+pub mod rangeproof;
 // Re-export
 pub use self::{
     accounts::Account,
     prover::Prover,
-    verifier::Verifier
+    verifier::Verifier,
+    rangeproof::RangeProof
 };
 
 pub mod transcript;

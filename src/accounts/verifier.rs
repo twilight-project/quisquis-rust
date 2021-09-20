@@ -165,26 +165,31 @@ impl<'a> Verifier<'a> {
 
         let combined_scalars = vec![zsk, *x];
         let point = vec![updated_delta_account.pk.gr, updated_delta_account.pk.grsk];
-        let e1 = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+        let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
         let combined_scalars = vec![zv, zsk, *x];
         let point = vec![base_pk.gr, updated_delta_account.comm.c, updated_delta_account.comm.d];
-        let f1 = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+        let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
-        let e2 = account_epsilon.comm.c.decompress().unwrap() * x;
+        let combined_scalars = vec![*x, zr];
+        let point = vec![account_epsilon.comm.c, base_pk.gr];
+        let e_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
         let combined_scalars = vec![zv, zr, *x];
         let point = vec![base_pk.gr, base_pk.grsk, account_epsilon.comm.d];
-        let f2 = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+        let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
         // lets create hash
         let mut transcript = Transcript::new(b"VerifyDeltaCompact");
         let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
 
-        verifier.allocate_point(b"e1", e1);
-        verifier.allocate_point(b"f1", f1);
-        verifier.allocate_point(b"e2", e2.compress());
-        verifier.allocate_point(b"f2", f2);
+        verifier.allocate_account(b"delta_account", *updated_delta_account); 
+        verifier.allocate_account(b"epsilon_account", *account_epsilon);
+
+        verifier.allocate_point(b"e_delta", e_delta);
+        verifier.allocate_point(b"f_delta", f_delta);
+        verifier.allocate_point(b"e_epsilon", e_epsilon);
+        verifier.allocate_point(b"f_epsilon", f_epsilon);
 
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
@@ -322,19 +327,19 @@ mod test {
         let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
 
         // balance that we want to prove should be sender balance - the balance user is trying to send
-
         let bl = 10 - 5;
+        
         // lets create an epsilon account with the new balance
         let rscalar = Scalar::random(&mut OsRng);
         // lets first create a new epsilon account using the passed balance
         let account_epsilon_vec: Vec<Account> = vec!(Account::create_epsilon_account(base_pk, rscalar, bl));
 
         let updated_delta_account_sender: Vec<Account> = vec!(updated_delta_accounts.unwrap()[0]);
-        let rscalar_sender: Vec<Scalar> = vec!(rscalars[0]);
-        let sender_sk: Vec<Scalar> = vec!(sender_sk[0].0);
+        let rscalar_sender: Vec<Scalar> = vec!(rscalar);
+        let sender_sk_vec: Vec<Scalar> = vec!(sender_sk[0].0);
         let value_vector_sender: Vec<i64> = vec!(bl);
 
-        let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &account_epsilon_vec, &sender_sk, &rscalar_sender, &value_vector_sender);
+        let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &account_epsilon_vec, &sender_sk_vec, &rscalar_sender, &value_vector_sender);
         
         //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
 

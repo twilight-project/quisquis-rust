@@ -174,13 +174,11 @@ impl<'a> Verifier<'a> {
         let combined_scalars = vec![*x, zr];
         let point = vec![account_epsilon.comm.c, base_pk.gr];
         let e_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
-
         let combined_scalars = vec![zv, zr, *x];
         let point = vec![base_pk.gr, base_pk.grsk, account_epsilon.comm.d];
         let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
-
         // lets create hash
-        let mut transcript = Transcript::new(b"VerifyDeltaCompact");
+        let mut transcript = Transcript::new(b"VerifyAccountProver");
         let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
 
         verifier.allocate_account(b"delta_account", *updated_delta_account); 
@@ -194,8 +192,8 @@ impl<'a> Verifier<'a> {
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
 
-        println!("{:?}", x);
-        println!("{:?}", verify_x);
+        //println!("{:?}", x);
+        //println!("{:?}", verify_x);
 
         if x == &verify_x{
             return true
@@ -339,11 +337,13 @@ mod test {
         let sender_sk_vec: Vec<Scalar> = vec!(sender_sk[0].0);
         let value_vector_sender: Vec<i64> = vec!(bl);
 
-        let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &account_epsilon_vec, &sender_sk_vec, &rscalar_sender, &value_vector_sender);
+       //let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &account_epsilon_vec, &sender_sk_vec, &rscalar_sender, &value_vector_sender);
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(updated_delta_account_sender[0], account_epsilon_vec[0], bl,&sender_sk[0],rscalar );
         
         //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
+        println!("Verifier");
 
-        let check = Verifier::verify_account_verifier(&updated_delta_account_sender[0], &account_epsilon_vec[0], &base_pk, zv[0], zsk[0], zr[0], &x);
+        let check = Verifier::verify_account_verifier(&updated_delta_account_sender[0], &account_epsilon_vec[0], &base_pk, zv, zsk, zr, &x);
 
         assert!(check);
     }

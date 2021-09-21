@@ -180,8 +180,8 @@ impl<'a> Verifier<'a> {
             let combined_scalars = vec![zv[i], zr[i], x];
             let point = vec![base_pk.gr, base_pk.grsk, account_epsilon[i].comm.d];
             let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
-            // lets create hash
             
+            // lets create hash
             let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
             verifier.allocate_account(b"delta_account", updated_delta_account[i]); 
             verifier.allocate_account(b"epsilon_account", account_epsilon[i]);

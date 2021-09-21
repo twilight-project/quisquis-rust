@@ -161,33 +161,36 @@ impl<'a> Verifier<'a> {
     }
 
     // verify_account_verifier verifies the knowledge of secret key and balance
-    pub fn verify_account_verifier(updated_delta_account: &Account, account_epsilon: &Account, base_pk: &RistrettoPublicKey, zv: Scalar, zsk: Scalar, zr: Scalar, x: &Scalar) -> bool{
+    pub fn verify_account_verifier(updated_delta_account: &Vec<Account>, account_epsilon: &Vec<Account>, base_pk: RistrettoPublicKey, zv: Vec<Scalar>, zsk: Vec<Scalar>, zr: Vec<Scalar>, x: Scalar) -> bool{
 
-        let combined_scalars = vec![zsk, *x];
-        let point = vec![updated_delta_account.pk.gr, updated_delta_account.pk.grsk];
-        let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
-
-        let combined_scalars = vec![zv, zsk, *x];
-        let point = vec![base_pk.gr, updated_delta_account.comm.c, updated_delta_account.comm.d];
-        let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
-
-        let combined_scalars = vec![*x, zr];
-        let point = vec![account_epsilon.comm.c, base_pk.gr];
-        let e_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
-        let combined_scalars = vec![zv, zr, *x];
-        let point = vec![base_pk.gr, base_pk.grsk, account_epsilon.comm.d];
-        let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
-        // lets create hash
         let mut transcript = Transcript::new(b"VerifyAccountProver");
-        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
 
-        verifier.allocate_account(b"delta_account", *updated_delta_account); 
-        verifier.allocate_account(b"epsilon_account", *account_epsilon);
+        for i in 0..updated_delta_account.iter().count(){
+            let combined_scalars = vec![zsk[i], x];
+            let point = vec![updated_delta_account[i].pk.gr, updated_delta_account[i].pk.grsk];
+            let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
-        verifier.allocate_point(b"e_delta", e_delta);
-        verifier.allocate_point(b"f_delta", f_delta);
-        verifier.allocate_point(b"e_epsilon", e_epsilon);
-        verifier.allocate_point(b"f_epsilon", f_epsilon);
+            let combined_scalars = vec![zv[i], zsk[i], x];
+            let point = vec![base_pk.gr, updated_delta_account[i].comm.c, updated_delta_account[i].comm.d];
+            let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+
+            let combined_scalars = vec![x, zr[i]];
+            let point = vec![account_epsilon[i].comm.c, base_pk.gr];
+            let e_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+            let combined_scalars = vec![zv[i], zr[i], x];
+            let point = vec![base_pk.gr, base_pk.grsk, account_epsilon[i].comm.d];
+            let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+            // lets create hash
+            
+            let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
+            verifier.allocate_account(b"delta_account", updated_delta_account[i]); 
+            verifier.allocate_account(b"epsilon_account", account_epsilon[i]);
+
+            verifier.allocate_point(b"e_delta", e_delta);
+            verifier.allocate_point(b"f_delta", f_delta);
+            verifier.allocate_point(b"e_epsilon", e_epsilon);
+            verifier.allocate_point(b"f_epsilon", f_epsilon);
+        }
 
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
@@ -195,7 +198,7 @@ impl<'a> Verifier<'a> {
         //println!("{:?}", x);
         //println!("{:?}", verify_x);
 
-        if x == &verify_x{
+        if x == verify_x{
             return true
         }else{
             return false
@@ -303,7 +306,7 @@ mod test {
     fn verify_account_verifier_test(){
         let base_pk = RistrettoPublicKey::generate_base_pk();
 
-        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let value_vector: Vec<i64> = vec![-5, -3, 5, 3, 0, 0, 0, 0, 0];
         let mut updated_accounts: Vec<Account> = Vec::new();
         let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
 
@@ -313,8 +316,8 @@ mod test {
 
             updated_accounts.push(updated_account);
 
-            // lets save the first sk as sender's sk as we discard the rest
-            if i == 0 {
+            // lets save the first and second sk as sender's sk as we discard the rest
+            if i == 0 || i == 1 {
                 sender_sk.push(sk);
             }
 
@@ -325,25 +328,34 @@ mod test {
         let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
 
         // balance that we want to prove should be sender balance - the balance user is trying to send
-        let bl = 10 - 5;
+
+        let bl_first_sender = 10 - 5;
+        let bl_second_sender = 10 - 3;
+
+        let delta_unwraped = updated_delta_accounts.unwrap();
+        let updated_delta_account_sender: Vec<Account> = vec!(delta_unwraped[0], delta_unwraped[1]);
         
-        // lets create an epsilon account with the new balance
-        let rscalar = Scalar::random(&mut OsRng);
-        // lets first create a new epsilon account using the passed balance
-        let account_epsilon_vec: Vec<Account> = vec!(Account::create_epsilon_account(base_pk, rscalar, bl));
+        //let sender_sk_vector: Vec<Scalar> = vec!(sender_sk[0].0, sender_sk[1].0);
+        let value_vector_sender: Vec<i64> = vec!(bl_first_sender, bl_second_sender);
 
-        let updated_delta_account_sender: Vec<Account> = vec!(updated_delta_accounts.unwrap()[0]);
-        let rscalar_sender: Vec<Scalar> = vec!(rscalar);
-        let sender_sk_vec: Vec<Scalar> = vec!(sender_sk[0].0);
-        let value_vector_sender: Vec<i64> = vec!(bl);
-
-       //let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &account_epsilon_vec, &sender_sk_vec, &rscalar_sender, &value_vector_sender);
-        let (zv, zsk, zr, x) = Prover::verify_account_prover(updated_delta_account_sender[0], account_epsilon_vec[0], bl,&sender_sk[0],rscalar );
+        let mut epsilon_account_vec: Vec<Account> = Vec::new();
+        let mut rscalar_sender: Vec<Scalar> = Vec::new();
         
-        //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
-        println!("Verifier");
+        for i in 0..value_vector_sender.iter().count(){
+            // lets create an epsilon account with the new balance
+            let rscalar = Scalar::random(&mut OsRng);
+            rscalar_sender.push(rscalar);
+            // lets first create a new epsilon account using the passed balance
+            let epsilon_account: Account = Account::create_epsilon_account(base_pk, rscalar, value_vector_sender[i]);
+            epsilon_account_vec.push(epsilon_account);
+        }
 
-        let check = Verifier::verify_account_verifier(&updated_delta_account_sender[0], &account_epsilon_vec[0], &base_pk, zv, zsk, zr, &x);
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(&updated_delta_account_sender, &epsilon_account_vec, value_vector_sender, &sender_sk, rscalar_sender );
+        
+        // //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
+        // println!("Verifier");
+
+        let check = Verifier::verify_account_verifier(&updated_delta_account_sender, &epsilon_account_vec, base_pk, zv, zsk, zr, x);
 
         assert!(check);
     }

@@ -235,66 +235,89 @@ impl<'a> Prover<'a> {
         return (x, z_vector)
     }
 
-        // verify_account_prover creates a signature for the sender account
+    // verify_account_prover creates a signature for the sender account
     // it proves the sender has secretkey and enough balance
-    pub fn verify_account_prover(updated_delta_account: Account, epsilon_account: Account, bl: i64, sk: &RistrettoSecretKey, rscalar: Scalar) -> (Scalar, Scalar, Scalar, Scalar){
+    pub fn verify_account_prover(updated_delta_account: &Vec<Account>, epsilon_account: &Vec<Account>, bl: Vec<i64>, sk: &Vec<RistrettoSecretKey>, rscalar: Vec<Scalar>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar){
 
-        //let rscalar = Scalar::random(&mut OsRng);
-        // lets first create a new epsilon account using the passed balance
-        //let epsilon_account = Account::create_epsilon_account(base_pk, rscalar, bl);
+        let mut r_dash_vector: Vec<Scalar> = Vec::new();
+        let mut rv_vector: Vec<Scalar> = Vec::new();
+        let mut rsk_vector: Vec<Scalar> = Vec::new();
+        let mut v_dash_vector: Vec<Scalar> = Vec::new();
 
         let mut transcript = Transcript::new(b"VerifyAccountProver");
-
-        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
-
-        let signed_int = SignedInteger::from(bl as u64);
-        let v_dash : Scalar = SignedInteger::into(signed_int);
-
-        prover.scalars.push(v_dash);
-        prover.scalars.push(rscalar);
-
-        prover.allocate_account(b"delta_account", updated_delta_account); 
-        prover.allocate_account(b"epsilon_account", epsilon_account);
         
-        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
 
-        // Generate three blinding factors
-        let rv = Scalar::random(&mut transcript_rng);
-        let rsk = Scalar::random(&mut transcript_rng);
-        let rdash = Scalar::random(&mut transcript_rng);
-        let g  = epsilon_account.pk.gr.decompress().unwrap();
-        let e1 = updated_delta_account.pk.gr.decompress().unwrap() * rsk;
-       
-        // lets generate f1
-        let g_rv = &g * &rv;
-        let c_rsk = updated_delta_account.comm.c.decompress().unwrap() * rsk;
-        let f1 = g_rv + c_rsk;
-       
-        let e2 = &g * &rdash;
-       
-        // lets generate f2
-        let h_rdash = epsilon_account.pk.grsk.decompress().unwrap() * rdash;
+        for i in 0..bl.iter().count(){
 
-        let f2 = g_rv + h_rdash;
-       
-        prover.allocate_point(b"e_delta", e1.compress());
-        prover.allocate_point(b"f_delta", f1.compress());
-        prover.allocate_point(b"e_epsilon", e2.compress());
-        prover.allocate_point(b"f_epsilon", f2.compress());
+            let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+
+            let signed_int = SignedInteger::from(bl[i] as u64);
+            let v_dash : Scalar = SignedInteger::into(signed_int);
+
+            prover.scalars.push(v_dash);
+            prover.scalars.push(rscalar[i]);
+
+            prover.allocate_account(b"delta_account", updated_delta_account[i]); 
+            prover.allocate_account(b"epsilon_account", epsilon_account[i]);
+
+            let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+
+            // Generate three blinding factors
+            let rv = Scalar::random(&mut transcript_rng);
+            let rsk = Scalar::random(&mut transcript_rng);
+            let rdash = Scalar::random(&mut transcript_rng);
+
+            // collect blindings and v_dash scalar in vectors to create outputs later 
+            rv_vector.push(rv);
+            rsk_vector.push(rsk);
+            r_dash_vector.push(rdash);
+            v_dash_vector.push(v_dash);
+
+            let g  = epsilon_account[i].pk.gr.decompress().unwrap();
+            let e1 = updated_delta_account[i].pk.gr.decompress().unwrap() * rsk;
+        
+            // lets generate f1
+            let g_rv = &g * &rv;
+            let c_rsk = updated_delta_account[i].comm.c.decompress().unwrap() * rsk;
+            let f1 = g_rv + c_rsk;
+        
+            let e2 = &g * &rdash;
+        
+            // lets generate f2
+            let h_rdash = epsilon_account[i].pk.grsk.decompress().unwrap() * rdash;
+
+            let f2 = g_rv + h_rdash;
+        
+            prover.allocate_point(b"e_delta", e1.compress());
+            prover.allocate_point(b"f_delta", f1.compress());
+            prover.allocate_point(b"e_epsilon", e2.compress());
+            prover.allocate_point(b"f_epsilon", f2.compress());
+        }
+
+        
+        let mut zv_vector: Vec<Scalar> = Vec::new();
+        let mut zsk_vector: Vec<Scalar> = Vec::new();
+        let mut zr_vector: Vec<Scalar> = Vec::new();
+        
 
         // obtain a scalar challenge
         let x = transcript.get_challenge(b"chal");
 
-        let xv_dash = x * v_dash;
-        let zv = rv - xv_dash;
+        for i in 0..bl.iter().count(){
+            let xv_dash = x * v_dash_vector[i];
+            let zv = rv_vector[i] - xv_dash;
+            zv_vector.push(zv);
 
-        let x_sk = x * sk.0;
-        let zsk = rsk - x_sk;
+            let x_sk = x * sk[i].0;
+            let zsk = rsk_vector[i] - x_sk;
+            zsk_vector.push(zsk);
 
-        let x_rscalar = x * rscalar;
-        let zr = rdash - x_rscalar;
+            let x_rscalar = x * rscalar[i];
+            let zr = r_dash_vector[i] - x_rscalar;
+            zr_vector.push(zr);
+        }
 
-        return (zv, zsk, zr, x)
+        return (zv_vector, zsk_vector, zr_vector, x)
     }
     
 }
@@ -395,7 +418,7 @@ mod test {
     fn verify_account_prover_test(){
         let base_pk = RistrettoPublicKey::generate_base_pk();
 
-        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let value_vector: Vec<i64> = vec![-5, -3, 5, 3, 0, 0, 0, 0, 0];
         let mut updated_accounts: Vec<Account> = Vec::new();
         let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
 
@@ -405,8 +428,8 @@ mod test {
 
             updated_accounts.push(updated_account);
 
-            // lets save the first sk as sender's sk as we discard the rest
-            if i == 0 {
+            // lets save the first and second sk as sender's sk as we discard the rest
+            if i == 0 || i == 1 {
                 sender_sk.push(sk);
             }
 
@@ -418,18 +441,29 @@ mod test {
 
         // balance that we want to prove should be sender balance - the balance user is trying to send
 
-        let bl = 10 - 5;
-        // lets create an epsilon account with the new balance
-        let rscalar = Scalar::random(&mut OsRng);
-        // lets first create a new epsilon account using the passed balance
-        let epsilon_account: Vec<Account> = vec!(Account::create_epsilon_account(base_pk, rscalar, bl));
+        let bl_first_sender = 10 - 5;
+        let bl_second_sender = 10 - 3;
 
-        let updated_delta_account_sender: Vec<Account> = vec!(updated_delta_accounts.unwrap()[0]);
-        let rscalar_sender: Vec<Scalar> = vec!(rscalars[0]);
-        let sender_sk: Vec<Scalar> = vec!(sender_sk[0].0);
-        let value_vector_sender: Vec<i64> = vec!(bl);
+        let delta_unwraped = updated_delta_accounts.unwrap();
+        let updated_delta_account_sender: Vec<Account> = vec!(delta_unwraped[0], delta_unwraped[1]);
+        
+        //let sender_sk_vector: Vec<Scalar> = vec!(sender_sk[0].0, sender_sk[1].0);
+        let value_vector_sender: Vec<i64> = vec!(bl_first_sender, bl_second_sender);
 
-        let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &epsilon_account, &sender_sk, &rscalar_sender, &value_vector_sender);
+        let mut epsilon_account_vec: Vec<Account> = Vec::new();
+        let mut rscalar_sender: Vec<Scalar> = Vec::new();
+        
+        for i in 0..value_vector_sender.iter().count(){
+            // lets create an epsilon account with the new balance
+            let rscalar = Scalar::random(&mut OsRng);
+            rscalar_sender.push(rscalar);
+            // lets first create a new epsilon account using the passed balance
+            let epsilon_account: Account = Account::create_epsilon_account(base_pk, rscalar, value_vector_sender[i]);
+            epsilon_account_vec.push(epsilon_account);
+        }
+
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(&updated_delta_account_sender, &epsilon_account_vec, value_vector_sender, &sender_sk, rscalar_sender );
+        //let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &epsilon_account, &sender_sk, &rscalar_sender, &value_vector_sender);
 
         // we need to verify that the sender has enough balance and posesses the sk
         //let (zv, zsk, zr, x) = Prover::verify_account_prover(updated_delta_accounts.unwrap()[0], generate_base_pk, 5, &sender_sk[0]);

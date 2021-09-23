@@ -7,28 +7,21 @@ use merlin::Transcript;
 /// RangeProof struct to hold the R1CS range proof 
 pub struct RangeProofProver<'g> {
     /// Common R1CS Prover for multiple rangeproofs
-    pub prover: bulletproofs::r1cs::Prover<'g, Transcript>,
+    prover: bulletproofs::r1cs::Prover<'g, Transcript>,
 }
 
 impl<'g> RangeProofProver<'g> {
-    // Private constructor
-  /*pub fn new(cs: Prover) -> RangeProofProver<'g> {
-        
-        RangeProofProver {
-            proof: proof,
-            com: com,
-        }
-    }*/
+    // R1CS constraint system building
     pub fn range_proof_prover(self, val: u64, epsilon_blinding: Scalar, n: usize) -> Result<CompressedRistretto, R1CSError> {
     
         // Commit to the val as variable 
         let (com, var) = self.prover.commit(val.into(), epsilon_blinding);
         //Update range proof R1CS constraint system       
-        RangeProofProver::range_proof(& mut self.prover, var.into(), Some(val), n)?;
+        range_proof(& mut self.prover, var.into(), Some(val), n)?;
         Ok(com)
     }
 
-
+}
 /// Enforces that the quantity of v is in the range [0, 2^n).
 pub fn range_proof<CS: ConstraintSystem>(
     cs: &mut CS,
@@ -63,4 +56,4 @@ pub fn range_proof<CS: ConstraintSystem>(
 
     Ok(())
 }
-}
+

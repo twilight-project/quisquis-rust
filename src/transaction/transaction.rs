@@ -153,7 +153,7 @@ impl Sender {
         let (delta_accounts, epsilon_accounts, delta_rscalar) = Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, generate_base_pk);
 
         // generate proofs dleq proof
-        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epsilon_accounts, &delta_rscalar, value_vector);
+        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epsilon_accounts, &delta_rscalar, &delta_rscalar, value_vector);
 
         // verify dleq proof
         let verify_delta_compact_proof = Verifier::verify_delta_compact_verifier(&delta_accounts, &epsilon_accounts, &zv_vector, &zr1_vector, &zr2_vector, &x);

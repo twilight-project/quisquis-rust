@@ -164,6 +164,12 @@ impl<'a> Verifier<'a> {
     pub fn verify_account_verifier(updated_delta_account: &Vec<Account>, account_epsilon: &Vec<Account>, base_pk: RistrettoPublicKey, zv: Vec<Scalar>, zsk: Vec<Scalar>, zr: Vec<Scalar>, x: Scalar) -> bool{
 
         let mut transcript = Transcript::new(b"VerifyAccountProver");
+        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
+
+        for i in 0..updated_delta_account.iter().count(){
+            verifier.allocate_account(b"delta_account", updated_delta_account[i]); 
+            verifier.allocate_account(b"epsilon_account", account_epsilon[i]);
+        }
 
         for i in 0..updated_delta_account.iter().count(){
             let combined_scalars = vec![zsk[i], x];
@@ -182,10 +188,6 @@ impl<'a> Verifier<'a> {
             let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
             
             // lets create hash
-            let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
-            verifier.allocate_account(b"delta_account", updated_delta_account[i]); 
-            verifier.allocate_account(b"epsilon_account", account_epsilon[i]);
-
             verifier.allocate_point(b"e_delta", e_delta);
             verifier.allocate_point(b"f_delta", f_delta);
             verifier.allocate_point(b"e_epsilon", e_epsilon);
@@ -194,9 +196,6 @@ impl<'a> Verifier<'a> {
 
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
-
-        //println!("{:?}", x);
-        //println!("{:?}", verify_x);
 
         if x == verify_x{
             return true

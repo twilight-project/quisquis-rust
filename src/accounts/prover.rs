@@ -280,11 +280,11 @@ impl<'a> Prover<'a> {
         // let c_rsk = updated_delta_account[i].comm.c.decompress().unwrap() * rsk;
         // let f1 = g_rv + c_rsk;
 
-        let g_rv = updated_delta_account.iter().zip(rv_vector.iter()).map(|(e, rv)|
+        let g_rv = epsilon_account.iter().zip(rv_vector.iter()).map(|(e, rv)|
             e.pk.gr.decompress().unwrap() * rv
         ).collect::<Vec<_>>();
 
-        let c_rsk = epsilon_account.iter().zip(rsk_vector.iter()).map(|(e, rsk)|
+        let c_rsk = updated_delta_account.iter().zip(rsk_vector.iter()).map(|(e, rsk)|
             e.comm.c.decompress().unwrap() * rsk
         ).collect::<Vec<_>>();
         
@@ -293,7 +293,7 @@ impl<'a> Prover<'a> {
         ).collect::<Vec<_>>();
         
         //let e2 = &g * &rdash;
-        let e2 = updated_delta_account.iter().zip(r_dash_vector.iter()).map(|(g, rdash)|
+        let e2 = epsilon_account.iter().zip(r_dash_vector.iter()).map(|(g, rdash)|
             g.pk.gr.decompress().unwrap() * rdash
         ).collect::<Vec<_>>();
     

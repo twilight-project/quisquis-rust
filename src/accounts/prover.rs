@@ -6,9 +6,11 @@ use curve25519_dalek::{
     scalar::Scalar,
     constants::RISTRETTO_BASEPOINT_TABLE
 };
-
+use bulletproofs::r1cs::*;
+use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
-use crate::accounts::TranscriptProtocol;
+use crate::accounts::{TranscriptProtocol, RangeProofProver};
+
 
 use crate::{
     accounts::Account,
@@ -21,6 +23,7 @@ use crate::{
         RistrettoSecretKey
     }
 };
+
 
 use rand::rngs::OsRng;
 
@@ -355,10 +358,7 @@ impl<'a> Prover<'a> {
 
         return (zv_vector, zsk_vector, zr_vector, x)
     }
-    
 }
-
-
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -507,3 +507,5 @@ mod test {
         println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
     }
 }
+
+

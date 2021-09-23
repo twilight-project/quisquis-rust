@@ -4,10 +4,10 @@ use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_COMPRESSED,
     traits::VartimeMultiscalarMul
 };
-
+use bulletproofs::r1cs::*;
+use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
-use crate::accounts::TranscriptProtocol;
-//use itertools::interleave;
+use crate::accounts::{TranscriptProtocol, RangeProof};
 
 use crate::{
     accounts::Account,
@@ -207,6 +207,27 @@ impl<'a> Verifier<'a> {
 }
 
 
+
+fn range_proof_verifier(com: CompressedRistretto, proof: R1CSProof, n: usize) -> Result<(), R1CSError> {
+
+    // Common
+    let pc_gens = PedersenGens::default();
+    let bp_gens = BulletproofGens::new(128, 1);
+
+    // Verifier makes a `ConstraintSystem` instance representing a merge gadget
+    let mut verifier_transcript = Transcript::new(b"RangeProof");
+    let mut verifier = bulletproofs::r1cs::Verifier::new(&mut verifier_transcript);
+
+    let var = verifier.commit(com);
+
+    // Verifier adds constraints to the constraint system
+    RangeProof::range_proof(&mut verifier, var.into(), None, n)?;
+
+    // Verifier verifies proof
+    verifier.verify(&proof, &pc_gens, &bp_gens)
+
+}
+}
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -303,6 +324,20 @@ mod test {
     }
 
     #[test]
+    fn range_proof_test(){
+        let bl = 10i64;
+        let n: usize = 64;
+        let rscalar = Scalar::random(&mut OsRng);
+        // lets first create a new epsilon account using the passed balance
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+        let epsilon_account = Account::create_epsilon_account(base_pk, rscalar, bl);
+        //println!("{:?}", epsilon_account.comm.d);
+        let result = Prover::range_proof_prover(bl as u64, rscalar, n);
+        let rangeproof = result.unwrap();
+        let check = Verifier::range_proof_verifier(epsilon_account.comm.d, rangeproof.proof, n);
+
+
+    #[test]
     fn verify_account_verifier_test(){
         let base_pk = RistrettoPublicKey::generate_base_pk();
 
@@ -358,5 +393,6 @@ mod test {
         let check = Verifier::verify_account_verifier(&updated_delta_account_sender, &epsilon_account_vec, base_pk, zv, zsk, zr, x);
 
         assert!(check);
+
     }
 }

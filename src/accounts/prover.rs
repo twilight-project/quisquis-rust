@@ -77,90 +77,103 @@ impl<'a> Prover<'a> {
         let mut v_doubledash_vector: Vec<Scalar> = Vec::new();
         
         let mut transcript = Transcript::new(b"VerifyDeltaCompact");
+        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+
+        for value in value_vector.iter(){
+            v_dash_vector.push(SignedInteger::into(SignedInteger::from(*value as u64)));
+        }
+
+        prover.scalars = rscalar1.iter().cloned().chain(rscalar2.iter().cloned()).chain(v_dash_vector.iter().cloned()).collect();
+
+        for i in 0..delta_accounts.iter().count(){
+            prover.allocate_account(b"delta_account", delta_accounts[i]); 
+            prover.allocate_account(b"epsilon_account", epsilon_accounts[i]);
+        }
+
+        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
 
         for i in 0..delta_accounts.iter().count(){
 
-            let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+            // Generate and collect three blindings
+            r1_dash_vector.push(Scalar::random(&mut transcript_rng));
+            r2_dash_vector.push(Scalar::random(&mut transcript_rng));
+            v_doubledash_vector.push(Scalar::random(&mut transcript_rng));
+        }
 
-            let signed_int = SignedInteger::from(value_vector[i] as u64);
-            let v_dash : Scalar = SignedInteger::into(signed_int);
+        // let e_delta = &delta_accounts[i].pk.gr.decompress().unwrap() * &r1_dash;
+        let e_delta = delta_accounts.iter().zip(r1_dash_vector.iter()).map(|(d, r1)|
+            d.pk.gr.decompress().unwrap() * r1
+        ).collect::<Vec<_>>();
 
-            prover.scalars.push(v_dash);
-            prover.scalars.push(rscalar1[i]);
-            prover.scalars.push(rscalar2[i]);
+        // lets create f_delta
 
-            prover.allocate_account(b"delta_account", delta_accounts[i]); 
-            prover.allocate_account(b"epsilon_account", epsilon_accounts[i]);
-            
-            let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+        let gv_doubledash = v_doubledash_vector.iter().map(|vd|
+            &RISTRETTO_BASEPOINT_TABLE * vd
+        ).collect::<Vec<_>>();
 
-            // Generate three blinding factors
-            let r1_dash = Scalar::random(&mut transcript_rng);
-            let r2_dash = Scalar::random(&mut transcript_rng);
-            let v_doubledash = Scalar::random(&mut transcript_rng);
+        let h_delta_r1_dash = delta_accounts.iter().zip(r1_dash_vector.iter()).map(|(d, r1)|
+            d.pk.grsk.decompress().unwrap() * r1
+        ).collect::<Vec<_>>();
+        
+        let f_delta = gv_doubledash.iter().zip(h_delta_r1_dash.iter()).map(|(gv, hd)|
+            gv + hd
+        ).collect::<Vec<_>>();
 
-            // collect blindings and v_dash scalar in vectors to create outputs later 
-            r1_dash_vector.push(r1_dash);
-            r2_dash_vector.push(r2_dash);
-            v_doubledash_vector.push(v_doubledash);
-            v_dash_vector.push(v_dash);
+        // lets create e_epsilon
+        let e_epsilon = epsilon_accounts.iter().zip(r2_dash_vector.iter()).map(|(e, r2)|
+            e.pk.gr.decompress().unwrap() * r2
+        ).collect::<Vec<_>>();
 
-            // lets create four points for the proof
-            // e_delta = g_delta ^ r1_dash
-            // f_delta = g ^ v_doubledash + h_delta ^ r1_dash
-            // e_epsilon = g_epsilon ^ r2_dash
-            // f_epsilon = g ^ v_doubledash + h_epsilon ^ r2_dash
-            // lets first create e_delta
-            let e_delta = &delta_accounts[i].pk.gr.decompress().unwrap() * &r1_dash;
+        // lets create f_epsilon
 
-            // lets create f_delta
-            let gv_doubledash = &RISTRETTO_BASEPOINT_TABLE * &v_doubledash;
-            let h_delta_r1_dash = &delta_accounts[i].pk.grsk.decompress().unwrap() * &r1_dash;
-            let f_delta = gv_doubledash + h_delta_r1_dash;
+        let h_epsilon_r2_dash = epsilon_accounts.iter().zip(r2_dash_vector.iter()).map(|(e, r2)|
+            e.pk.grsk.decompress().unwrap() * r2
+        ).collect::<Vec<_>>();
 
-            // lets create e_epsilon
-            let e_epsilon = &epsilon_accounts[i].pk.gr.decompress().unwrap() * &r2_dash;
+        let f_epsilon = gv_doubledash.iter().zip(h_epsilon_r2_dash.iter()).map(|(g, h)|
+            g + h
+        ).collect::<Vec<_>>();
 
-            // lets create f_epsilon
-            let h_epsilon_r2_dash = &epsilon_accounts[i].pk.grsk.decompress().unwrap() * &r2_dash;
-            let f_epsilon = gv_doubledash + h_epsilon_r2_dash;
+        for i in 0..delta_accounts.iter().count(){
 
             // lets append e_delta, f_delta, e_epsilon and f_epsilon to the transcript
-            prover.allocate_point(b"e_delta", e_delta.compress());
-            prover.allocate_point(b"f_delta", f_delta.compress());
-            prover.allocate_point(b"e_epsilon", e_epsilon.compress());
-            prover.allocate_point(b"f_epsilon", f_epsilon.compress());
-
+            prover.allocate_point(b"e_delta", e_delta[i].compress());
+            prover.allocate_point(b"f_delta", f_delta[i].compress());
+            prover.allocate_point(b"e_epsilon", e_epsilon[i].compress());
+            prover.allocate_point(b"f_epsilon", f_epsilon[i].compress());
         }
 
         // obtain a scalar challenge
         let x = transcript.get_challenge(b"chal");
 
         // lets create the outputs
-        // zv = v_doubledash - x ^ v_dash (value vector v)
-        // zr1 = r1_dash - x ^ r (rscalar)
-        // zr2 = r2_dash - x ^ r (rscalar)
 
-        let mut zv_vector: Vec<Scalar> = Vec::new();
-        let mut zr1_vector: Vec<Scalar> = Vec::new();
-        let mut zr2_vector: Vec<Scalar> = Vec::new();
+        // lets create zv
+        let xv_dash_vector = v_dash_vector.iter().map(|v_dash|
+            v_dash * x
+        ).collect::<Vec<_>>();
 
-        for i in 0..delta_accounts.iter().count() {
-            // lets create zv
-            let xv_dash = x * v_dash_vector[i];
-            let zv = v_doubledash_vector[i] - xv_dash;
-            zv_vector.push(zv);
+        let zv_vector = v_doubledash_vector.iter().zip(xv_dash_vector.iter()).map(|(vd, xv_dash)|
+            vd - xv_dash
+        ).collect::<Vec<_>>();
 
-            // lets create zr1
-            let xr1 = x * rscalar1[i];
-            let zr1 = r1_dash_vector[i] - xr1;
-            zr1_vector.push(zr1);
+        // lets create zr1
+        let x_rscalar1_vector = rscalar1.iter().map(|r|
+            r * x
+        ).collect::<Vec<_>>();
 
-            // lets create zr2
-            let xr2 = x * rscalar2[i];
-            let zr2 = r2_dash_vector[i] - xr2;
-            zr2_vector.push(zr2);
-        }
+        let zr1_vector = r1_dash_vector.iter().zip(x_rscalar1_vector.iter()).map(|(r1, x_r)|
+            r1 - x_r
+        ).collect::<Vec<_>>();
+
+        // lets create zr2
+        let xr2_vector = rscalar2.iter().map(|r|
+            r * x
+        ).collect::<Vec<_>>();
+
+        let zr2_vector = r2_dash_vector.iter().zip(xr2_vector.iter()).map(|(r2, xr2)|
+            r2 - xr2
+        ).collect::<Vec<_>>();
         
         return (zv_vector, zr1_vector, zr2_vector, x)
     }
@@ -269,16 +282,12 @@ impl<'a> Prover<'a> {
             r_dash_vector.push(Scalar::random(&mut transcript_rng));
         }
 
-        //let e1 = updated_delta_account[i].pk.gr.decompress().unwrap() * rsk;
-        let e1 = updated_delta_account.iter().zip(rsk_vector.iter()).map(|(u, rsk)|
+        //let create e_delta
+        let e_delta = updated_delta_account.iter().zip(rsk_vector.iter()).map(|(u, rsk)|
             u.pk.gr.decompress().unwrap() * rsk
         ).collect::<Vec<_>>();
         
-        // lets generate f1
-        // let g  = epsilon_account[i].pk.gr.decompress().unwrap();
-        // let g_rv = &g * &rv;
-        // let c_rsk = updated_delta_account[i].comm.c.decompress().unwrap() * rsk;
-        // let f1 = g_rv + c_rsk;
+        // lets generate f_delta
 
         let g_rv = epsilon_account.iter().zip(rv_vector.iter()).map(|(e, rv)|
             e.pk.gr.decompress().unwrap() * rv
@@ -288,54 +297,34 @@ impl<'a> Prover<'a> {
             e.comm.c.decompress().unwrap() * rsk
         ).collect::<Vec<_>>();
         
-        let f1 = g_rv.iter().zip(c_rsk.iter()).map(|(grv, crsk)|
+        let f_delta = g_rv.iter().zip(c_rsk.iter()).map(|(grv, crsk)|
             grv + crsk
         ).collect::<Vec<_>>();
         
-        //let e2 = &g * &rdash;
-        let e2 = epsilon_account.iter().zip(r_dash_vector.iter()).map(|(g, rdash)|
+        //let create e_epsilon
+        let e_epsilon = epsilon_account.iter().zip(r_dash_vector.iter()).map(|(g, rdash)|
             g.pk.gr.decompress().unwrap() * rdash
         ).collect::<Vec<_>>();
     
-        // lets generate f2
-        // let h_rdash = epsilon_account[i].pk.grsk.decompress().unwrap() * rdash;
-        // let f2 = g_rv + h_rdash;
+        // lets generate f_epsilon
 
         let h_rdash = epsilon_account.iter().zip(r_dash_vector.iter()).map(|(e, rdash)|
             e.pk.grsk.decompress().unwrap() * rdash
         ).collect::<Vec<_>>();
 
-        let f2 = g_rv.iter().zip(h_rdash.iter()).map(|(g, h)|
+        let f_epsilon = g_rv.iter().zip(h_rdash.iter()).map(|(g, h)|
             g + h
         ).collect::<Vec<_>>();
         
         for i in 0..bl.iter().count(){
-            prover.allocate_point(b"e_delta", e1[i].compress());
-            prover.allocate_point(b"f_delta", f1[i].compress());
-            prover.allocate_point(b"e_epsilon", e2[i].compress());
-            prover.allocate_point(b"f_epsilon", f2[i].compress());
+            prover.allocate_point(b"e_delta", e_delta[i].compress());
+            prover.allocate_point(b"f_delta", f_delta[i].compress());
+            prover.allocate_point(b"e_epsilon", e_epsilon[i].compress());
+            prover.allocate_point(b"f_epsilon", f_epsilon[i].compress());
         }
-
-        // let mut zv_vector: Vec<Scalar> = Vec::new();
-        // let mut zsk_vector: Vec<Scalar> = Vec::new();
-        // let mut zr_vector: Vec<Scalar> = Vec::new();
         
         // obtain a scalar challenge
         let x = transcript.get_challenge(b"chal");
-
-        // for i in 0..bl.iter().count(){
-        //     let xv_dash = x * v_dash_vector[i];
-        //     let zv = rv_vector[i] - xv_dash;
-        //     zv_vector.push(zv);
-
-        //     let x_sk = x * sk[i].0;
-        //     let zsk = rsk_vector[i] - x_sk;
-        //     zsk_vector.push(zsk);
-
-        //     let x_rscalar = x * rscalar[i];
-        //     let zr = r_dash_vector[i] - x_rscalar;
-        //     zr_vector.push(zr);
-        // }
 
         // lets create zv
         let xv_dash_vector = v_dash_vector.iter().map(|v_dash|

@@ -60,13 +60,14 @@ impl<'a> Verifier<'a> {
     pub fn verify_delta_compact_verifier(delta_accounts: &Vec<Account>, epsilon_accounts: &Vec<Account>, zv_vector: &Vec<Scalar>, zr1_vector: &Vec<Scalar>, zr2_vector: &Vec<Scalar>, x: &Scalar) -> bool{
         
         let mut transcript = Transcript::new(b"VerifyDeltaCompact");
+        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
 
-        for i in 0..9{
-
-            let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
-
+        for i in 0..delta_accounts.iter().count(){
             verifier.allocate_account(b"delta_account", delta_accounts[i]); 
             verifier.allocate_account(b"epsilon_account", epsilon_accounts[i]);
+        }
+
+        for i in 0..delta_accounts.iter().count(){
 
             // lets create four points for the proof
             // e_delta = g_delta ^ zr1 ^ cdelta ^ x

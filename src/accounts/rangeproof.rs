@@ -1,24 +1,34 @@
 use bulletproofs::r1cs::*;
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::ristretto::CompressedRistretto;
+use merlin::Transcript;
 
 // Range Proof gadget
 /// RangeProof struct to hold the R1CS range proof 
-pub struct RangeProof {
-    /// R1CS proof
-    pub proof: R1CSProof,
-    /// Commitment of value
-    pub com: CompressedRistretto,
+pub struct RangeProofProver<'g> {
+    /// Common R1CS Prover for multiple rangeproofs
+    pub prover: bulletproofs::r1cs::Prover<'g, Transcript>,
 }
 
-impl RangeProof {
+impl<'g> RangeProofProver<'g> {
     // Private constructor
-  pub fn new(proof: R1CSProof, com: CompressedRistretto) -> RangeProof {
-        RangeProof {
+  /*pub fn new(cs: Prover) -> RangeProofProver<'g> {
+        
+        RangeProofProver {
             proof: proof,
             com: com,
         }
+    }*/
+    pub fn range_proof_prover(self, val: u64, epsilon_blinding: Scalar, n: usize) -> Result<CompressedRistretto, R1CSError> {
+    
+        // Commit to the val as variable 
+        let (com, var) = self.prover.commit(val.into(), epsilon_blinding);
+        //Update range proof R1CS constraint system       
+        RangeProofProver::range_proof(& mut self.prover, var.into(), Some(val), n)?;
+        Ok(com)
     }
+
+
 /// Enforces that the quantity of v is in the range [0, 2^n).
 pub fn range_proof<CS: ConstraintSystem>(
     cs: &mut CS,

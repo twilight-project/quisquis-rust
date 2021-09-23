@@ -7,7 +7,7 @@ pub use self::{
     accounts::Account,
     prover::Prover,
     verifier::Verifier,
-    rangeproof::RangeProof
+    rangeproof::RangeProofProver
 };
 
 pub mod transcript;

@@ -6,8 +6,6 @@ use curve25519_dalek::{
     scalar::Scalar,
     constants::RISTRETTO_BASEPOINT_TABLE
 };
-use bulletproofs::r1cs::*;
-use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
 use crate::accounts::{TranscriptProtocol, RangeProofProver};
 
@@ -253,8 +251,8 @@ impl<'a> Prover<'a> {
 
     // verify_account_prover creates a signature for the sender account
     // it proves the sender has secretkey and enough balance
-    pub fn verify_account_prover(updated_delta_account: &Vec<Account>, epsilon_account: &Vec<Account>, bl: Vec<i64>, sk: &Vec<RistrettoSecretKey>, rscalar: Vec<Scalar>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar){
-
+    pub fn verify_account_prover(updated_delta_account: &Vec<Account>, epsilon_account: &Vec<Account>, bl: Vec<i64>, sk: &Vec<RistrettoSecretKey>, rscalar: Vec<Scalar>, rp_prover: &mut RangeProofProver) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar){
+        
         let mut r_dash_vector: Vec<Scalar> = Vec::new();
         let mut rv_vector: Vec<Scalar> = Vec::new();
         let mut rsk_vector: Vec<Scalar> = Vec::new();
@@ -324,6 +322,11 @@ impl<'a> Prover<'a> {
             prover.allocate_point(b"f_delta", f_delta[i].compress());
             prover.allocate_point(b"e_epsilon", e_epsilon[i].compress());
             prover.allocate_point(b"f_epsilon", f_epsilon[i].compress());
+            println!("{:?}",e_delta[i].compress());
+            println!("{:?}",f_delta[i].compress());
+            println!("{:?}",e_epsilon[i].compress());
+            println!("{:?}",f_epsilon[i].compress());
+            
         }
         
         // obtain a scalar challenge
@@ -356,8 +359,20 @@ impl<'a> Prover<'a> {
             r_dash - x_rscalar
         ).collect::<Vec<_>>();
 
+        //Create RICS constraint based range proof over Account value
+        for i in 0..epsilon_account.iter().count(){
+            let _ = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
+        }
         return (zv_vector, zsk_vector, zr_vector, x)
     }
+    //verify_non_negative_prover creates range proof on Receiver accounts with zero balance
+    pub fn verify_non_negative_prover(epsilon_account: &Vec<Account>, bl: Vec<i64>, rscalar: Vec<Scalar>, rp_prover: &mut RangeProofProver){
+        for i in 0..epsilon_account.iter().count(){
+            let _ = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
+        }
+    }
+
+        
 }
 // ------------------------------------------------------------------------
 // Tests
@@ -375,7 +390,8 @@ mod test {
             RistrettoSecretKey
         }
     };
-
+    use bulletproofs::r1cs;
+    use bulletproofs::{BulletproofGens, PedersenGens};
     #[test]
     fn verify_delta_compact_prover_test(){
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
@@ -497,8 +513,18 @@ mod test {
             let epsilon_account: Account = Account::create_epsilon_account(base_pk, rscalar, value_vector_sender[i]);
             epsilon_account_vec.push(epsilon_account);
         }
-
-        let (zv, zsk, zr, x) = Prover::verify_account_prover(&updated_delta_account_sender, &epsilon_account_vec, value_vector_sender, &sender_sk, rscalar_sender );
+    
+        // Prepare the constraint system
+        let pc_gens = PedersenGens::default();
+        let cs = r1cs::Prover::new(&pc_gens, Transcript::new(b"bulletproof.r1cs"));
+        let mut prover = RangeProofProver {
+            prover: cs,
+        };
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(&updated_delta_account_sender, &epsilon_account_vec, value_vector_sender, &sender_sk, rscalar_sender, &mut prover );
+        
+        
+        let range_proof = prover.build_proof();
+        println!("{:?}", range_proof);
         //let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &epsilon_account, &sender_sk, &rscalar_sender, &value_vector_sender);
 
         // we need to verify that the sender has enough balance and posesses the sk

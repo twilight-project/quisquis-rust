@@ -4,11 +4,10 @@ use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_COMPRESSED,
     traits::VartimeMultiscalarMul
 };
-use bulletproofs::r1cs::*;
-use bulletproofs::{BulletproofGens, PedersenGens};
-use merlin::Transcript;
-use crate::accounts::{TranscriptProtocol, RangeProof};
 
+use merlin::Transcript;
+use crate::accounts::{TranscriptProtocol, RangeProofVerifier};
+                   
 use crate::{
     accounts::Account,
     ristretto::{
@@ -162,7 +161,7 @@ impl<'a> Verifier<'a> {
     }
 
     // verify_account_verifier verifies the knowledge of secret key and balance
-    pub fn verify_account_verifier(updated_delta_account: &Vec<Account>, account_epsilon: &Vec<Account>, base_pk: RistrettoPublicKey, zv: Vec<Scalar>, zsk: Vec<Scalar>, zr: Vec<Scalar>, x: Scalar) -> bool{
+    pub fn verify_account_verifier(updated_delta_account: &Vec<Account>, account_epsilon: &Vec<Account>, base_pk: RistrettoPublicKey, zv: Vec<Scalar>, zsk: Vec<Scalar>, zr: Vec<Scalar>, x: Scalar, rp_verifier: &mut RangeProofVerifier) -> bool{
 
         let mut transcript = Transcript::new(b"VerifyAccountProver");
         let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
@@ -171,7 +170,7 @@ impl<'a> Verifier<'a> {
             verifier.allocate_account(b"delta_account", updated_delta_account[i]); 
             verifier.allocate_account(b"epsilon_account", account_epsilon[i]);
         }
-
+        println!("Verifier");
         for i in 0..updated_delta_account.iter().count(){
             let combined_scalars = vec![zsk[i], x];
             let point = vec![updated_delta_account[i].pk.gr, updated_delta_account[i].pk.grsk];
@@ -193,41 +192,34 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"f_delta", f_delta);
             verifier.allocate_point(b"e_epsilon", e_epsilon);
             verifier.allocate_point(b"f_epsilon", f_epsilon);
+            println!("{:?}",e_delta);
+            println!("{:?}",f_delta);
+            println!("{:?}",e_epsilon);
+            println!("{:?}",f_epsilon);
         }
 
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
-
+        println!("{:?}",verify_x);
+        for i in 0..account_epsilon.iter().count(){
+            let _ = rp_verifier.range_proof_verifier(account_epsilon[i].comm.d);
+          }
         if x == verify_x{
+            
             return true
         }else{
             return false
         }
     }
+     //verify_non_negative_verifier verifies range proof on Receiver accounts with zero balance
+     pub fn verify_non_negative_verifier(epsilon_account: &Vec<Account>, rp_verifier: &mut RangeProofVerifier){
+        for i in 0..epsilon_account.iter().count(){
+            let _ = rp_verifier.range_proof_verifier(epsilon_account[i].comm.d);
+        }
+    }
 }
 
 
-
-fn range_proof_verifier(com: CompressedRistretto, proof: R1CSProof, n: usize) -> Result<(), R1CSError> {
-
-    // Common
-    let pc_gens = PedersenGens::default();
-    let bp_gens = BulletproofGens::new(128, 1);
-
-    // Verifier makes a `ConstraintSystem` instance representing a merge gadget
-    let mut verifier_transcript = Transcript::new(b"RangeProof");
-    let mut verifier = bulletproofs::r1cs::Verifier::new(&mut verifier_transcript);
-
-    let var = verifier.commit(com);
-
-    // Verifier adds constraints to the constraint system
-    RangeProof::range_proof(&mut verifier, var.into(), None, n)?;
-
-    // Verifier verifies proof
-    verifier.verify(&proof, &pc_gens, &bp_gens)
-
-}
-}
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -245,6 +237,9 @@ mod test {
             RistrettoSecretKey
         }
     };
+    use bulletproofs::r1cs;
+    use bulletproofs::{BulletproofGens, PedersenGens};
+    use crate::accounts::{RangeProofProver};
     #[test]
     fn verify_delta_compact_verifier_test(){
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
@@ -322,21 +317,6 @@ mod test {
 
         assert!(check);
     }
-
-    #[test]
-    fn range_proof_test(){
-        let bl = 10i64;
-        let n: usize = 64;
-        let rscalar = Scalar::random(&mut OsRng);
-        // lets first create a new epsilon account using the passed balance
-        let base_pk = RistrettoPublicKey::generate_base_pk();
-        let epsilon_account = Account::create_epsilon_account(base_pk, rscalar, bl);
-        //println!("{:?}", epsilon_account.comm.d);
-        let result = Prover::range_proof_prover(bl as u64, rscalar, n);
-        let rangeproof = result.unwrap();
-        let check = Verifier::range_proof_verifier(epsilon_account.comm.d, rangeproof.proof, n);
-
-
     #[test]
     fn verify_account_verifier_test(){
         let base_pk = RistrettoPublicKey::generate_base_pk();
@@ -384,15 +364,27 @@ mod test {
             let epsilon_account: Account = Account::create_epsilon_account(base_pk, rscalar, value_vector_sender[i]);
             epsilon_account_vec.push(epsilon_account);
         }
-
-        let (zv, zsk, zr, x) = Prover::verify_account_prover(&updated_delta_account_sender, &epsilon_account_vec, value_vector_sender, &sender_sk, rscalar_sender );
-        
+        // Create R1CS rangeproof Prover
+        let pc_gens = PedersenGens::default();
+        let cs = r1cs::Prover::new(&pc_gens, Transcript::new(b"Rangeproof.r1cs"));
+        let mut prover = RangeProofProver {
+            prover: cs,
+        };
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(&updated_delta_account_sender, &epsilon_account_vec, value_vector_sender, &sender_sk, rscalar_sender,&mut prover);
+        //Create R1CS rangeproof on all sender accounts
+        let range_proof = prover.build_proof();
         // //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
-        // println!("Verifier");
-
-        let check = Verifier::verify_account_verifier(&updated_delta_account_sender, &epsilon_account_vec, base_pk, zv, zsk, zr, x);
-
-        assert!(check);
+        println!("Verifier");
+        // Initialise the Verifier `ConstraintSystem` instance representing a merge gadget
+        let verifier_initial = bulletproofs::r1cs::Verifier::new(Transcript::new(b"Rangeproof.r1cs"));
+        let mut rp_verifier = RangeProofVerifier {
+            verifier: verifier_initial,
+        };
+        let check = Verifier::verify_account_verifier(&updated_delta_account_sender, &epsilon_account_vec, base_pk, zv, zsk, zr, x, &mut rp_verifier);
+        //Verify r1cs rangeproof 
+        let bp_check = rp_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
+        println!("{:?}", bp_check.is_ok());
+        assert!(check );
 
     }
 }

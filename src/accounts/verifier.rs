@@ -177,7 +177,7 @@ impl<'a> Verifier<'a> {
             let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
             let combined_scalars = vec![zv[i], zsk[i], x];
-            let point = vec![base_pk.gr, updated_delta_account[i].comm.c, updated_delta_account[i].comm.d];
+            let point = vec![account_epsilon[i].pk.gr, updated_delta_account[i].comm.c, updated_delta_account[i].comm.d];
             let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
 
             let combined_scalars = vec![x, zr[i]];

@@ -1,3 +1,4 @@
+use curve25519_dalek::ristretto::RistrettoPoint;
 use rand::thread_rng;
 //use std::time::Instant;
 
@@ -370,6 +371,42 @@ impl<'a> Prover<'a> {
         for i in 0..epsilon_account.iter().count(){
             let _ = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
         }
+    }
+
+    // verify_update_ddh_prover confirms if (G,H,G',H') is a DDH tuple and (G,H) is updated correctly using rho
+    pub fn verify_update_ddh_prover(g: RistrettoPoint, h: RistrettoPoint, g_dash: RistrettoPoint, h_dash: RistrettoPoint, rho: Scalar) -> (Scalar,Scalar){
+        // lets create random scalar r with the transcript
+        let mut transcript = Transcript::new(b"VerifyUpdateDDH");
+        let mut prover = Prover::new(b"DDHTuple", &mut transcript);
+
+        prover.scalars.push(rho); 
+
+        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+
+        // Generate a single blinding factor
+        let r_scalar = Scalar::random(&mut transcript_rng);
+        
+        // first messasge
+        let g_r = g * r_scalar;
+        let h_r = h * r_scalar;
+
+        //allocates points to Transcript
+        prover.allocate_point(b"g", g.compress());
+        prover.allocate_point(b"g_dash", g_dash.compress());
+        prover.allocate_point(b"h", h.compress());
+        prover.allocate_point(b"h_dash", h_dash.compress());  
+
+        prover.allocate_point(b"gr", g_r.compress());
+        prover.allocate_point(b"hr", h_r.compress());
+        
+        // obtain a scalar challenge
+        let x = transcript.get_challenge(b"chal");
+        
+        //proof
+        let x_rho = x * rho;
+        let z = r_scalar - x_rho; 
+
+        return (z, x)
     }
 
         

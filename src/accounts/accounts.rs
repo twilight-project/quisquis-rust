@@ -180,6 +180,12 @@ impl Account {
         }   
     }
 
+    // create_epsilon_account generates a single epsilon account
+    pub fn create_epsilon_account(base_pk: RistrettoPublicKey, rscalar: Scalar, bl: i64) -> Account{
+        let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl);
+        Account::set_account(base_pk, comm_epsilon)
+    }
+
 
     ///////////////////////////////////////////// Misc. Methods /////////////////////////////////////////////
 
@@ -198,7 +204,7 @@ impl Account {
 
     // generate_random_account_with_value generates a random account with a given value
     // this function is being used to produce tests and for anonymity account generation
-    pub fn generate_random_account_with_value(amount: i64) -> Account{
+    pub fn generate_random_account_with_value(amount: i64) -> (Account, RistrettoSecretKey){
         let mut rng = rand::thread_rng();
         let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
@@ -212,7 +218,7 @@ impl Account {
 
         let updated_account = Account::update_account(acc, amount, updated_keys_scalar, comm_scalar);
         
-        return updated_account
+        return (updated_account, sk)
     }
     
 }

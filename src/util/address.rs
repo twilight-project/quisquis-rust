@@ -217,7 +217,7 @@ fn slice_to_pkpoint(data: &[u8]) -> Result<CompressedRistretto, &'static str> {
 // ------------------------------------------------------------------------
 #[cfg(test)]
 mod test {
-    use super::*;
+   // use super::*;
     #[test]
     fn hex_encoding_decoding_test() {
         

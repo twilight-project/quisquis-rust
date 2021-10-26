@@ -6,10 +6,14 @@ use curve25519_dalek::{
 };
 
 use merlin::Transcript;
-use crate::accounts::TranscriptProtocol;
-//use itertools::interleave;
-
-use crate::{accounts::Account};
+use crate::accounts::{TranscriptProtocol, RangeProofVerifier};
+                   
+use crate::{
+    accounts::Account,
+    ristretto::{
+        RistrettoPublicKey
+    }
+};
 
 pub struct Verifier<'a> {
     transcript: &'a mut Transcript,
@@ -55,13 +59,14 @@ impl<'a> Verifier<'a> {
     pub fn verify_delta_compact_verifier(delta_accounts: &Vec<Account>, epsilon_accounts: &Vec<Account>, zv_vector: &Vec<Scalar>, zr1_vector: &Vec<Scalar>, zr2_vector: &Vec<Scalar>, x: &Scalar) -> bool{
         
         let mut transcript = Transcript::new(b"VerifyDeltaCompact");
+        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
 
-        for i in 0..9{
-
-            let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
-
+        for i in 0..delta_accounts.iter().count(){
             verifier.allocate_account(b"delta_account", delta_accounts[i]); 
             verifier.allocate_account(b"epsilon_account", epsilon_accounts[i]);
+        }
+
+        for i in 0..delta_accounts.iter().count(){
 
             // lets create four points for the proof
             // e_delta = g_delta ^ zr1 ^ cdelta ^ x
@@ -144,7 +149,7 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"commitmentgrsk", e12[i]);
         }
 
-        // Obtain a scalar challenge
+        // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
 
         if x == &verify_x{
@@ -153,6 +158,64 @@ impl<'a> Verifier<'a> {
             return false
         }
 
+    }
+
+    // verify_account_verifier verifies the knowledge of secret key and balance
+    pub fn verify_account_verifier(updated_delta_account: &Vec<Account>, account_epsilon: &Vec<Account>, base_pk: RistrettoPublicKey, zv: Vec<Scalar>, zsk: Vec<Scalar>, zr: Vec<Scalar>, x: Scalar, rp_verifier: &mut RangeProofVerifier) -> bool{
+
+        let mut transcript = Transcript::new(b"VerifyAccountProver");
+        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
+
+        for i in 0..updated_delta_account.iter().count(){
+            verifier.allocate_account(b"delta_account", updated_delta_account[i]); 
+            verifier.allocate_account(b"epsilon_account", account_epsilon[i]);
+        }
+        println!("Verifier");
+        for i in 0..updated_delta_account.iter().count(){
+            let combined_scalars = vec![zsk[i], x];
+            let point = vec![updated_delta_account[i].pk.gr, updated_delta_account[i].pk.grsk];
+            let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+
+            let combined_scalars = vec![zv[i], zsk[i], x];
+            let point = vec![base_pk.gr, updated_delta_account[i].comm.c, updated_delta_account[i].comm.d];
+            let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+
+            let combined_scalars = vec![x, zr[i]];
+            let point = vec![account_epsilon[i].comm.c, base_pk.gr];
+            let e_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+            let combined_scalars = vec![zv[i], zr[i], x];
+            let point = vec![base_pk.gr, base_pk.grsk, account_epsilon[i].comm.d];
+            let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point).unwrap().compress();
+            
+            // lets create hash
+            verifier.allocate_point(b"e_delta", e_delta);
+            verifier.allocate_point(b"f_delta", f_delta);
+            verifier.allocate_point(b"e_epsilon", e_epsilon);
+            verifier.allocate_point(b"f_epsilon", f_epsilon);
+            println!("{:?}",e_delta);
+            println!("{:?}",f_delta);
+            println!("{:?}",e_epsilon);
+            println!("{:?}",f_epsilon);
+        }
+
+        // obtain a scalar challenge
+        let verify_x = transcript.get_challenge(b"chal");
+        println!("{:?}",verify_x);
+        for i in 0..account_epsilon.iter().count(){
+            let _ = rp_verifier.range_proof_verifier(account_epsilon[i].comm.d);
+          }
+        if x == verify_x{
+            
+            return true
+        }else{
+            return false
+        }
+    }
+     //verify_non_negative_verifier verifies range proof on Receiver accounts with zero balance
+     pub fn verify_non_negative_verifier(epsilon_account: &Vec<Account>, rp_verifier: &mut RangeProofVerifier){
+        for i in 0..epsilon_account.iter().count(){
+            let _ = rp_verifier.range_proof_verifier(epsilon_account[i].comm.d);
+        }
     }
 }
 
@@ -174,6 +237,9 @@ mod test {
             RistrettoSecretKey
         }
     };
+    use bulletproofs::r1cs;
+    use bulletproofs::{BulletproofGens, PedersenGens};
+    use crate::accounts::{RangeProofProver};
     #[test]
     fn verify_delta_compact_verifier_test(){
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
@@ -201,7 +267,7 @@ mod test {
           }
         let (delta_accounts, epislon_accounts, rscalar) = Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, generate_base_pk);
 
-        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epislon_accounts, &rscalar, &value_vector);
+        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(&delta_accounts, &epislon_accounts, &rscalar, &rscalar, &value_vector);
 
         let check = Verifier::verify_delta_compact_verifier(&delta_accounts, &epislon_accounts, &zv_vector, &zr1_vector, &zr2_vector, &x);
 
@@ -250,5 +316,75 @@ mod test {
         let check = Verifier::verify_update_account_verifier(&updated_accounts_slice.to_vec(), &updated_delta_accounts_slice.to_vec(), &z_vector, &x);
 
         assert!(check);
+    }
+    #[test]
+    fn verify_account_verifier_test(){
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+
+        let value_vector: Vec<i64> = vec![-5, -3, 5, 3, 0, 0, 0, 0, 0];
+        let mut updated_accounts: Vec<Account> = Vec::new();
+        let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
+
+        for i in 0..9 {
+
+            let (updated_account, sk) = Account::generate_random_account_with_value(10);
+
+            updated_accounts.push(updated_account);
+
+            // lets save the first and second sk as sender's sk as we discard the rest
+            if i == 0 || i == 1 {
+                sender_sk.push(sk);
+            }
+
+          }
+
+        let (delta_accounts, _, rscalars) = Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, base_pk);
+
+        let updated_delta_accounts = Account::update_delta_accounts(&updated_accounts, &delta_accounts);
+
+        // balance that we want to prove should be sender balance - the balance user is trying to send
+
+        let bl_first_sender = 10 - 5;
+        let bl_second_sender = 10 - 3;
+
+        let delta_unwraped = updated_delta_accounts.unwrap();
+        let updated_delta_account_sender: Vec<Account> = vec!(delta_unwraped[0], delta_unwraped[1]);
+        
+        //let sender_sk_vector: Vec<Scalar> = vec!(sender_sk[0].0, sender_sk[1].0);
+        let value_vector_sender: Vec<i64> = vec!(bl_first_sender, bl_second_sender);
+
+        let mut epsilon_account_vec: Vec<Account> = Vec::new();
+        let mut rscalar_sender: Vec<Scalar> = Vec::new();
+        
+        for i in 0..value_vector_sender.iter().count(){
+            // lets create an epsilon account with the new balance
+            let rscalar = Scalar::random(&mut OsRng);
+            rscalar_sender.push(rscalar);
+            // lets first create a new epsilon account using the passed balance
+            let epsilon_account: Account = Account::create_epsilon_account(base_pk, rscalar, value_vector_sender[i]);
+            epsilon_account_vec.push(epsilon_account);
+        }
+        // Create R1CS rangeproof Prover
+        let pc_gens = PedersenGens::default();
+        let cs = r1cs::Prover::new(&pc_gens, Transcript::new(b"Rangeproof.r1cs"));
+        let mut prover = RangeProofProver {
+            prover: cs,
+        };
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(&updated_delta_account_sender, &epsilon_account_vec, value_vector_sender, &sender_sk, rscalar_sender,&mut prover);
+        //Create R1CS rangeproof on all sender accounts
+        let range_proof = prover.build_proof();
+        // //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
+        println!("Verifier");
+        // Initialise the Verifier `ConstraintSystem` instance representing a merge gadget
+        let verifier_initial = bulletproofs::r1cs::Verifier::new(Transcript::new(b"Rangeproof.r1cs"));
+        let mut rp_verifier = RangeProofVerifier {
+            verifier: verifier_initial,
+        };
+        let check = Verifier::verify_account_verifier(&updated_delta_account_sender, &epsilon_account_vec, base_pk, zv, zsk, zr, x, &mut rp_verifier);
+        //Verify r1cs rangeproof 
+        let bp_check = rp_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
+        println!("{:?}", bp_check.is_ok());
+        assert!(check );
+
     }
 }

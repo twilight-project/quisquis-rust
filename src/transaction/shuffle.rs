@@ -165,11 +165,8 @@ impl Shuffle {
     pub fn get_outputs_vector(&self) -> Vec<Account> {
         self.outputs.as_row_major()
     }
-
-    pub fn multiexponen_prove(&self){
-        
-    
- 
+//product and multiexponential argument
+    pub fn shuffle_argument_prove(&self){
         let pc_gens = PedersenGens::default();
         //generate Xcomit generator points of length m+1
         let xpc_gens = extended_pedersen_gen(ROWS+1, pc_gens.B, pc_gens.B_blinding);
@@ -224,6 +221,97 @@ impl Shuffle {
       
         
     }
+
+    pub fn product_argument_prove(&self, b_matrix: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, x_chal: Scalar){
+        //create random number r to vector commit on witness. The commitment is on columns of A matrix
+         //compute r. it is the witness in c_A
+         let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+
+         //create statement 
+         //compute Xcomit on A
+         //convert to column major representation
+         //convrt pi matrix to scalar
+         let pi_scalar: Vec<_> = self.pi.perm_matrix.as_row_major().iter().map(|i| Scalar::from(*i as u64)).collect();
+        let pi_2d = Array2D::from_row_major(&pi_scalar, ROWS, COLUMNS);
+         let perm_scalar_as_cols = pi_2d.as_columns();
+         let mut comit_a_vec = Vec::<RistrettoPoint>::new();
+         for i in 0..COLUMNS{
+             comit_a_vec.push(extended_commit(&perm_scalar_as_cols[i], r[i], &xpc_gens));
+         }
+         // cb = com(product (from 1 to m) a1j, ..., product (from 1 to m) 
+         
+         let mut bvec = Vec::<Scalar>::new();
+         for row_iter in pi_2d.rows_iter() {
+            let mut product = Scalar::one();
+            for element in row_iter {
+               product = product * element;
+            }
+            bvec.push(product);
+        }
+        //create challenge s for bvec comit    
+        let s = Scalar::random(&mut OsRng);
+        let cb = extended_commit(&bvec, s, &xpc_gens);
+        // hadamard argument convinces verifier you know
+	    // A and b st prod prod A = b :) with b a VECTOR
+
+
+
+    }
+    pub fn hadamard_product_arg(pi_2d: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, bvec: &Vec<Scalar>, comit_a: &Vec<RistrettoPoint>, cb: &RistrettoPoint){
+        // ai, b, vectors of length n
+        // cA, cb, a1, ..., am, bvec, st bvec = product ai
+        // (with entrywise multiplication)
+        // cA = com(A;rvec); cb = com(bvec; s)
+        
+        //create b1,b2....bm
+        let perm_scalar_as_cols = pi_2d.as_columns();
+        // b1 =a1
+        let b1 = perm_scalar_as_cols[0].clone();
+        // b2 = a1 * a2
+        let a2 = perm_scalar_as_cols[1].clone();
+        let b2: Vec<_> = b1.iter().zip(a2.iter()).map(|(i, j)| i * j).collect();
+        //b3 = b
+        let b3 = bvec.clone();
+
+        let s2 = Scalar::random(&mut OsRng);
+        let c_B2 = extended_commit(&b2, s2, &xpc_gens);
+        let c_B1 = comit_a[0].clone();
+        let c_B3 = cb.clone();
+        //CREATE CHALLENGE X AND Y
+        let x = Scalar::random(&mut OsRng);
+        let y = Scalar::random(&mut OsRng);
+        let x_exp: Vec<_> = exp_iter(x).take(2*ROWS).collect();
+        //let x_exp_m = &x_exp[1..4].to_vec();
+        let c_D1 = c_B1 * x_exp[1];
+        let c_D2 = c_B2 * x_exp[2];
+        let c_D3 = c_B3 * x_exp[3];
+        //c_D = c_B_2 ^ x c_B_3^x^2
+        let c_D = c_B2 * x_exp[1] + c_B3 * x_exp[2];
+
+        // engage in a zero argument, for the committed values satisfying 0 = a2 ⇤ d1 + a3 ⇤ d2   1 ⇤ d.
+
+
+    }
+
+    pub fn zero_argument(pi_2d: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, bvec: &Vec<Scalar>, comit_a: &Vec<RistrettoPoint>, cb: &RistrettoPoint, y: Scalar){
+        //pick a0, bm 
+        let a0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let bm: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+
+        //pick r0, s3
+        let r0 = Scalar::random(&mut OsRng);
+        let s3 = Scalar::random(&mut OsRng);
+
+        //comit on a0 and bm
+        let c_a0 = extended_commit(&a0, r0, xpc_gens);
+        let c_bm= extended_commit(&bm, s3, xpc_gens);
+
+        //for k = 0,...,2m : compute d_k
+
+        
+        
+    }
+
     pub fn multiexp_commit_prove(&self, a_witness: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, pk: &RistrettoPublicKey, rho: Scalar){
         //create random number s' to vector commit on witness. The commitment is on columns of A matrix
          //compute s'. it is the witness in c_A
@@ -295,7 +383,7 @@ impl Shuffle {
 
         //compute t = t0 + sum from 1 to 2m-1 (tk.x^k)
         let tx = vector_multiply_scalar(&tau_vec[1..6].to_vec(),&x_k);
-        let t = tau_vec[0] + sx;
+        let t = tau_vec[0] + tx;
 
 
         //Third Message. Send a_vec, r, b, s  
@@ -626,6 +714,10 @@ impl Shuffle {
     
         
 }
+pub fn running_checks_for_confirmation(accounts: &Array2D<Account>, b_mat: &Array2D<Scalar>, b_dash: &Array2D<Scalar> , b: &Vec<Scalar>, pk:&RistrettoPublicKey, rho:Scalar){
+
+}
+
 pub fn create_C_comit_prover(accounts: &Array2D<Account>, pi: &Array2D<Scalar>, pk:&RistrettoPublicKey, rho:Scalar)-> (RistrettoPoint, RistrettoPoint){
     //extract commitments from accounts
     let comm: Vec<ElGamalCommitment> = accounts.as_row_major().iter().map(|acc| acc.comm).collect();
@@ -799,6 +891,7 @@ pub fn create_ek_comm(accounts: &Array2D<Account>, b_mat: &Array2D<Scalar>, a0: 
 
 
     (E_c,E_d)
+    //(e_c,e_d)
 }
 pub fn create_ek_pk(accounts: &Array2D<Account>, b_dash: &Array2D<Scalar>, a0: &Vec<Scalar>, G: RistrettoPoint, H: RistrettoPoint, b_random: &Vec<Scalar>)-> (Vec<RistrettoPoint>,Vec<RistrettoPoint>){
     //extract commitments from accounts

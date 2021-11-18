@@ -11,6 +11,7 @@ use crate::{
     keys::{SecretKey, PublicKey}
 };
 use core::ops::{Add,Mul};
+use sha2::Sha512;
 
 const SCALAR_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
@@ -28,6 +29,10 @@ impl SecretKey for RistrettoSecretKey {
 
     fn random<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         RistrettoSecretKey(Scalar::random(rng))
+    }
+
+    fn from_bytes(slice: &[u8]) -> Self {
+        RistrettoSecretKey(Scalar::hash_from_bytes::<Sha512>(slice))
     }
 }
 // ------- PrivateKey Partial Eq, Eq ------- //

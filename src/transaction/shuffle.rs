@@ -15,6 +15,9 @@ use rand::{CryptoRng, Rng};
 use array2d::{Array2D};
 use curve25519_dalek::traits::MultiscalarMul;
 use curve25519_dalek::traits::VartimeMultiscalarMul;
+use std::convert::TryInto;
+
+
 #[derive(Debug, Clone)]
 pub struct Permutation {
     perm_matrix: Array2D<usize>,
@@ -264,8 +267,8 @@ impl Shuffle {
         let b = bvec.iter().product::<Scalar>();
         // hadamard argument convinces verifier you know
 	    // A and b st prod prod A = b :) with b a VECTOR
-        //self.hadamard_product_arg(&pi_2d, &pc_gens, &xpc_gens, &bvec, &comit_a_vec, &cb, x_chal, r, s);
-        self.single_value_argument_prover(&pc_gens, &xpc_gens, cb, b, s, &bvec);
+        self.hadamard_product_arg(&pi_2d, &pc_gens, &xpc_gens, &bvec, &comit_a_vec, &cb, x_chal, r, s);
+        //self.single_value_argument_prover(&pc_gens, &xpc_gens, cb, b, s, &bvec);
 
     }
     pub fn hadamard_product_arg(&self, pi_2d: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, bvec: &Vec<Scalar>, comit_a: &Vec<RistrettoPoint>, cb: &RistrettoPoint, x_chal: Scalar, r: Vec<Scalar>, s_3: Scalar){
@@ -436,8 +439,8 @@ impl Shuffle {
 
         let mut a_bar_vec = Vec::<Scalar>::new();
         let mut b_bar_vec = Vec::<Scalar>::new();
-        //creating a_bar abd b_bar
-        for i in 0..4{
+        //creating a_bar and b_bar
+        for i in 0..3{
             a_bar_vec.push(a_cols[0][i] + a1x[i] + a2x2[i] + a3x3[i]);
             b_bar_vec.push(b0x3[i] + b1x2[i] + b2x[i] + b_cols[3][i]);
 
@@ -450,7 +453,7 @@ impl Shuffle {
        let r_bar: Scalar = vector_multiply_scalar(&r_ext_vec,&x_exp_m);
        
        //compute s_bar = s . x. x is [0....x^n]
-       let s_bar: Scalar = vector_multiply_scalar(&s_ext_vec,&x_exp_m);
+       let s_bar: Scalar = vector_multiply_scalar(&s_ext_vec,&x_m_j);
 
        //compute t_bar = t . x. x is [0....x^2m+1]
        let t_bar: Scalar = vector_multiply_scalar(&t,&x_k);
@@ -468,22 +471,54 @@ impl Shuffle {
        if comit_0_0 == comit_d_m_1{
            println!("Cdm+1 TRUE");
        }
-       /*
-       // Verify c_A_0 . c_A_vec^(x_vec) = com (a_vec,r)
-       //println!("{:?}",x_exp_m);
-       //compute C_A^x_vec
-       let c_a_x_vec = RistrettoPoint::multiscalar_mul(x_exp_m.iter().clone(), comit_a_vec.iter().clone());        
-       //let trying = extended_commit(&ax, rx, &xpc_gens);
-       
-       let c_a_0_c_a_x_vec = c_a_x_vec + c_A_0;
-       //compute comit(a_vec:r)
-       let c_a_r = extended_commit(&a_vec, r, &xpc_gens);
-       
-       if c_a_0_c_a_x_vec == c_a_r{
-           println!("CA TRUE");
+
+
+       // prod i=0..m (c_Ai^x^i ) = com(a_bar,r)
+       //Com_A_0 ^ X^0 = com_a0
+        
+        //can use multiscalar_multiplication. should be done for all elements. 
+        let x_m_1 = &x_exp_m[1..4].to_vec();
+        let temp_a = RistrettoPoint::multiscalar_mul(x_m_1.iter().clone(), comit_a.iter().clone());
+        let comit_a_product = c_a0 + temp_a;
+
+       //com(a_bar,r)
+       let comit_a_bar = extended_commit(&a_bar_vec, r_bar, xpc_gens);
+       if comit_a_bar == comit_a_product{
+        println!(" comit_a_bar Verifies");
+        }
+       // prod j=0..m (c_Bj^x^(m-j) ) = com(b_bar,s)
+       //Com_B_m ^ X^0 = com_b3
+ 
+        //can use multiscalar_multiplication. should be done for all elements. 
+        let  b_full = vec![comit_b[0], comit_b[1],comit_b[2], c_b3];
+        let comit_b_full = RistrettoPoint::multiscalar_mul(x_m_j.iter().clone(), b_full.iter().clone());
+
+       //com(b_bar,s)
+       let comit_b_bar = extended_commit(&b_bar_vec, s_bar, xpc_gens);
+       if comit_b_bar == comit_b_full{
+        println!(" comit_b_bar Verifies");
        }else{
-           println!("CA FALSE");
-       }*/
+        println!(" comit_b_bar Veification fails");
+       }
+       
+       // Verify for k=0..2m c_D_k ^(x ^k)  ==  com(a_bar * b_bar; t) where * is bilinear map
+
+       //com(a_bar * b_bar; t)
+       //create y^i 
+       let y_exp: Vec<_> = exp_iter(y).take(ROWS+1).collect();
+       let y_i = &y_exp[1..4].to_vec();
+       let a_bar_b_bar = single_bilinearmap(&a_bar_vec, &b_bar_vec, y_i );
+       let comit_a_bar_b_bar = pc_gens.commit(a_bar_b_bar, t_bar);
+
+       //k=0..2m c_D_k ^(x ^k)
+       let c_D_x_k:RistrettoPoint = c_D.iter().zip(x_k.iter()).map(|(c, xk)| c*xk ).sum();
+       
+       if comit_a_bar_b_bar == c_D_x_k{
+        println!(" c_D_x_k Verifies");
+       }else{
+        println!(" c_D_x_k Veification fails");
+       }
+
 
         
     }
@@ -1017,13 +1052,17 @@ pub fn bilnearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal:Scalar) -> Ve
     let a_as_cols = a.as_columns();
     let b_as_cols = b.as_columns();
     let mut dvec = Vec::<Scalar>::new();
-
-    for k in 0..2*ROWS+1 {
+   
+    for k in 0isize..7 {
+        //println!("K = , {:?}",k);
 		let mut sum = Scalar::zero();
-		for i in 0..COLUMNS {
-			for j in 0..COLUMNS {
-				if j == ROWS - k + i {
-					sum = single_bilinearmap(&a_as_cols[i], &b_as_cols[j], &y_i) + sum;
+		for i in 0isize..=3 {
+          //  println!("i = {:?}",i);
+            for j in 0isize..=3 {
+            //    println!("j = {:?}",j);
+              //  println!("ROWS - k + i = {:?}",(3 - k + i));
+				if j == (3 - k + i) {
+					sum = single_bilinearmap(&a_as_cols[i as usize], &b_as_cols[j as usize], &y_i) + sum;
 				} else {
 					continue;
 				}

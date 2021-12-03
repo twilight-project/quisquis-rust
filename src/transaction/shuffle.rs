@@ -30,11 +30,12 @@ const COLUMNS: usize = 3; //n
 
 impl Permutation {
     pub fn new<R: Rng + CryptoRng>(rng: &mut R, n: usize) -> Self {
-        let mut permutation: Vec<usize> = (0..n).collect();
+        let mut permutation: Vec<usize> = (1..n+1).collect();
         for i in (1..permutation.len()).rev() {
             // invariant: elements with index > i have been locked in place.
             permutation.swap(i, rng.gen_range(0, i + 1));
         }
+
         let perm_matrix = Array2D::from_row_major(&permutation, ROWS,COLUMNS);
         Self {perm_matrix}
     }
@@ -46,10 +47,10 @@ impl Permutation {
 
     //Inverse the permutation matrix for use in Input shuffle
     pub fn invert_permutation(&self)-> Array2D<usize> {
-        let mut inverse = vec![0; N];
+        let mut inverse = vec![0; self.perm_matrix.num_elements()];
         let permutation = self.perm_matrix.as_row_major();
        for i in 0..permutation.len() {
-            inverse[permutation[i]]  = i ;            
+            inverse[permutation[i]-1]  = i + 1;            
         }
         let perm_matrix = Array2D::from_row_major(&inverse, ROWS,COLUMNS);
         perm_matrix
@@ -99,7 +100,7 @@ impl Shuffle {
         let permutation =  pi.perm_matrix.as_row_major();
 
         //shuffle Input accounts randomly using permutation matrix
-        let shuffled_accounts: Vec<_> = (0..len).map(|i| inputs[permutation[i]].clone()).collect();    
+        let shuffled_accounts: Vec<_> = (0..len).map(|i| inputs[permutation[i]-1].clone()).collect();    
         
         //Invert the permutation Matrix for Inputs shuffle
         pi.set(pi.invert_permutation());
@@ -128,7 +129,7 @@ impl Shuffle {
         let permutation =  pi.perm_matrix.as_row_major();
 
         //shuffle Inputs
-        let shuffled_accounts: Vec<_> = (0..len).map(|i| inputs[permutation[i]].clone()).collect();
+        let shuffled_accounts: Vec<_> = (0..len).map(|i| inputs[permutation[i]-1].clone()).collect();
         
         //Shuffled and Updated Accounts
         let shuffled_outputs: Vec<_> = shuffled_accounts.iter().zip(tau.iter()).map(|(acc, t)| Account::update_account(*acc, 0, *t, rho)).collect();
@@ -1738,12 +1739,12 @@ mod test {
          };
          let permutation =  pi.perm_matrix.as_row_major();
          //shuffle Account Vector
-         let shuffled_accounts: Vec<_> = (0..len).map(|i| account_vector[permutation[i]].clone()).collect();
+         let shuffled_accounts: Vec<_> = (0..len).map(|i| account_vector[permutation[i]-1].clone()).collect();
          assert_ne!(account_vector, shuffled_accounts)
 
     }
     #[test]
-    fn shuffle_test() {
+    fn shuffle_output_test() {
         // lets define a vector of accounts
         let mut account_vector: Vec<Account> = Vec::new();
 
@@ -1768,10 +1769,65 @@ mod test {
         let tau = shuffle.as_ref().unwrap().shuffled_tau.as_row_major();
         let rho = shuffle.as_ref().unwrap().rho;
         
-        let shuffled_inputs: Vec<_> = (0..9).map(|i| inp[perm[i]].clone()).collect();
+        let shuffled_inputs: Vec<_> = (0..9).map(|i| inp[perm[i]-1].clone()).collect();
         let shuffled_updated: Vec<_> = shuffled_inputs.iter().zip(tau.iter()).map(|(acc, t)| Account::update_account(*acc, 0, *t, rho)).collect();
 
         assert_eq!(out, shuffled_updated)
     
+    }
+    // Testing the update of input and assignment to output
+    #[test]
+    fn shuffle_input_update_test() {
+        // lets define a vector of accounts
+        let mut account_vector: Vec<Account> = Vec::new();
+
+        // lets create these accounts and associated keypairs
+        for _x in 0..9 {
+
+            let mut rng = rand::thread_rng();
+            let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
+            let acc = Account::generate_account(pk);
+            account_vector.push(acc);
+
+        }
+        // 1 for input , 2 for output
+        let shuffle = {
+            Shuffle::input_shuffle(&account_vector)
+        };
+        let out = shuffle.as_ref().unwrap().outputs.as_row_major();
+        let tau = shuffle.as_ref().unwrap().shuffled_tau.as_row_major();
+        let rho = shuffle.as_ref().unwrap().rho;
+        
+        let input_updated: Vec<_> = account_vector.iter().zip(tau.iter()).map(|(acc, t)| Account::update_account(*acc, 0, *t, rho)).collect();
+        assert_eq!(out, input_updated)    
+    }
+
+    // Testing the inverse permutation and assignment to input
+    #[test]
+    fn shuffle_input_perm_test() {
+        // lets define a vector of accounts
+        let mut account_vector: Vec<Account> = Vec::new();
+
+        // lets create these accounts and associated keypairs
+        for _x in 0..9 {
+
+            let mut rng = rand::thread_rng();
+            let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
+            let acc = Account::generate_account(pk);
+            account_vector.push(acc);
+
+        }
+        // 1 for input , 2 for output
+        let shuffle = {
+            Shuffle::input_shuffle(&account_vector)
+        };
+        let inp = shuffle.as_ref().unwrap().inputs.as_row_major();
+        let pi = &shuffle.as_ref().unwrap().pi;
+        let perm = pi.perm_matrix.as_row_major();
+        //shuffle the input and compare with the account_vector
+        let shuffled_inputs: Vec<_> = (0..9).map(|i| inp[perm[i]-1].clone()).collect();
+        assert_eq!(account_vector, shuffled_inputs)
     }
 }

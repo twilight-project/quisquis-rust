@@ -27,6 +27,10 @@ impl<'g> RangeProofProver<'g> {
         self.prover.prove(&bp_gens)
     }
 
+   // pub fn hadamard_product_prover(&mut self, val: u64, epsilon_blinding: Scalar) -> Result<CompressedRistretto, R1CSError>{
+
+   // }
+
 }
 
 pub struct RangeProofVerifier{

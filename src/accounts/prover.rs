@@ -1,5 +1,8 @@
 use curve25519_dalek::ristretto::RistrettoPoint;
 use rand::thread_rng;
+use bulletproofs::r1cs::*;
+use bulletproofs::{BulletproofGens, PedersenGens};
+
 //use std::time::Instant;
 
 use curve25519_dalek::{
@@ -408,8 +411,98 @@ impl<'a> Prover<'a> {
 
         return (z, x)
     }
+}
+    // Prover's scope
+fn hadamard_product_prove(
+    pc_gens: &PedersenGens,
+    bp_gens: &BulletproofGens,
+    a: &Vec<Scalar>,
+    b: &Vec<Scalar>,
+    c: &Vec<Scalar>,
+  
+) -> Result<(R1CSProof, Vec<CompressedRistretto>, Vec<CompressedRistretto>, Vec<CompressedRistretto>), R1CSError> {
+    let mut transcript = Transcript::new(b"HadamardProductProof");
 
-        
+    // 1. Create a prover
+    let mut prover = bulletproofs::r1cs::Prover::new(pc_gens, &mut transcript);
+
+    // 2. Commit high-level variables
+    let (a_commitments, a_vars): (Vec<_>, Vec<_>) = a
+        .into_iter()
+        .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
+        .unzip();
+
+        let (b_commitments, b_vars): (Vec<_>, Vec<_>) = a
+        .into_iter()
+        .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
+        .unzip();
+
+        let (c_commitments, c_vars): (Vec<_>, Vec<_>) = a
+        .into_iter()
+        .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
+        .unzip();
+    //convert variables to Linearcombinations
+
+        // 3. Build a CS
+    hadamard_gadget(
+        &mut prover,
+        &a_vars,
+        &b_vars,
+        &c_vars
+    );
+
+    // 4. Make a proof
+    let proof = prover.prove(bp_gens)?;
+
+    Ok((proof, a_commitments, b_commitments, c_commitments))
+}
+/// Constrains (a1 + a2) * (b1 + b2) = (c1 + c2)
+fn hadamard_gadget<CS: ConstraintSystem>(
+    cs: &mut CS,
+    a: &Vec<Variable>,
+    b: &Vec<Variable>,
+    c: &Vec<Variable>
+) {
+    for i in 0..a.len() {
+        // Create low-level variables and add them to constraints
+        let (_, _, o) = cs.multiply(a[i].into(), b[i].into());
+
+        // Enforce a * b = c, so one of (a,b) is zero
+        let lc: LinearCombination = o - c[i];
+        cs.constrain(lc);
+    }
+}
+// Verifier logic
+fn hadamard_gadget_verify(
+    pc_gens: &PedersenGens,
+    bp_gens: &BulletproofGens,
+    proof: R1CSProof,
+    a_commitments: &Vec<CompressedRistretto>,
+    b_commitments: &Vec<CompressedRistretto>,
+    c_commitments: &Vec<CompressedRistretto>,
+) -> Result<(), R1CSError> {
+    let mut transcript = Transcript::new(b"HadamardProductProof");
+
+    // 1. Create a verifier
+    let mut verifier = Verifier::new(&mut transcript);
+
+    // 2. Commit high-level variables
+    let a_vars: Vec<_> = a_commitments.iter().map(|V| verifier.commit(*V)).collect();
+    let b_vars: Vec<_> = a_commitments.iter().map(|V| verifier.commit(*V)).collect();
+    let c_vars: Vec<_> = a_commitments.iter().map(|V| verifier.commit(*V)).collect();
+
+    // 3. Build a CS
+    hadamard_gadget(
+        &mut verifier,
+        &a_vars,
+        &b_vars,
+        &c_vars
+    );
+
+    // 4. Verify the proof
+    verifier
+        .verify(&proof, &pc_gens, &bp_gens)
+        .map_err(|_| R1CSError::VerificationError)
 }
 // ------------------------------------------------------------------------
 // Tests
@@ -569,6 +662,35 @@ mod test {
         
         println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
     }
+    
+    #[test]
+    fn hadamard_product_rics_prover_test(){
+        
+
+        let a_vector: Vec<Scalar> = vec![Scalar::from(5u64), Scalar::from(3u64),Scalar::from(6u64),Scalar::from(2u64)];
+        let b_vector: Vec<Scalar> = vec![Scalar::from(3u64), Scalar::from(2u64),Scalar::from(4u64),Scalar::from(7u64)];
+
+        let c_vector: Vec<Scalar> = vec![Scalar::from(15u64), Scalar::from(6u64),Scalar::from(24u64),Scalar::from(14u64)];
+        let pc_gens = PedersenGens::default();
+        let bp_gens = BulletproofGens::new(512,1);
+
+
+        let res = hadamard_product_prove(&pc_gens, &bp_gens, &a_vector, &b_vector, &c_vector);
+       // let proof = res.
+        //println!("{:?}", res.as_ref().unwrap().0);
+
+
+        let verify = hadamard_gadget_verify(
+            &pc_gens,
+            &bp_gens,
+            res.as_ref().unwrap().0.clone(),
+            &res.as_ref().unwrap().1,
+            &res.as_ref().unwrap().2,
+            &res.as_ref().unwrap().3);
+
+            println!("{:?}", verify.is_ok());
+
+
+    }
+
 }
-
-

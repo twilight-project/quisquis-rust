@@ -183,7 +183,7 @@ impl Shuffle {
 
         //Create Pk^x^ for testing purposes here. Should be refactored later.
         // x^i
-        /*let exp_xx: Vec<_> = exp_iter(x).take(9).collect();
+        let exp_xx: Vec<_> = exp_iter(x).take(9).collect();
         // gather g, h from Public key    
         // gather g, h from Public key
         let pk: Vec<RistrettoPublicKey> = self.inputs.as_row_major().iter().map(|acc| acc.pk).collect();
@@ -195,7 +195,7 @@ impl Shuffle {
         let H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
 
         let pk = RistrettoPublicKey{gr: G.compress(), grsk: H.compress()};
-*/
+
        //JUST FOR CHECKING
       /*  let pk_out: Vec<RistrettoPublicKey> = self.outputs.as_row_major().iter().map(|acc| acc.pk).collect();
         let g_i_out: Vec<_> = pk_out.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
@@ -218,13 +218,26 @@ impl Shuffle {
 
         //Calling Multiexponentiation Prove for PK Update and shuffle
        
-        // self.multiexp_pubkey_prove(&b_dash, &pc_gens , &xpc_gens, G, H);
+        self.multiexp_pubkey_prove(&b_dash, &pc_gens , &xpc_gens, G, H);
         
         //Calling Multiexponentiation Prove for COMIT Update and shuffle
-       // self.multiexp_commit_prove(&b_mat, &pc_gens, &xpc_gens, &pk, rho_b);
+        //self.multiexp_commit_prove(&b_mat, &pc_gens, &xpc_gens, &pk, rho_b);
        
-       self.product_argument_prove(&b_mat, &pc_gens, &xpc_gens, x);
+      // self.product_argument_prove(&b_mat, &pc_gens, &xpc_gens, x);
       
+        
+    }
+
+    pub fn verify_shuffle_argument(a_comit: &[RistrettoPoint], b_comit: &[RistrettoPoint])/*-> bool*/ {
+        //check if C_A and C_B ∈ G^m
+        //all vectors should be of length m 
+        assert_eq!(a_comit.len(), ROWS);
+        assert_eq!(b_comit.len(), ROWS);
+        
+        
+        
+        
+
         
     }
 
@@ -732,7 +745,7 @@ impl Shuffle {
         //let trying = extended_commit(&ax, rx, &xpc_gens);
         
         let c_a_0_c_a_x_vec = c_a_x_vec + c_A_0;
-        //compute comit(a_vec:r)
+        //compute comit(a_vec:r). The commitment is on the a_vec from second message. 
         let c_a_r = extended_commit(&a_vec, r, &xpc_gens);
         
         if c_a_0_c_a_x_vec == c_a_r{
@@ -1042,6 +1055,7 @@ impl Shuffle {
     
         
 }
+
 pub fn bilnearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal:Scalar) -> Vec<Scalar>{
     //Estimate complete bilinear map for Matrix A and B. A and B are constructed in the calling function
 
@@ -1274,7 +1288,7 @@ pub fn create_ek_pk(accounts: &Array2D<Account>, b_dash: &Array2D<Scalar>, a0: &
     let c2 = &pk_matrix_as_rows[1];
     let c3 = &pk_matrix_as_rows[2];
 
-    // gather c, d from ElgamalCommitment
+    // gather g, h from Publickey
     let c1_c: Vec<_> = c1.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
     let c1_d: Vec<_> = c1.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
     let c2_c: Vec<_> = c2.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
@@ -1409,8 +1423,10 @@ pub fn vector_multiply_scalar(row: &Vec<Scalar>, col: &Vec<Scalar>)-> Scalar{
     let sum: Vec<_> = row.iter().zip(col.iter()).map(|(i,j)| i *j).collect();
     sum.iter().sum()
 }
-//Hardcoding for inital verification. Should be flexible in terms of size of m
-pub fn extended_pedersen_gen(capacity: usize, g: RistrettoPoint, h: RistrettoPoint) -> Vec<RistrettoPoint>{
+//Hardcoding for inital verification. Should be flexible in terms of size of m.ROWS
+//Creating generators for extended pedersen commit. 
+pub fn 
+extended_pedersen_gen(capacity: usize, g: RistrettoPoint, h: RistrettoPoint) -> Vec<RistrettoPoint>{
     let mut gens = Vec::<RistrettoPoint>::new();
     gens.push(h);
     for i in 0..(capacity-2){
@@ -1423,7 +1439,7 @@ pub fn extended_pedersen_gen(capacity: usize, g: RistrettoPoint, h: RistrettoPoi
     final_gens.extend(&gens[1..len]);
     final_gens
 }
-
+//Performing extended pedersen commit on vectors 
 pub fn extended_commit(msg: &Vec<Scalar>, rscalar: Scalar, gens: &Vec<RistrettoPoint>)->  RistrettoPoint{
     let mut scalar = vec![rscalar];
     scalar.extend(msg);
@@ -1459,13 +1475,16 @@ pub fn exp_iter(x: Scalar) -> ScalarExp {
 
 pub fn create_b_b_dash(x: Scalar, tau: &Vec<Scalar>, perm: &Vec<usize>) -> (Array2D<Scalar>, Array2D<Scalar>)
 {
-    let exp_x: Vec<_> = exp_iter(x).take(9).collect();
-    let mut x_psi: Vec<Scalar> = Vec::with_capacity(9);
+    //create x^i for i = 1..N
+    let mut exp_x: Vec<_> = exp_iter(x).skip(1).take(N).collect();
+    let mut x_psi: Vec<Scalar> = Vec::with_capacity(N);
+    
+    //create 1/tau 
     let tau_inv: Vec<_> = tau.iter().map(|i| Scalar::invert(i)).collect();
 
-    let mut b_dash: Vec<Scalar> = Vec::with_capacity(9);
-    for i in 0..9{
-        x_psi.push(exp_x[perm[i]]);
+    let mut b_dash: Vec<Scalar> = Vec::with_capacity(N);
+    for (i,_) in exp_x.iter().enumerate(){
+        x_psi.push(exp_x[perm[i]-1]);
         b_dash.push(x_psi[i]*tau_inv[i]);
     }
     //Convert to a 2D array representation
@@ -1547,6 +1566,7 @@ pub fn verify_update_ddh_verify(x: Scalar, pk: &Vec<RistrettoPublicKey>, g_dash:
     Verifier::verify_update_ddh_verifier(G.compress(), H.compress(), g_dash, h_dash, z, chal)
     
 }
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -1680,17 +1700,40 @@ mod test {
         println!("{:?}",allinv);
     }
     #[test]
-    fn create_b_dash_test() {
+    fn b_dash_vector_test() {
         //Create Random tau used for updating the Account Pks
         let x = Scalar::random(&mut OsRng);
-        let tau: Vec<_> = (0..9).map(|_| Scalar::random(&mut OsRng)).collect();       
+       //let x = Scalar::from(3u64); 
+       let tau: Vec<_> = (0..9).map(|_| Scalar::random(&mut OsRng)).collect();       
         let perm = Permutation::new(&mut OsRng, N);
         let perm_vec = perm.perm_matrix.as_row_major();
+        
         let (b,b_dash) = create_b_b_dash(x,&tau,&perm_vec);
+
+        //test
         let b_dash_tau : Vec<Scalar> = b_dash.as_row_major().iter().zip(tau.iter()).map(|(b, t)| b*t).collect();
-        println!("{:?}",b.as_row_major());
-        println!("{:?}",b_dash_tau);
+        
         assert_eq!(b_dash_tau, b.as_row_major());
+
+    }
+    #[test]
+    fn b_vector_test() {
+       //test for N = 9 
+       let x = Scalar::from(3u64); 
+        //Create Random tau used for updating the Account Pks
+       let tau: Vec<_> = (0..N).map(|_| Scalar::random(&mut OsRng)).collect();       
+       
+       let permutation: Vec<usize> = vec![2,1,3,8,7,6,4,5,9];
+        
+       let (b,b_dash) = create_b_b_dash(x,&tau,&permutation);
+        
+       let b_reference: Vec<Scalar> = vec![Scalar::from(9u64), Scalar::from(3u64), Scalar::from(27u64), Scalar::from(6561u64), Scalar::from(2187u64), Scalar::from(729u64) , Scalar::from(81u64) ,Scalar::from(243u64) ,Scalar::from(19683u64)];
+       //println!("{:?}",b.as_row_major());
+       //println!("{:?}",b_reference);
+
+        //test
+        
+        assert_eq!(b_reference, b.as_row_major());
 
     }
     #[test]

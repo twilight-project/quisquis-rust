@@ -8,7 +8,7 @@ use crate::{
         RangeProofProver,
         RangeProofVerifier
     },
-    transaction::shuffle::Shuffle,
+    shuffle::Shuffle,
     ristretto::{RistrettoPublicKey, RistrettoSecretKey}
 };
 use bulletproofs::r1cs;
@@ -327,7 +327,7 @@ mod test {
         //};
         use crate::{
             keys::{PublicKey,SecretKey },
-            transaction::shuffle::Shuffle,
+            shuffle::Shuffle,
             ristretto::{RistrettoPublicKey,RistrettoSecretKey}
         };
         // lets define a vector of accounts

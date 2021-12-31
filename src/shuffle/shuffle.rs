@@ -7,7 +7,9 @@ use curve25519_dalek::{
 use crate::{
     accounts::{Account,Prover, Verifier},
     ristretto::RistrettoPublicKey,
-    elgamal::ElGamalCommitment
+    elgamal::ElGamalCommitment,
+    shuffle::vectorutil,
+    pedersen::vectorpedersen::VectorPedersenGens,
 };
 use sha3::Sha3_512;
 use rand::rngs::OsRng;
@@ -169,12 +171,14 @@ impl Shuffle {
     pub fn get_outputs_vector(&self) -> Vec<Account> {
         self.outputs.as_row_major()
     }
+
+    
 //product and multiexponential argument
     pub fn shuffle_argument_prove(&self){
         let pc_gens = PedersenGens::default();
         //generate Xcomit generator points of length m+1
-        let xpc_gens = extended_pedersen_gen(ROWS+1, pc_gens.B, pc_gens.B_blinding);
-
+       // let xpc_gens = extended_pedersen_gen(ROWS+1, pc_gens.B, pc_gens.B_blinding);
+        let xpc_gens = VectorPedersenGens::new(ROWS+1);
         //create challenge x for b and b' vectors    
         let x = Scalar::random(&mut OsRng);
         //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
@@ -183,7 +187,7 @@ impl Shuffle {
 
         //Create Pk^x^ for testing purposes here. Should be refactored later.
         // x^i
-        let exp_xx: Vec<_> = exp_iter(x).take(9).collect();
+        let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
         // gather g, h from Public key    
         // gather g, h from Public key
         let pk: Vec<RistrettoPublicKey> = self.inputs.as_row_major().iter().map(|acc| acc.pk).collect();
@@ -210,20 +214,20 @@ impl Shuffle {
         //}
 
         //create vector of -rho of length N
-        //let neg_rho = -self.rho;
-        //let rho_vec: Vec<Scalar> = vec![neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho];   
+        let neg_rho = -self.rho;
+        let rho_vec: Vec<Scalar> = vec![neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho];   
 
         //create rho = -rho . b
-        //let rho_b = vector_multiply_scalar(&rho_vec, &b_mat.as_row_major());
+        let rho_b = vectorutil::vector_multiply_scalar(&rho_vec, &b_mat.as_row_major());
 
         //Calling Multiexponentiation Prove for PK Update and shuffle
        
-        self.multiexp_pubkey_prove(&b_dash, &pc_gens , &xpc_gens, G, H);
+        //self.multiexp_pubkey_prove(&b_dash, &pc_gens , &xpc_gens, G, H);
         
         //Calling Multiexponentiation Prove for COMIT Update and shuffle
-        //self.multiexp_commit_prove(&b_mat, &pc_gens, &xpc_gens, &pk, rho_b);
+       // self.multiexp_commit_prove(&b_mat, &pc_gens, &xpc_gens, &pk, rho_b);
        
-      // self.product_argument_prove(&b_mat, &pc_gens, &xpc_gens, x);
+        self.product_argument_prove(&b_mat, &pc_gens, &xpc_gens, x);
       
         
     }
@@ -241,7 +245,7 @@ impl Shuffle {
         
     }
 
-    pub fn product_argument_prove(&self, b_matrix: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, x_chal: Scalar){
+    pub fn product_argument_prove(&self, b_matrix: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &VectorPedersenGens, x_chal: Scalar){
         //create random number r to vector commit on witness. The commitment is on columns of A matrix
         //compute r. it is the witness in c_A
         let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -259,7 +263,7 @@ impl Shuffle {
         let perm_scalar_as_cols = pi_2d.as_columns();
         let mut comit_a_vec = Vec::<RistrettoPoint>::new();
         for i in 0..COLUMNS{
-            comit_a_vec.push(extended_commit(&perm_scalar_as_cols[i], r[i], &xpc_gens));
+            comit_a_vec.push(xpc_gens.commit(&perm_scalar_as_cols[i], r[i]));
         }
         // cb = com(product (from 1 to m) a1j, ..., product (from 1 to m) 
         //println!("{:?}",pi_2d);
@@ -275,17 +279,17 @@ impl Shuffle {
 
         //create challenge s for bvec comit    
         let s = Scalar::random(&mut OsRng);
-        let cb = extended_commit(&bvec, s, &xpc_gens);
+        let cb = xpc_gens.commit(&bvec, s);
 
         //create b. i.e., product of all elements in A
         let b = bvec.iter().product::<Scalar>();
         // hadamard argument convinces verifier you know
 	    // A and b st prod prod A = b :) with b a VECTOR
-        self.hadamard_product_arg(&pi_2d, &pc_gens, &xpc_gens, &bvec, &comit_a_vec, &cb, x_chal, r, s);
-        //self.single_value_argument_prover(&pc_gens, &xpc_gens, cb, b, s, &bvec);
+        self.hadamard_product_arg(&pi_2d, &pc_gens, xpc_gens, &bvec, &comit_a_vec, &cb, x_chal, r, s);
+        self.single_value_argument_prover(&pc_gens, &xpc_gens, cb, b, s, &bvec);
 
     }
-    pub fn hadamard_product_arg(&self, pi_2d: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, bvec: &Vec<Scalar>, comit_a: &Vec<RistrettoPoint>, cb: &RistrettoPoint, x_chal: Scalar, r: Vec<Scalar>, s_3: Scalar){
+    pub fn hadamard_product_arg(&self, pi_2d: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &VectorPedersenGens, bvec: &Vec<Scalar>, comit_a: &Vec<RistrettoPoint>, cb: &RistrettoPoint, x_chal: Scalar, r: Vec<Scalar>, s_3: Scalar){
         // ai, b, vectors of length n
         // cA, cb, a1, ..., am, bvec, st bvec = product ai
         // (with entrywise multiplication)
@@ -305,7 +309,7 @@ impl Shuffle {
         let b3 = bvec.clone();
 
         let s2 = Scalar::random(&mut OsRng);
-        let c_B2 = extended_commit(&b2, s2, &xpc_gens);
+        let c_B2 = xpc_gens.commit(&b2, s2);
         let c_B1 = comit_a[0].clone();
         let c_B3 = cb.clone();
 
@@ -315,7 +319,7 @@ impl Shuffle {
         let x = x_chal;
         let y = Scalar::random(&mut OsRng);
         
-        let x_exp: Vec<_> = exp_iter(x).take(2*ROWS).collect();
+        let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2*ROWS).collect();
         //let x_exp_m = &x_exp[1..4].to_vec();
         let c_D1 = c_B1 * x_exp[1];
         let c_D2 = c_B2 * x_exp[2];
@@ -334,7 +338,7 @@ impl Shuffle {
             scalar_one_inv.clone(),
         ];
 
-        let c_minus_one = extended_commit(&scalars, Scalar::zero(), &xpc_gens);
+        let c_minus_one = xpc_gens.commit(&scalars, Scalar::zero());
 
         //Calculate openings of c_D1, c_D2, and c_D3
         //d1 = xb1
@@ -385,7 +389,7 @@ impl Shuffle {
 
     }
 
-    pub fn zero_argument(&self, a_2d: &Array2D<Scalar>, b_2d: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, comit_a: &Vec<RistrettoPoint>, comit_b: &Vec<RistrettoPoint>, r_vec: &Vec<Scalar>, s_vec:&Vec<Scalar>,y: Scalar){
+    pub fn zero_argument(&self, a_2d: &Array2D<Scalar>, b_2d: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &VectorPedersenGens, comit_a: &Vec<RistrettoPoint>, comit_b: &Vec<RistrettoPoint>, r_vec: &Vec<Scalar>, s_vec:&Vec<Scalar>,y: Scalar){
         //pick a0, bm 
         let a0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
         let b3: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -395,8 +399,8 @@ impl Shuffle {
         let s3 = Scalar::random(&mut OsRng);
 
         //comit on a0 and bm
-        let c_a0 = extended_commit(&a0, r0, xpc_gens);
-        let c_b3= extended_commit(&b3, s3, xpc_gens);
+        let c_a0 = xpc_gens.commit(&a0, r0);
+        let c_b3= xpc_gens.commit(&b3, s3);
 
         
         //Create Full A and B vector to be used in bilinearmap. Add a0 to A and b3 to B
@@ -428,7 +432,7 @@ impl Shuffle {
         let z_chal = Scalar::random(&mut OsRng);
 
         // set x = (x, x^2, x^3, x^4.., x^m). Thesis says length should be m but rebekkah has its length as 2m-2
-        let x_exp: Vec<_> = exp_iter(z_chal).take(2*ROWS+1).collect();
+        let x_exp: Vec<_> = vectorutil::exp_iter(z_chal).take(2*ROWS+1).collect();
         let x_exp_m = &x_exp[0..4].to_vec();
         let x_k = &x_exp[0..2*ROWS+1].to_vec();
         //creating this explicitly for now. Shold be done in iterator
@@ -464,13 +468,13 @@ impl Shuffle {
         let s_ext_vec = vec![s_vec[0], s_vec[1],s_vec[2], s3];
 
         //compute r_bar = r . x. x is [0....x^n]
-       let r_bar: Scalar = vector_multiply_scalar(&r_ext_vec,&x_exp_m);
+       let r_bar: Scalar = vectorutil::vector_multiply_scalar(&r_ext_vec,&x_exp_m);
        
        //compute s_bar = s . x. x is [0....x^n]
-       let s_bar: Scalar = vector_multiply_scalar(&s_ext_vec,&x_m_j);
+       let s_bar: Scalar = vectorutil::vector_multiply_scalar(&s_ext_vec,&x_m_j);
 
        //compute t_bar = t . x. x is [0....x^2m+1]
-       let t_bar: Scalar = vector_multiply_scalar(&t,&x_k);
+       let t_bar: Scalar = vectorutil::vector_multiply_scalar(&t,&x_k);
 
 
         //Third Message. Send a_bar, b_bar, r_bar, s_bar, t_bar  
@@ -496,7 +500,7 @@ impl Shuffle {
         let comit_a_product = c_a0 + temp_a;
 
        //com(a_bar,r)
-       let comit_a_bar = extended_commit(&a_bar_vec, r_bar, xpc_gens);
+       let comit_a_bar = xpc_gens.commit(&a_bar_vec, r_bar);
        if comit_a_bar == comit_a_product{
         println!(" comit_a_bar Verifies");
         }
@@ -508,7 +512,7 @@ impl Shuffle {
         let comit_b_full = RistrettoPoint::multiscalar_mul(x_m_j.iter().clone(), b_full.iter().clone());
 
        //com(b_bar,s)
-       let comit_b_bar = extended_commit(&b_bar_vec, s_bar, xpc_gens);
+       let comit_b_bar = xpc_gens.commit(&b_bar_vec, s_bar);
        if comit_b_bar == comit_b_full{
         println!(" comit_b_bar Verifies");
        }else{
@@ -519,7 +523,7 @@ impl Shuffle {
 
        //com(a_bar * b_bar; t)
        //create y^i 
-       let y_exp: Vec<_> = exp_iter(y).take(ROWS+1).collect();
+       let y_exp: Vec<_> = vectorutil::exp_iter(y).take(ROWS+1).collect();
        let y_i = &y_exp[1..4].to_vec();
        let a_bar_b_bar = single_bilinearmap(&a_bar_vec, &b_bar_vec, y_i );
        let comit_a_bar_b_bar = pc_gens.commit(a_bar_b_bar, t_bar);
@@ -536,7 +540,8 @@ impl Shuffle {
 
         
     }
-    pub fn single_value_argument_prover(&self, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, comit_a: RistrettoPoint, b:Scalar, r: Scalar, a_vec:&Vec<Scalar>){
+    
+    pub fn single_value_argument_prover(&self, pc_gens: &PedersenGens, xpc_gens: &VectorPedersenGens, comit_a: RistrettoPoint, b:Scalar, r: Scalar, a_vec:&Vec<Scalar>){
         //compute the first message
         //compute b1 =a1 =58,b2 =a1 ·a2 =48,b3 =b2 ·b3 =75,b4 =b3 ·a4 =b=10,
         let mut bvec = Vec::<Scalar>::new();
@@ -552,7 +557,7 @@ impl Shuffle {
         let d_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
         let rd = Scalar::random(&mut OsRng);
         
-        let comit_d = extended_commit(&d_vec, rd, &xpc_gens); //send it to verifier
+        let comit_d = xpc_gens.commit(&d_vec, rd); //send it to verifier
 
         //compute random delta of COLUMN size and set delta_1 as d_1 and delta_n as 0
         let mut delta_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -584,10 +589,14 @@ impl Shuffle {
 	    }
         println!("{:?}", delta);
         println!("{:?}", d_delta);
-        //Create commitment
-        let comit_delta = extended_commit(&delta, s_1, &xpc_gens[0..delta.len()+1].to_vec()); //send it to verifier
+        
+        //create new CommitmentGens to accomodate for smaller lengths
+        let xpc_gens_trun = VectorPedersenGens::new(delta.len()+1);
 
-        let comit_d_delta = extended_commit(&d_delta, s_x, &xpc_gens[0..d_delta.len()+1].to_vec()); //send it to verifier
+        //Create commitment
+        let comit_delta = xpc_gens_trun.commit(&delta, s_1); //send it to verifier
+
+        let comit_d_delta = xpc_gens_trun.commit(&d_delta, s_x); //send it to verifier
         //println!("{:?}", comit_delta);
         //println!("{:?}", comit_d_delta);
          //SEND comit_d, comit_delta, comit_d_delta to the verifier
@@ -624,7 +633,7 @@ impl Shuffle {
         
         //c_a^x * c_d == com(abar;rbar)
 
-        let comit_a_bar = extended_commit(&a_bar, rbar, xpc_gens);
+        let comit_a_bar = xpc_gens.commit(&a_bar, rbar);
         let cax = comit_a * x;
         let caxcd = cax + comit_d;
 
@@ -643,8 +652,8 @@ impl Shuffle {
         for i in 0..COLUMNS-1 {
             comvec.push((b_bar[i+1] * x) - ( b_bar[i] * a_bar[i+1]));
 	    }
-        let comit_verify = extended_commit(&comvec, sbar, &xpc_gens[0..comvec.len()+1].to_vec()); //send it to verifier
-
+        //let comit_verify = extended_commit(&comvec, sbar, &xpc_gens[0..comvec.len()+1].to_vec()); //send it to verifier
+        let comit_verify = xpc_gens_trun.commit(&comvec, sbar); //send it to verifier
         if cxdeltadelta == comit_verify{
             println!("cxdeltadelta verified");
         }else{
@@ -653,7 +662,7 @@ impl Shuffle {
     }
 
  
-    pub fn multiexp_commit_prove(&self, a_witness: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, pk: &RistrettoPublicKey, rho: Scalar){
+    pub fn multiexp_commit_prove(&self, a_witness: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &VectorPedersenGens, pk: &RistrettoPublicKey, rho: Scalar){
         //create random number s' to vector commit on witness. The commitment is on columns of A matrix
          //compute s'. it is the witness in c_A
          let s_dash: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -664,7 +673,8 @@ impl Shuffle {
          let perm_scalar_as_cols = a_witness.as_columns();
          let mut comit_a_vec = Vec::<RistrettoPoint>::new();
          for i in 0..COLUMNS{
-             comit_a_vec.push(extended_commit(&perm_scalar_as_cols[i], s_dash[i], &xpc_gens));
+             //comit_a_vec.push(extended_commit(&perm_scalar_as_cols[i], s_dash[i], &xpc_gens));
+             comit_a_vec.push(xpc_gens.commit(&perm_scalar_as_cols[i], s_dash[i]));
          }         
          //compute random a_0 vectors of length n and r_0 
          let a_0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -681,7 +691,9 @@ impl Shuffle {
          tau_vec[ROWS] = rho;
          
          //compute Xcomit on a_0
-         let c_A_0 = extended_commit(&a_0, r_0, &xpc_gens);
+         //let c_A_0 = extended_commit(&a_0, r_0, &xpc_gens);
+         let c_A_0 = xpc_gens.commit(&a_0, r_0);
+
          //compute standard pedersen commitment on all items of b_vec
          let cb_k: Vec<_> = b_vec.iter().zip(s_vec.iter()).map(|(b, s)| pc_gens.commit(*b, *s).compress()).collect();
         
@@ -695,7 +707,7 @@ impl Shuffle {
         //let x = Scalar::random(&mut OsRng);
          let x = Scalar::from(3u64);
          // set x = (x, x^2, x^3, x^4.., x^m). Thesis says length should be m but rebekkah has its length as 2m-2
-         let x_exp: Vec<_> = exp_iter(x).take(2*ROWS).collect();
+         let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2*ROWS).collect();
          let x_exp_m = &x_exp[1..4].to_vec();
          let x_k = &x_exp[1..6].to_vec();
          
@@ -703,7 +715,7 @@ impl Shuffle {
          //borrow A
          let perm_scalar_rows = a_witness.as_rows();
 
-         let ax: Vec<Scalar> = (0..ROWS).map(|i| vector_multiply_scalar(&perm_scalar_rows[i],&x_exp_m)).collect();    
+         let ax: Vec<Scalar> = (0..ROWS).map(|i| vectorutil::vector_multiply_scalar(&perm_scalar_rows[i],&x_exp_m)).collect();    
          let mut a_vec = Vec::<Scalar>::new();
          //let a_vec: Vec<Scalar> = ax.iter().zip(a_0.iter()).map(|(i,j)| i+j).collect(); 
          for i in 0..ax.len(){
@@ -711,19 +723,19 @@ impl Shuffle {
         }
 
         //compute r_vec = r . x. r is s' in thi case
-        let rx: Scalar = vector_multiply_scalar(&s_dash,&x_exp_m);
+        let rx: Scalar = vectorutil::vector_multiply_scalar(&s_dash,&x_exp_m);
         let r =  r_0 + rx;
 
         //compute b = b0 + sum from 1 to 2m-1 (bk.x^k)
-        let bx = vector_multiply_scalar(&b_vec[1..6].to_vec(),&x_k);
+        let bx = vectorutil::vector_multiply_scalar(&b_vec[1..6].to_vec(),&x_k);
         let b = b_vec[0] + bx;
 
         //compute s = s0 + sum from 1 to 2m-1 (sk.x^k)
-        let sx = vector_multiply_scalar(&s_vec[1..6].to_vec(),&x_k);
+        let sx = vectorutil::vector_multiply_scalar(&s_vec[1..6].to_vec(),&x_k);
         let s = s_vec[0] + sx;
 
         //compute t = t0 + sum from 1 to 2m-1 (tk.x^k)
-        let tx = vector_multiply_scalar(&tau_vec[1..6].to_vec(),&x_k);
+        let tx = vectorutil::vector_multiply_scalar(&tau_vec[1..6].to_vec(),&x_k);
         let t = tau_vec[0] + tx;
 
 
@@ -746,7 +758,8 @@ impl Shuffle {
         
         let c_a_0_c_a_x_vec = c_a_x_vec + c_A_0;
         //compute comit(a_vec:r). The commitment is on the a_vec from second message. 
-        let c_a_r = extended_commit(&a_vec, r, &xpc_gens);
+       // let c_a_r = extended_commit(&a_vec, r, &xpc_gens);
+        let c_a_r = xpc_gens.commit(&a_vec, r);
         
         if c_a_0_c_a_x_vec == c_a_r{
             println!("CA TRUE");
@@ -832,7 +845,7 @@ impl Shuffle {
        let c2_h_xa = RistrettoPoint::multiscalar_mul(x_1_a.clone(), c2_d.clone());
 
 
-// for i = 3
+    // for i = 3
         //computing the scalar x^3-3)a = a 
        let c3_g_xa = RistrettoPoint::multiscalar_mul(a_vec.clone(), c3_c.clone());
        let c3_h_xa = RistrettoPoint::multiscalar_mul(a_vec.clone(), c3_d.clone());
@@ -856,7 +869,7 @@ impl Shuffle {
     }
 
     //b' is the witness and trated as A in the arguent described in paper 
-    pub fn multiexp_pubkey_prove(&self, a_witness: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &Vec<RistrettoPoint>, G: RistrettoPoint, H: RistrettoPoint){
+    pub fn multiexp_pubkey_prove(&self, a_witness: &Array2D<Scalar>, pc_gens: &PedersenGens, xpc_gens: &VectorPedersenGens, G: RistrettoPoint, H: RistrettoPoint){
         //create random number s' to vector commit on witness. The commitment is on columns of A matrix
          //compute s'. it is the witness in c_A
          let s_dash: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -867,7 +880,8 @@ impl Shuffle {
          let perm_scalar_as_cols = a_witness.as_columns();
          let mut comit_a_vec = Vec::<RistrettoPoint>::new();
          for i in 0..COLUMNS{
-             comit_a_vec.push(extended_commit(&perm_scalar_as_cols[i], s_dash[i], &xpc_gens));
+             //comit_a_vec.push(extended_commit(&perm_scalar_as_cols[i], s_dash[i], &xpc_gens));
+             comit_a_vec.push(xpc_gens.commit(&perm_scalar_as_cols[i], s_dash[i]));
          }         
          //compute random a_0 vectors of length n and r_0 
          let a_0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -881,7 +895,8 @@ impl Shuffle {
          s_vec[ROWS] = Scalar::zero();
          
          //compute Xcomit on a_0
-         let c_A_0 = extended_commit(&a_0, r_0, &xpc_gens);
+         //let c_A_0 = extended_commit(&a_0, r_0, &xpc_gens);
+         let c_A_0 = xpc_gens.commit(&a_0, r_0);   
          //compute standard pedersen commitment on all items of b_vec
          let cb_k: Vec<_> = b_vec.iter().zip(s_vec.iter()).map(|(b, s)| pc_gens.commit(*b, *s).compress()).collect();
          
@@ -893,7 +908,7 @@ impl Shuffle {
         //let x = Scalar::random(&mut OsRng);
          let x = Scalar::from(3u64);
          // set x = (x, x^2, x^3, x^4.., x^m). Thesis says length should be m but rebekkah has its length as 2m-2
-         let x_exp: Vec<_> = exp_iter(x).take(2*ROWS).collect();
+         let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2*ROWS).collect();
          let x_exp_m = &x_exp[1..4].to_vec();
          let x_k = &x_exp[1..6].to_vec();
          
@@ -901,7 +916,7 @@ impl Shuffle {
          //borrow A
          let perm_scalar_rows = a_witness.as_rows();
 
-         let ax: Vec<Scalar> = (0..ROWS).map(|i| vector_multiply_scalar(&perm_scalar_rows[i],&x_exp_m)).collect();    
+         let ax: Vec<Scalar> = (0..ROWS).map(|i| vectorutil::vector_multiply_scalar(&perm_scalar_rows[i],&x_exp_m)).collect();    
          let mut a_vec = Vec::<Scalar>::new();
          //let a_vec: Vec<Scalar> = ax.iter().zip(a_0.iter()).map(|(i,j)| i+j).collect(); 
         for i in 0..ax.len(){
@@ -909,15 +924,15 @@ impl Shuffle {
         }
 
         //compute r_vec = r . x. r is s' in thi case
-        let rx: Scalar = vector_multiply_scalar(&s_dash,&x_exp_m);
+        let rx: Scalar = vectorutil::vector_multiply_scalar(&s_dash,&x_exp_m);
         let r =  r_0 + rx;
 
         //compute b = b0 + sum from 1 to 2m-1 (bk.x^k)
-        let bx = vector_multiply_scalar(&b_vec[1..6].to_vec(),&x_k);
+        let bx = vectorutil::vector_multiply_scalar(&b_vec[1..6].to_vec(),&x_k);
         let b = b_vec[0] + bx;
 
         //compute s = s0 + sum from 1 to 2m-1 (sk.x^k)
-        let sx = vector_multiply_scalar(&s_vec[1..6].to_vec(),&x_k);
+        let sx = vectorutil::vector_multiply_scalar(&s_vec[1..6].to_vec(),&x_k);
         let s = s_vec[0] + sx;
 
         //Third Message. Send a_vec, r, b, s  
@@ -940,7 +955,8 @@ impl Shuffle {
         
         let c_a_0_c_a_x_vec = c_a_x_vec + c_A_0;
         //compute comit(a_vec:r)
-        let c_a_r = extended_commit(&a_vec, r, &xpc_gens);
+        //let c_a_r = extended_commit(&a_vec, r, &xpc_gens);
+        let c_a_r = xpc_gens.commit(&a_vec, r);
         
         if c_a_0_c_a_x_vec == c_a_r{
             println!("CA TRUE");
@@ -1051,16 +1067,14 @@ impl Shuffle {
 
 
     }    
-
-    
-        
+      
 }
 
 pub fn bilnearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal:Scalar) -> Vec<Scalar>{
     //Estimate complete bilinear map for Matrix A and B. A and B are constructed in the calling function
 
     //create y^i 
-    let y_exp: Vec<_> = exp_iter(y_chal).take(ROWS+1).collect();
+    let y_exp: Vec<_> = vectorutil::exp_iter(y_chal).take(ROWS+1).collect();
     let y_i = &y_exp[1..4].to_vec();
 
     //converting Array2D to column representation. Can also use column iterator. Should look into it
@@ -1414,38 +1428,38 @@ pub fn reencrypt_commitment(p: &RistrettoPublicKey, rscalar: Scalar, bl_scalar: 
     ElGamalCommitment{c: c.compress(),
                       d: d.compress()}
 }
-pub fn vector_multiply(row: &Vec<usize>, col: &Vec<Scalar>)-> Scalar{
-    let sum: Vec<_> = row.iter().zip(col.iter()).map(|(i,j)| Scalar::from(*i as u64) *j).collect();
-    sum.iter().sum()
-}
+// pub fn vector_multiply(row: &Vec<usize>, col: &Vec<Scalar>)-> Scalar{
+//     let sum: Vec<_> = row.iter().zip(col.iter()).map(|(i,j)| Scalar::from(*i as u64) *j).collect();
+//     sum.iter().sum()
+// }
 
-pub fn vector_multiply_scalar(row: &Vec<Scalar>, col: &Vec<Scalar>)-> Scalar{
-    let sum: Vec<_> = row.iter().zip(col.iter()).map(|(i,j)| i *j).collect();
-    sum.iter().sum()
-}
+// pub fn vector_multiply_scalar(row: &Vec<Scalar>, col: &Vec<Scalar>)-> Scalar{
+//     let sum: Vec<_> = row.iter().zip(col.iter()).map(|(i,j)| i *j).collect();
+//     sum.iter().sum()
+// }
 //Hardcoding for inital verification. Should be flexible in terms of size of m.ROWS
 //Creating generators for extended pedersen commit. 
-pub fn 
-extended_pedersen_gen(capacity: usize, g: RistrettoPoint, h: RistrettoPoint) -> Vec<RistrettoPoint>{
-    let mut gens = Vec::<RistrettoPoint>::new();
-    gens.push(h);
-    for i in 0..(capacity-2){
-        gens.push(RistrettoPoint::hash_from_bytes::<Sha3_512>(
-            gens[i].compress().as_bytes()));
-    }
-    let mut final_gens = Vec::<RistrettoPoint>::new();
-    final_gens.push(h); final_gens.push(g);
-    let len = gens.len();
-    final_gens.extend(&gens[1..len]);
-    final_gens
-}
-//Performing extended pedersen commit on vectors 
-pub fn extended_commit(msg: &Vec<Scalar>, rscalar: Scalar, gens: &Vec<RistrettoPoint>)->  RistrettoPoint{
-    let mut scalar = vec![rscalar];
-    scalar.extend(msg);
-    RistrettoPoint::multiscalar_mul(scalar.iter().clone(), gens.iter().clone())
-}
-/// Provides an iterator over the powers of a `Scalar`.
+// pub fn 
+// extended_pedersen_gen(capacity: usize, g: RistrettoPoint, h: RistrettoPoint) -> Vec<RistrettoPoint>{
+//     let mut gens = Vec::<RistrettoPoint>::new();
+//     gens.push(h);
+//     for i in 0..(capacity-2){
+//         gens.push(RistrettoPoint::hash_from_bytes::<Sha3_512>(
+//             gens[i].compress().as_bytes()));
+//     }
+//     let mut final_gens = Vec::<RistrettoPoint>::new();
+//     final_gens.push(h); final_gens.push(g);
+//     let len = gens.len();
+//     final_gens.extend(&gens[1..len]);
+//     final_gens
+// }
+// //Performing extended pedersen commit on vectors 
+// pub fn extended_commit(msg: &Vec<Scalar>, rscalar: Scalar, gens: &Vec<RistrettoPoint>)->  RistrettoPoint{
+//     let mut scalar = vec![rscalar];
+//     scalar.extend(msg);
+//     RistrettoPoint::multiscalar_mul(scalar.iter().clone(), gens.iter().clone())
+// }
+/* /// Provides an iterator over the powers of a `Scalar`.
 ///
 /// This struct is created by the `exp_iter` function.
 pub struct ScalarExp {
@@ -1471,12 +1485,14 @@ impl Iterator for ScalarExp {
 pub fn exp_iter(x: Scalar) -> ScalarExp {
     let next_exp_x = Scalar::one();
     ScalarExp { x, next_exp_x }
-}
+} */
 
-pub fn create_b_b_dash(x: Scalar, tau: &Vec<Scalar>, perm: &Vec<usize>) -> (Array2D<Scalar>, Array2D<Scalar>)
+/// Prepare b and b' vector to be passed as witness to multiexponentiation proof
+/// 
+fn create_b_b_dash(x: Scalar, tau: &Vec<Scalar>, perm: &Vec<usize>) -> (Array2D<Scalar>, Array2D<Scalar>)
 {
     //create x^i for i = 1..N
-    let mut exp_x: Vec<_> = exp_iter(x).skip(1).take(N).collect();
+    let mut exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
     let mut x_psi: Vec<Scalar> = Vec::with_capacity(N);
     
     //create 1/tau 
@@ -1491,8 +1507,8 @@ pub fn create_b_b_dash(x: Scalar, tau: &Vec<Scalar>, perm: &Vec<usize>) -> (Arra
     let b_matrix = Array2D::from_row_major(&x_psi, ROWS,COLUMNS);
     let b_dash_matrix = Array2D::from_row_major(&b_dash, ROWS,COLUMNS);
     (b_matrix,b_dash_matrix)
-}
-
+} 
+/*
 pub fn hadamard_product_proof_prover(tau: Array2D<Scalar>, pi: Permutation)->(Vec<RistrettoPoint>,Vec<RistrettoPoint>,Vec<RistrettoPoint>){
     //create pedersen generators for Xtended commitment
     let pc_gens = PedersenGens::default();
@@ -1528,11 +1544,11 @@ pub fn hadamard_product_proof_prover(tau: Array2D<Scalar>, pi: Permutation)->(Ve
     (c_tau, c_b, c_b_dash)
 }
 
-
+*/
 pub fn verify_update_ddh_prove(x: Scalar, pk: &Vec<RistrettoPublicKey>, rho: Scalar)->(Scalar, Scalar, CompressedRistretto,CompressedRistretto) 
 {
     // x^i
-    let exp_x: Vec<_> = exp_iter(x).take(9).collect();
+    let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
     // gather g, h from Public key
     let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
     let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
@@ -1554,7 +1570,7 @@ pub fn verify_update_ddh_prove(x: Scalar, pk: &Vec<RistrettoPublicKey>, rho: Sca
 pub fn verify_update_ddh_verify(x: Scalar, pk: &Vec<RistrettoPublicKey>, g_dash: CompressedRistretto, h_dash: CompressedRistretto, z: Scalar, chal:Scalar)-> bool
 {
      // x^i
-    let exp_x: Vec<_> = exp_iter(x).take(9).collect(); 
+    let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect(); 
     // gather g, h from Public key
     let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
     let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
@@ -1642,43 +1658,43 @@ mod test {
         assert_eq!(verify, true);
     }
 
-    #[test]
-    fn extended_pedersen_gen_test() {
-        let perm = Permutation::new(&mut OsRng, N);
-        let cols = perm.perm_matrix.as_columns();
-        let pc_gens = PedersenGens::default();
-        //generate Xcomit generator points of length m+1
-        let gens = extended_pedersen_gen(ROWS+1, pc_gens.B, pc_gens.B_blinding);
+    // #[test]
+    // fn extended_pedersen_gen_test() {
+    //     let perm = Permutation::new(&mut OsRng, N);
+    //     let cols = perm.perm_matrix.as_columns();
+    //     let pc_gens = PedersenGens::default();
+    //     //generate Xcomit generator points of length m+1
+    //     let gens = extended_pedersen_gen(ROWS+1, pc_gens.B, pc_gens.B_blinding);
        
-        println!("Permuted Matrix {:?}",perm.perm_matrix.as_rows());
-        println!("{:?}",cols[0]);
-        println!("{:?}",gens);
-    }
-    #[test]
-    fn extended_commit_test(){
-        let perm = Permutation::new(&mut OsRng, N);
-        let cols = perm.perm_matrix.as_columns();
-        let pc_gens = PedersenGens::default();
-        //generate Xcomit generator points of length m+1
-        let gens = extended_pedersen_gen(ROWS+1, pc_gens.B, pc_gens.B_blinding);
-        let shuffle_scalar: Vec<_> = cols[0].iter().map(|i| Scalar::from(*i as u64).clone()).collect();
-        let rscalar = Scalar::random(&mut OsRng);
-        let c = extended_commit(&shuffle_scalar, rscalar, &gens);
-        println!("{:?}",c);
-    }
-    #[test]
-    fn exp_iter_test() {
-        let x = Scalar::random(&mut OsRng);
-        let exp_2: Vec<_> = exp_iter(x).take(9).collect();
-        println!("{:?}",x);
-        println!("{:?}",exp_2);
-        //assert_eq!(exp_2[0], Scalar::from(1u64));
-    }
+    //     println!("Permuted Matrix {:?}",perm.perm_matrix.as_rows());
+    //     println!("{:?}",cols[0]);
+    //     println!("{:?}",gens);
+    // }
+    // #[test]
+    // fn extended_commit_test(){
+    //     let perm = Permutation::new(&mut OsRng, N);
+    //     let cols = perm.perm_matrix.as_columns();
+    //     let pc_gens = PedersenGens::default();
+    //     //generate Xcomit generator points of length m+1
+    //     let gens = extended_pedersen_gen(ROWS+1, pc_gens.B, pc_gens.B_blinding);
+    //     let shuffle_scalar: Vec<_> = cols[0].iter().map(|i| Scalar::from(*i as u64).clone()).collect();
+    //     let rscalar = Scalar::random(&mut OsRng);
+    //     let c = extended_commit(&shuffle_scalar, rscalar, &gens);
+    //     println!("{:?}",c);
+    // }
+    // #[test]
+    // fn exp_iter_test() {
+    //     let x = Scalar::random(&mut OsRng);
+    //     let exp_2: Vec<_> = exp_iter(x).take(9).collect();
+    //     println!("{:?}",x);
+    //     println!("{:?}",exp_2);
+    //     //assert_eq!(exp_2[0], Scalar::from(1u64));
+    // }
     #[test]
     fn x_psi_test() {
         //let x = Scalar::random(&mut OsRng);
         let x = Scalar::from(2u64);
-        let exp_x: Vec<_> = exp_iter(x).take(9).collect();
+        let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
         let perm = Permutation::new(&mut OsRng, N);
         let perm_vec = perm.perm_matrix.as_row_major();
         let mut x_psi: Vec<Scalar> = Vec::with_capacity(9);
@@ -1741,9 +1757,9 @@ mod test {
         let tau: Vec<_> = (0..9).map(|_| Scalar::random(&mut OsRng)).collect();       
         let tau_2d = Array2D::from_row_major(&tau, 3, 3);
         let perm = Permutation::new(&mut OsRng, N);
-        let (t, b, bd) = hadamard_product_proof_prover(tau_2d, perm);
-        let b_dash_tau : Vec<RistrettoPoint> = bd.iter().zip(t.iter()).map(|(b, t)| b+t).collect();
-        assert_eq!(b_dash_tau, b);
+        //let (t, b, bd) = hadamard_product_proof_prover(tau_2d, perm);
+        //let b_dash_tau : Vec<RistrettoPoint> = bd.iter().zip(t.iter()).map(|(b, t)| b+t).collect();
+       // assert_eq!(b_dash_tau, b);
 
        // println!("{:?}",x);
        // println!("{:?}",exp_2);

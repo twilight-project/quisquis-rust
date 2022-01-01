@@ -53,6 +53,14 @@ impl<'a> Verifier<'a> {
                     point.iter().map(|pt| pt.decompress()),
                 )
     }
+    /// Allocate a new domain to create another transcript for embedded proof with new `label`.
+    pub fn new_domain_sep(&mut self, label: &'static [u8])  {
+        self.transcript.domain_sep(label);
+    }
+    /// Wrapper for getting a challenge in Other modules.
+    pub fn get_challenge(&mut self, label: &'static [u8])->Scalar  {
+        self.transcript.get_challenge(label)
+    }
 
     // verify_delta_compact_verifier verifies proves values committed in delta_accounts and epsilon_accounts are the same
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.2

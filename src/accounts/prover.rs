@@ -72,6 +72,15 @@ impl<'a> Prover<'a> {
         self.transcript.append_account_var(label, &account);
     }
 
+    /// Allocate a new domain to create another transcript for embedded proof with new `label`.
+    pub fn new_domain_sep(&mut self, label: &'static [u8])  {
+        self.transcript.domain_sep(label);
+    }
+    /// Wrapper for getting a challenge in Other modules.
+    pub fn get_challenge(&mut self, label: &'static [u8])->Scalar  {
+        self.transcript.get_challenge(label)
+    }
+
     // verify_delta_compact_prover generates proves values committed in delta_accounts and epsilon_accounts are the same
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.1
     pub fn verify_delta_compact_prover(delta_accounts: &Vec<Account>, epsilon_accounts: &Vec<Account>, rscalar1: &Vec<Scalar>, rscalar2: &Vec<Scalar>, value_vector: &Vec<i64>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar){
@@ -411,6 +420,20 @@ impl<'a> Prover<'a> {
 
         return (z, x)
     }
+    
+    // Shuffle proof prover implementation. 
+    // pub fn shuffle_proof_prover() -> (Scalar,Scalar){
+    //     // lets create random scalar r with the transcript
+    //     let mut transcript = Transcript::new(b"VerifyUpdateDDH");
+    //     let mut prover = Prover::new(b"DDHTuple", &mut transcript);
+
+    //     prover.scalars.push(rho); 
+
+    //     let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+
+    //     // Generate a single blinding factor
+    //     let r_scalar = Scalar::random(&mut transcript_rng);
+    // }
 }
     // Prover's scope
 fn hadamard_product_prove(
@@ -424,6 +447,7 @@ fn hadamard_product_prove(
     let mut transcript = Transcript::new(b"HadamardProductProof");
 
     // 1. Create a prover
+    //let cs = r1cs::Prover::new(&pc_gens, Transcript::new(b"bulletproof.r1cs"));
     let mut prover = bulletproofs::r1cs::Prover::new(pc_gens, &mut transcript);
 
     // 2. Commit high-level variables
@@ -444,7 +468,7 @@ fn hadamard_product_prove(
     //convert variables to Linearcombinations
 
         // 3. Build a CS
-    hadamard_gadget(
+        hadamard_gadget(
         &mut prover,
         &a_vars,
         &b_vars,
@@ -456,6 +480,7 @@ fn hadamard_product_prove(
 
     Ok((proof, a_commitments, b_commitments, c_commitments))
 }
+
 /// Constrains (a1 + a2) * (b1 + b2) = (c1 + c2)
 fn hadamard_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
@@ -504,6 +529,8 @@ fn hadamard_gadget_verify(
         .verify(&proof, &pc_gens, &bp_gens)
         .map_err(|_| R1CSError::VerificationError)
 }
+
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------

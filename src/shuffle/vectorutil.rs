@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Utility functions to manipulate vectors and Matrices.
 //! 
 //! Vector multiplication and Matrix multiplication functions
@@ -5,8 +7,7 @@
 //! Shared functions needed in shuffle proof implementation
 
 use curve25519_dalek::scalar::Scalar;
-
-
+//use std::num::Zero;
 /// Provides an iterator over the powers of a `Scalar`.
 ///
 /// This struct is created by the `exp_iter` function.
@@ -39,19 +40,25 @@ pub fn exp_iter(x: Scalar) -> ScalarExp {
 
 /// Scalar product of a vector of usize elements with a vector of Scalars 
 /// 
-pub fn vector_multiply(row: &Vec<usize>, col: &Vec<Scalar>)-> Scalar{
-    let sum: Vec<_> = row.iter().zip(col.iter()).map(|(i,j)| Scalar::from(*i as u64) *j).collect();
-    sum.iter().sum()
+pub fn vector_multiply(row: &[usize], col: &[Scalar])-> Scalar{
+    if row.len() != col.len() { 
+        panic!("vector_multiply(a,b): lengths of vectors do not match"); 
+    }
+    row.iter()
+        .zip(col.iter())
+            .fold(Scalar::zero(), | sum, (i,j)| sum + Scalar::from(*i as u64) *j)
 }
 
 /// Scalar product of 2 scalar vectors    
 /// 
-pub fn vector_multiply_scalar(row: &Vec<Scalar>, col: &Vec<Scalar>)-> Scalar{
-    let sum: Vec<_> = row.iter().zip(col.iter()).map(|(i,j)| i *j).collect();
-    sum.iter().sum()
+pub fn vector_multiply_scalar(row: &[Scalar], col: &[Scalar])-> Scalar{
+    if row.len() != col.len() { 
+        panic!("vector_multiply_scalar(a,b): lengths of vectors do not match"); 
+    }
+    row.iter()
+        .zip(col.iter())
+            .fold(Scalar::zero(), | sum, (i,j)| sum + i *j)
 }
-
-
 
 
 
@@ -73,5 +80,33 @@ mod test {
         assert_eq!(reference, exp_2);
     }
 
+    #[test]
+    fn test_vector_multiply_scalar() {
+        let a = vec![
+            Scalar::from(1u64),
+            Scalar::from(2u64),
+            Scalar::from(3u64),
+            Scalar::from(4u64),
+        ];
+        let b = vec![
+            Scalar::from(2u64),
+            Scalar::from(3u64),
+            Scalar::from(4u64),
+            Scalar::from(5u64),
+        ];
+        assert_eq!(Scalar::from(40u64), vector_multiply_scalar(&a, &b));
+    }
+
+    #[test]
+    fn test_vector_multiply() {
+        let a: Vec<usize> = vec![1 , 2, 3, 4];
+        let b = vec![
+            Scalar::from(2u64),
+            Scalar::from(3u64),
+            Scalar::from(4u64),
+            Scalar::from(5u64),
+        ];
+        assert_eq!(Scalar::from(40u64), vector_multiply(&a, &b));
+    }
 }
 

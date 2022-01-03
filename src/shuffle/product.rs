@@ -85,32 +85,16 @@ impl ProductProof {
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
         x_chal: Scalar, //challenge generated in shuffle proof function
-    ) -> (ProductProof, Scalar, Scalar, Scalar) {
+    ) -> (ProductProof, Scalar) {
         //create random number r to vector commit on witness. The commitment is on super::COLUMNS of A matrix
         //compute r. it is the witness in c_A
         let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
 
         //create statement
-        //compute Xcomit on A
         //convert to column major representation
-        //convrt pi matrix to scalar
-        /*CREATING PI MATRIX FOR TESTING THE CODE. Actually the pi matrix sghould have values from 1 to 9. There should be no 0 value. Avoiding 0 for the time being. Adjust the pi matrix and shuffle accordingly */
-
-        // let pi_scalar: Vec<_> = vec![
-        //     Scalar::from(7u64),
-        //     Scalar::from(6u64),
-        //     Scalar::from(1u64),
-        //     Scalar::from(5u64),
-        //     Scalar::from(3u64),
-        //     Scalar::from(4u64),
-        //     Scalar::from(2u64),
-        //     Scalar::from(8u64),
-        //     Scalar::from(9u64),
-        // ];
-        //let pi_2d = Array2D::from_row_major(&pi_scalar, ROWS, COLUMNS);
-        //let perm_scalar_as_cols = pi_2d.as_columns();
-
         let perm_scalar_as_cols = b_matrix.as_columns();
+
+        //compute Xcomit on A
         let mut comit_a_vec = Vec::<RistrettoPoint>::new();
         for i in 0..COLUMNS {
             comit_a_vec.push(xpc_gens.commit(&perm_scalar_as_cols[i], r[i]));
@@ -146,7 +130,8 @@ impl ProductProof {
         };
 
         //create multihadamard product proof
-        let (multihadamard_proof, x, y, z) = MultiHadamardProof::create_multi_hadamard_product_arg(
+        let (multihadamard_proof, x) = MultiHadamardProof::create_multi_hadamard_product_arg(
+            prover,
             &b_matrix,
             &pc_gens,
             &xpc_gens,
@@ -159,14 +144,8 @@ impl ProductProof {
         );
 
         //create single value product proof
-        let svp_proof = SVPProof::create_single_value_argument_proof(
-            prover,
-            &xpc_gens,
-            cb.clone(),
-            b.clone(),
-            s,
-            &bvec,
-        );
+        let svp_proof =
+            SVPProof::create_single_value_argument_proof(prover, &xpc_gens, cb, b, s, &bvec);
 
         //Product Proof struct
         (
@@ -177,8 +156,6 @@ impl ProductProof {
                 svp_proof: svp_proof,
             },
             x,
-            y,
-            z,
         )
     }
     ///Product Argument proof verification
@@ -189,43 +166,28 @@ impl ProductProof {
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
         x: Scalar,
-        y: Scalar,
-        z: Scalar,
     ) -> bool {
         //The verifier accepts if cb ∈ G and both SHVZK arguments (Mutihadamard and SingleValue Product) are convincing.
         // cb ∈ G is always valid if cb is a CompressedRistretto
 
         //check Mutihadamard Proof
         self.multi_hadamard_proof.verify(
+            verifier,
             &self.multi_hadamard_argument,
             &self.multi_hadamard_proof.zero_argument,
             &self.multi_hadamard_proof.zero_proof,
             pc_gens,
             xpc_gens,
             x,
-            y,
-            z,
         ) && self /*check Single Value Product Proof*/
             .svp_proof
             .verify(verifier, &self.svp_argument, xpc_gens)
-        //println!("Hadamard Verification {:?}", verify_multi_hadamard);
-        //check Single Value Product Proof
-        // let verify_svp = self
-        //     .svp_proof
-        //     .verify(verifier, &self.svp_argument, xpc_gens);
-        //println!("SVP Verification {:?}", verify_svp);
-
-        //  verify_multi_hadamard && verify_svp
-        // if verify_multi_hadamard && verify_svp {
-        //     return true;
-        // } else {
-        //     return false;
-        // }
     }
 }
 
 impl MultiHadamardProof {
     pub fn create_multi_hadamard_product_arg(
+        prover: &mut Prover,
         pi_2d: &Array2D<Scalar>,
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
@@ -235,7 +197,10 @@ impl MultiHadamardProof {
         x_chal: Scalar,
         r: Vec<Scalar>,
         s_3: Scalar,
-    ) -> (MultiHadamardProof, Scalar, Scalar, Scalar) {
+    ) -> (MultiHadamardProof, Scalar) {
+        //Create new transcript
+        prover.new_domain_sep(b"MultiHadamardProductProof");
+
         // ai, b, vectors of length n
         // cA, cb, a1, ..., am, bvec, st bvec = product ai
         // (with entrywise multiplication)
@@ -256,13 +221,19 @@ impl MultiHadamardProof {
         let c_B1 = comit_a[0].clone();
         let c_B3 = cb.clone();
 
-        //create C_B vector
+        //create C_B vector. Send C_B vector to verifier
         let c_B_inital: Vec<CompressedRistretto> =
             vec![c_B1.compress(), c_B2.compress(), c_B3.compress()];
-        //Send C_B vector to verifier
+        //
+        //Commit C_B vector to Transcript for y challenge generation
+        for cr in c_B_inital.iter() {
+            prover.allocate_point(b"BVectorCommitment", *cr);
+        }
         //CREATE CHALLENGE X AND Y
         let x = x_chal;
-        let y = Scalar::random(&mut OsRng);
+
+        let y = prover.get_challenge(b"challenge");
+        //let y = Scalar::random(&mut OsRng);
 
         let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2 * ROWS).collect();
         //let x_exp_m = &x_exp[1..4].to_vec();
@@ -321,8 +292,8 @@ impl MultiHadamardProof {
         let cB: Vec<RistrettoPoint> = vec![c_D1, c_D2, c_D];
         // engage in a zero argument, for the committed values satisfying 0 = a2 ⇤ d1 + a3 ⇤ d2   1 ⇤ d.
 
-        let (zero_proof, z_chal) = ZeroProof::create_zero_argument_proof(
-            &a_array, &d_array, pc_gens, xpc_gens, &cA, &cB, &r, &s, y,
+        let zero_proof = ZeroProof::create_zero_argument_proof(
+            prover, &a_array, &d_array, pc_gens, xpc_gens, &cA, &cB, &r, &s, y,
         );
         //create zero argument
         let zero_arg = ZeroArgument {
@@ -336,22 +307,25 @@ impl MultiHadamardProof {
                 zero_proof: zero_proof,
             },
             x,
-            y,
-            z_chal,
         )
     }
 
     pub fn verify(
         &self,
+        verifier: &mut Verifier,
         arg: &MultiHadamardArgument,
         zero_arg: &ZeroArgument,
         zero_proof: &ZeroProof,
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
         x_chal: Scalar,
-        y_chal: Scalar,
-        z_chal: Scalar,
     ) -> bool {
+        //Create new transcript
+        verifier.new_domain_sep(b"MultiHadamardProductProof");
+        //Recreate y challenge by adding Commit C_B vector to Transcript
+        for cr in self.c_B.iter() {
+            verifier.allocate_point(b"BVectorCommitment", *cr);
+        }
         //Check c_B2,...,c_Bm−1 ∈ G
         //Always true if received as CompressedRistretto
         //Check  cB1 = cA1
@@ -361,7 +335,7 @@ impl MultiHadamardProof {
 
         //redefine cD_i = (c_B_i)^(x_i)
         let x = x_chal;
-
+        let y_chal = verifier.get_challenge(b"challenge");
         let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2 * ROWS).collect();
         //let x_exp_m = &x_exp[1..4].to_vec();
         let c_D1 = self.c_B[0].decompress().unwrap() * x_exp[1];
@@ -381,7 +355,7 @@ impl MultiHadamardProof {
         let c_minus_one = xpc_gens.commit(&scalars, Scalar::zero());
 
         // Accept if the zero argument is valid.
-        zero_proof.verify(zero_arg, z_chal, xpc_gens, pc_gens, y_chal)
+        zero_proof.verify(verifier, zero_arg, xpc_gens, pc_gens, y_chal)
     }
 }
 
@@ -389,6 +363,7 @@ impl ZeroProof {
     ///Create Zero Argument proof
     ///
     pub fn create_zero_argument_proof(
+        prover: &mut Prover,
         a_2d: &Array2D<Scalar>,
         b_2d: &Array2D<Scalar>,
         pc_gens: &PedersenGens,
@@ -398,7 +373,9 @@ impl ZeroProof {
         r_vec: &Vec<Scalar>,
         s_vec: &Vec<Scalar>,
         y: Scalar,
-    ) -> (ZeroProof, Scalar) {
+    ) -> ZeroProof {
+        //Create new transcript
+        prover.new_domain_sep(b"ZeroArgumentProof");
         //Initial message
         //pick a0, bm
         let a_0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -409,8 +386,8 @@ impl ZeroProof {
         let s_m = Scalar::random(&mut OsRng);
 
         //comit on a0 and bm
-        let c_a_0 = xpc_gens.commit(&a_0, r_0);
-        let c_b_m = xpc_gens.commit(&b_m, s_m);
+        let c_a_0 = xpc_gens.commit(&a_0, r_0).compress();
+        let c_b_m = xpc_gens.commit(&b_m, s_m).compress();
 
         //Create Full A and B vector to be used in bilinearmap. Add a0 to A and bm to B
         let a_orig_colums = a_2d.as_columns();
@@ -450,9 +427,15 @@ impl ZeroProof {
             .map(|(i, t)| pc_gens.commit(*i, *t).compress())
             .collect();
 
+        //Add C_A_0 and C_B_m and C_D to Transcript to generate challenge Z
+        prover.allocate_point(b"A0Commitment", c_a_0);
+        prover.allocate_point(b"BmCommitment", c_b_m);
+        for cd in c_D.iter() {
+            prover.allocate_point(b"DCommitment", *cd);
+        }
         //The verifier picks a challenge x which is z in my view
-
-        let z_chal = Scalar::random(&mut OsRng);
+        let z_chal = prover.get_challenge(b"challenge");
+        //let z_chal = Scalar::random(&mut OsRng);
 
         // set x = (x, x^2, x^3, x^4.., x^m). Thesis says length should be m but rebekkah has its length as 2m-2
         let x_exp: Vec<_> = vectorutil::exp_iter(z_chal).take(2 * ROWS + 1).collect();
@@ -496,25 +479,23 @@ impl ZeroProof {
         let t_bar: Scalar = vectorutil::vector_multiply_scalar(&t, &x_k);
 
         //Third Message. Send a_bar, b_bar, r_bar, s_bar, t_bar
-        (
-            ZeroProof {
-                c_A_0: c_a_0.compress(),
-                c_B_m: c_b_m.compress(),
-                c_D: c_D,
-                a_vec: a_bar_vec,
-                b_vec: b_bar_vec,
-                r: r_bar,
-                s: s_bar,
-                t: t_bar,
-            },
-            z_chal,
-        )
+
+        ZeroProof {
+            c_A_0: c_a_0,
+            c_B_m: c_b_m,
+            c_D: c_D,
+            a_vec: a_bar_vec,
+            b_vec: b_bar_vec,
+            r: r_bar,
+            s: s_bar,
+            t: t_bar,
+        }
     }
 
     pub fn verify(
         &self,
+        verifier: &mut Verifier,
         arg: &ZeroArgument,
-        chal: Scalar,
         xpc_gens: &VectorPedersenGens,
         pc_gens: &PedersenGens,
         chal_y: Scalar,
@@ -523,6 +504,15 @@ impl ZeroProof {
         assert_eq!(self.c_D.len(), 2 * ROWS + 1);
         assert_eq!(self.a_vec.len(), COLUMNS);
         assert_eq!(self.b_vec.len(), COLUMNS);
+
+        //Create new transcript
+        verifier.new_domain_sep(b"ZeroArgumentProof");
+        //recreate Transcript for Z challenge generation aby adding C_A_0 and C_B_m and C_D
+        verifier.allocate_point(b"A0Commitment", self.c_A_0);
+        verifier.allocate_point(b"BmCommitment", self.c_B_m);
+        for cd in self.c_D.iter() {
+            verifier.allocate_point(b"DCommitment", *cd);
+        }
 
         //VERIFICATION CODE HERE.
         //Verifying c_d_m+1 = com(0,0)
@@ -537,8 +527,9 @@ impl ZeroProof {
 
         // prod i=0..m (c_Ai^x^i ) = com(a_bar,r)
         //Com_A_0 ^ X^0 = com_a0
+        let challenge = verifier.get_challenge(b"challenge");
         //recreate x_exp_m
-        let x_exp: Vec<_> = vectorutil::exp_iter(chal).take(2 * ROWS + 1).collect();
+        let x_exp: Vec<_> = vectorutil::exp_iter(challenge).take(2 * ROWS + 1).collect();
         //can use multiscalar_multiplication. should be done for all elements.
         let x_m_1 = &x_exp[1..ROWS + 1].to_vec();
         let points = arg
@@ -669,6 +660,13 @@ mod test {
     const COLUMNS: usize = 3; //n
     #[test]
     fn multi_hadamard_product_proof_test() {
+        //create Prover and verifier
+        let mut transcript_p = Transcript::new(b"ShuffleProof");
+        let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
+
+        let mut transcript_v = Transcript::new(b"ShuffleProof");
+        let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
+
         //generate Xcomit generator points of length m+1
         let xpc_gens = VectorPedersenGens::new(ROWS + 1);
         let pc_gens = PedersenGens::default();
@@ -716,7 +714,8 @@ mod test {
         let s = Scalar::random(&mut OsRng);
         let cb = xpc_gens.commit(&bvec, s);
 
-        let (had_proof, x, y, z) = MultiHadamardProof::create_multi_hadamard_product_arg(
+        let (had_proof, x) = MultiHadamardProof::create_multi_hadamard_product_arg(
+            &mut prover,
             &pi_2d,
             &pc_gens,
             &xpc_gens,
@@ -736,14 +735,13 @@ mod test {
             c_b: cb.compress(),
         };
         let verify = had_proof.verify(
+            &mut verifier,
             &had_arg,
             &had_proof.zero_argument,
             &had_proof.zero_proof,
             &pc_gens,
             &xpc_gens,
             x,
-            y,
-            z,
         );
         assert!(verify);
 
@@ -778,7 +776,7 @@ mod test {
         let mut transcript_p = Transcript::new(b"ShuffleProof");
         let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
 
-        let (prod_proof, x, y, z) = ProductProof::create_product_argument_prove(
+        let (prod_proof, x) = ProductProof::create_product_argument_prove(
             &mut prover,
             &pi_2d,
             &pc_gens,
@@ -789,7 +787,7 @@ mod test {
         let mut transcript_v = Transcript::new(b"ShuffleProof");
         let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
 
-        let verify = prod_proof.verify(&mut verifier, &pc_gens, &xpc_gens, x, y, z);
+        let verify = prod_proof.verify(&mut verifier, &pc_gens, &xpc_gens, x);
         assert!(verify);
 
         //println!("Product Argument Verify {:?}", verify)

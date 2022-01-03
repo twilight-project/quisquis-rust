@@ -41,14 +41,14 @@ pub struct SVPProof {
 impl SVPProof {
     ///Create Single Value Argument proof
     /// 
-    pub fn create_single_value_argument(
+    pub fn create_single_value_argument_proof(
         prover: &mut Prover,
         xpc_gens: &VectorPedersenGens,
         comit_a: RistrettoPoint,
         b: Scalar,
         r: Scalar,
         a_vec: &Vec<Scalar>,
-    ) ->(SVPProof, Scalar){
+    ) ->SVPProof{
         //Create new transcript
         prover.new_domain_sep(b"SingleValueProductProof");
 
@@ -141,7 +141,7 @@ impl SVPProof {
         let s_bar = s_x * x + s_1;
 
         //send all this to verifier
-        (SVPProof{
+        SVPProof{
             commitment_d: comit_d.compress(),
             commitment_delta_small: comit_delta_small.compress(),
             commitment_delta_capital: comit_delta_cap.compress(),
@@ -149,12 +149,12 @@ impl SVPProof {
             b_twildle: b_bar,
             r_twildle: r_bar,
             s_twildle: s_bar,
-        }, x)
+        }
     }
         
     
     ///This method is for verifying the single value product proof 
-    pub fn verify(&self, svparg: &SVPArgument,/* x: Scalar,*/ xpc_gens: &VectorPedersenGens, verifier: &mut Verifier) -> bool{
+    pub fn verify(&self,  verifier: &mut Verifier, svparg: &SVPArgument,/* x: Scalar,*/ xpc_gens: &VectorPedersenGens) -> bool{
         //Verification Code
         //checking the length of a_twildle and b_twildle vectors
         assert_eq!(self.a_twildle.len(), COLUMNS);
@@ -277,14 +277,14 @@ mod test {
         let mut transcript_p = Transcript::new(b"SingleValue");
         let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
 
-        let (proof, chal) = SVPProof::create_single_value_argument(&mut prover, &xpc_gens, cb.clone(), b.clone(), s, &bvec );
+        let proof = SVPProof::create_single_value_argument_proof(&mut prover, &xpc_gens, cb.clone(), b.clone(), s, &bvec );
         let arg = SVPArgument{ commitment_a: cb.compress(),
             b: b,
         };
 
         let mut transcript_v = Transcript::new(b"SingleValue");
         let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
-        let verify = proof.verify(&arg, &xpc_gens, &mut verifier);
+        let verify = proof.verify(&mut verifier, &arg, &xpc_gens );
         assert!(verify);
        // println!("Verification {:?}",verify);
     }

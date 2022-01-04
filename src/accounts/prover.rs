@@ -11,8 +11,7 @@ use crate::{
     elgamal::{elgamal::ElGamalCommitment, signed_integer::SignedInteger},
     pedersen::VectorPedersenGens,
     ristretto::{RistrettoPublicKey, RistrettoSecretKey},
-    shuffle::{Shuffle, ShuffleProof}
-    shuffle::{shuffle, vectorutil},
+    shuffle::{shuffle::ShuffleProof, Shuffle},
 };
 use curve25519_dalek::traits::MultiscalarMul;
 use curve25519_dalek::{
@@ -441,7 +440,7 @@ impl<'a> Prover<'a> {
         shuffle: &Shuffle,
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-    ) -> ShuffleProof{
+    ) -> ShuffleProof {
         //Computes product and multiexponential argument to produce Shuffle proof.
         // lets start a transcript and a prover script
         let mut transcript = Transcript::new(b"ShuffleProof");
@@ -452,7 +451,7 @@ impl<'a> Prover<'a> {
 
         let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
 
-        ShuffleProof::create_shuffle_proof(prover, shuffle, witness, pc_gens, xpc_gens)
+        ShuffleProof::create_shuffle_proof(&mut prover, shuffle, &witness, pc_gens, xpc_gens)
     }
 
     // verify_update_ddh_prover confirms if (G,H,G',H') is a DDH tuple and (G,H) is updated correctly using rho

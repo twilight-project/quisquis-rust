@@ -29,7 +29,7 @@ use rand::rngs::OsRng;
 //of commitments ~cA to A = {a_ij}i,j=1 to n,m
 ///~C1,..., ~Cm ∈ H^n , C ∈ H and ~cA ∈ G^m
 #[derive(Debug, Clone)]
-struct MultiexpoStatement {
+pub struct MultiexpoStatement {
     //Vector of lenght m
     pub c_A: Vec<CompressedRistretto>,
     pub C: CompressedRistretto,
@@ -52,7 +52,6 @@ pub struct MultiexpoProof {
 }
 impl MultiexpoProof {
     pub fn create_multiexponential_elgamal_commit_proof(
-        &self,
         prover: &mut Prover,
         shuf: &Shuffle,
         a_witness: &Array2D<Scalar>,
@@ -60,7 +59,7 @@ impl MultiexpoProof {
         xpc_gens: &VectorPedersenGens,
         pk: &RistrettoPublicKey,
         rho: Scalar,
-    ) -> MultiexpoProof {
+    ) -> (MultiexpoProof, Vec<RistrettoPoint>) {
         //Create new transcript
         prover.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
 
@@ -156,17 +155,20 @@ impl MultiexpoProof {
         let t = tau_vec[0] + tx;
 
         //Third Message. Send a_vec, r, b, s
-        MultiexpoProof {
-            c_A_0: c_A_0,
-            c_B_k: cb_k,
-            E_k_0: ek_c,
-            E_k_1: ek_d,
-            a_vec: a_vec,
-            r: r,
-            b: b,
-            s: s,
-            t: t,
-        }
+        (
+            MultiexpoProof {
+                c_A_0: c_A_0,
+                c_B_k: cb_k,
+                E_k_0: ek_c,
+                E_k_1: ek_d,
+                a_vec: a_vec,
+                r: r,
+                b: b,
+                s: s,
+                t: t,
+            },
+            comit_a_vec,
+        )
     }
     pub fn verify_multiexponential_elgamal_commit_proof(
         &self,
@@ -331,7 +333,6 @@ impl MultiexpoProof {
 
     //b' is the witness and trated as A in the arguent described in paper
     pub fn create_multiexponential_pubkey_proof(
-        &self,
         prover: &mut Prover,
         shuf: &Shuffle,
         a_witness: &Array2D<Scalar>,
@@ -339,7 +340,7 @@ impl MultiexpoProof {
         xpc_gens: &VectorPedersenGens,
         G: RistrettoPoint,
         H: RistrettoPoint,
-    ) -> MultiexpoProof {
+    ) -> (MultiexpoProof, Vec<RistrettoPoint>) {
         //Create new transcript
         prover.new_domain_sep(b"MultiExponentialPubKeyProof");
         //create random number s' to vector commit on witness. The commitment is on columns of A matrix
@@ -422,17 +423,20 @@ impl MultiexpoProof {
         let s = s_vec[0] + sx;
 
         //Third Message. Send a_vec, r, b, s
-        MultiexpoProof {
-            c_A_0: c_A_0,
-            c_B_k: cb_k,
-            E_k_0: ek_g,
-            E_k_1: ek_h,
-            a_vec: a_vec,
-            r: r,
-            b: b,
-            s: s,
-            t: Scalar::zero(),
-        }
+        (
+            MultiexpoProof {
+                c_A_0: c_A_0,
+                c_B_k: cb_k,
+                E_k_0: ek_g,
+                E_k_1: ek_h,
+                a_vec: a_vec,
+                r: r,
+                b: b,
+                s: s,
+                t: Scalar::zero(),
+            },
+            comit_a_vec,
+        )
     }
     pub fn verify_multiexponential_pubkey_proof(
         &self,
@@ -1034,6 +1038,7 @@ mod test {
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
     };
     use array2d::Array2D;
+    use merlin::Transcript;
     use rand::rngs::OsRng;
     const N: usize = 9; //N - Length of vector
     #[test]
@@ -1074,8 +1079,37 @@ mod test {
         // (G, H) = sum of all i (pk_i * x^i)
         let G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
         let H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
+        //create Prover and verifier
+        let mut transcript_p = Transcript::new(b"ShuffleProof");
+        let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
 
-        multiexp_pubkey_prove(&shuffle, &b_dash, &pc_gens, &xpc_gens, G, H);
+        let (proof, argCommitment) = MultiexpoProof::create_multiexponential_pubkey_proof(
+            &mut prover,
+            &shuffle,
+            &b_dash,
+            &pc_gens,
+            &xpc_gens,
+            G,
+            H,
+        );
+        let multiexpo_arg = MultiexpoStatement {
+            c_A: argCommitment.iter().map(|a| a.compress()).collect(),
+            C: CompressedRistretto::default(),
+        };
+
+        let mut transcript_v = Transcript::new(b"ShuffleProof");
+        let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
+
+        let verify = proof.verify_multiexponential_pubkey_proof(
+            &mut verifier,
+            &multiexpo_arg,
+            &shuffle,
+            &pc_gens,
+            &xpc_gens,
+            G,
+            H,
+        );
+        println! {"Verify PubKey Multiexpo{:?} ", verify}
         assert_eq!(true, true);
     }
     #[test]
@@ -1129,7 +1163,37 @@ mod test {
 
         //create rho = -rho . b
         let rho_b = vectorutil::vector_multiply_scalar(&rho_vec, &b_mat.as_row_major());
-        multiexp_commit_prove(&shuffle, &b_mat, &pc_gens, &xpc_gens, &pk, rho_b);
+
+        //create Prover and verifier
+        let mut transcript_p = Transcript::new(b"ShuffleProof");
+        let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
+        let (proof, argCommitment) = MultiexpoProof::create_multiexponential_elgamal_commit_proof(
+            &mut prover,
+            &shuffle,
+            &b_mat,
+            &pc_gens,
+            &xpc_gens,
+            &pk,
+            rho_b,
+        );
+        // multiexp_commit_prove(&shuffle, &b_mat, &pc_gens, &xpc_gens, &pk, rho_b);
+        let multiexpo_arg = MultiexpoStatement {
+            c_A: argCommitment.iter().map(|a| a.compress()).collect(),
+            C: CompressedRistretto::default(),
+        };
+
+        let mut transcript_v = Transcript::new(b"ShuffleProof");
+        let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
+
+        let verify = proof.verify_multiexponential_elgamal_commit_proof(
+            &mut verifier,
+            &multiexpo_arg,
+            &shuffle,
+            &pc_gens,
+            &xpc_gens,
+            &pk,
+        );
+        println! {"Verify PubKey Multiexpo{:?} ", verify}
         assert_eq!(true, true);
     }
 

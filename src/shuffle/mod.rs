@@ -1,14 +1,9 @@
-
-pub mod shuffle;
 pub mod ddh;
-mod vectorutil;
-mod product;
 mod multiexponential;
+mod product;
+pub mod shuffle;
 mod singlevalueproduct;
+mod vectorutil;
 
 // Re-export
-pub use self::{
-    shuffle::Permutation,
-    shuffle::Shuffle,
-    vectorutil::ScalarExp,
-};
+pub use self::{shuffle::Permutation, shuffle::Shuffle, vectorutil::ScalarExp};

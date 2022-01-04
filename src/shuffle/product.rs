@@ -34,7 +34,7 @@ struct ProductArgument {
 ///Product argument proof
 ///
 #[derive(Debug, Clone)]
-struct ProductProof {
+pub struct ProductProof {
     pub multi_hadamard_argument: MultiHadamardArgument,
     pub multi_hadamard_proof: MultiHadamardProof,
     pub svp_argument: SVPArgument,
@@ -86,7 +86,7 @@ impl ProductProof {
         xpc_gens: &VectorPedersenGens,
         x_chal: Scalar, //challenge generated in shuffle proof function
     ) -> (ProductProof, Scalar) {
-        //create random number r to vector commit on witness. The commitment is on super::COLUMNS of A matrix
+        //create random number r to vector commit on witness. The commitment is on COLUMNS of A matrix
         //compute r. it is the witness in c_A
         let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
 

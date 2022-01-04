@@ -24,7 +24,7 @@ use rand::rngs::OsRng;
 /// an argument that a set of committed values have a particular product
 ///
 #[derive(Debug, Clone)]
-struct ProductArgument {
+pub struct ProductArgument {
     // commitments c_A to Matrix A = {a_i_j} i,j=1, to n,m
     //Vector of lenght m
     pub c_A: Vec<CompressedRistretto>,
@@ -44,14 +44,14 @@ pub struct ProductProof {
 ///MultiHadamard argument
 ///
 #[derive(Debug, Clone)]
-struct MultiHadamardArgument {
+pub struct MultiHadamardArgument {
     pub c_A: Vec<CompressedRistretto>,
     pub c_b: CompressedRistretto,
 }
 ///MultiHadamard argument proof
 ///
 #[derive(Debug, Clone)]
-struct MultiHadamardProof {
+pub struct MultiHadamardProof {
     pub c_B: Vec<CompressedRistretto>,
     pub zero_argument: ZeroArgument,
     pub zero_proof: ZeroProof,
@@ -60,14 +60,14 @@ struct MultiHadamardProof {
 ///Zero argument
 ///
 #[derive(Debug, Clone)]
-struct ZeroArgument {
+pub struct ZeroArgument {
     pub c_A: Vec<CompressedRistretto>,
     pub c_B: Vec<CompressedRistretto>,
 }
 ///Zero argument proof
 ///
 #[derive(Debug, Clone)]
-struct ZeroProof {
+pub struct ZeroProof {
     pub c_A_0: CompressedRistretto,
     pub c_B_m: CompressedRistretto,
     pub c_D: Vec<CompressedRistretto>,
@@ -412,7 +412,7 @@ impl ZeroProof {
         //for k = 0,...,2m : compute d_k
 
         //BILINEAR MAP
-        let dv = bilnearmap(&a_Array, &b_Array, y);
+        let dv = bilinearmap(&a_Array, &b_Array, y);
 
         //pick random t for committing d
         let mut t: Vec<_> = (0..2 * ROWS + 1)
@@ -605,7 +605,7 @@ impl ZeroProof {
     }
 }
 
-pub fn bilnearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal: Scalar) -> Vec<Scalar> {
+pub fn bilinearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal: Scalar) -> Vec<Scalar> {
     //Estimate complete bilinear map for Matrix A and B. A and B are constructed in the calling function
 
     //create y^i
@@ -619,16 +619,18 @@ pub fn bilnearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal: Scalar) -> V
     let a_as_cols = a.as_columns();
     let b_as_cols = b.as_columns();
     let mut dvec = Vec::<Scalar>::new();
-
-    for k in 0isize..7 {
+    let kiter = (2 * ROWS + 1) as isize;
+    let ijiter = ROWS as isize;
+    let m = ijiter; //m = ROWS in paper
+    for k in 0..kiter {
         //println!("K = , {:?}",k);
         let mut sum = Scalar::zero();
-        for i in 0isize..=3 {
+        for i in 0..=ijiter {
             //  println!("i = {:?}",i);
-            for j in 0isize..=3 {
+            for j in 0..=ijiter {
                 //    println!("j = {:?}",j);
-                //  println!("ROWS - k + i = {:?}",(3 - k + i));
-                if j == (3 - k + i) {
+                // println!("ROWS - k{:?} + i{:?} = {:?}", (3 - k + i), k, i);
+                if j == (m - k + i) {
                     sum = single_bilinearmap(&a_as_cols[i as usize], &b_as_cols[j as usize], &y_i)
                         + sum;
                 } else {
@@ -641,7 +643,7 @@ pub fn bilnearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal: Scalar) -> V
     dvec
 }
 
-pub fn single_bilinearmap(ai: &Vec<Scalar>, bj: &Vec<Scalar>, yi: &Vec<Scalar>) -> Scalar {
+pub fn single_bilinearmap(ai: &[Scalar], bj: &[Scalar], yi: &[Scalar]) -> Scalar {
     ai.iter()
         .zip(bj.iter())
         .zip(yi.iter())
@@ -791,5 +793,111 @@ mod test {
         assert!(verify);
 
         //println!("Product Argument Verify {:?}", verify)
+    }
+
+    #[test]
+    fn single_bilinear_map_test() {
+        let ai: Vec<_> = vec![Scalar::from(7u64), Scalar::from(6u64), Scalar::from(1u64)];
+        let bj: Vec<_> = vec![Scalar::from(5u64), Scalar::from(3u64), Scalar::from(4u64)];
+        let y = Scalar::from(5u64);
+        //create y^i
+        let y_i: Vec<_> = vectorutil::exp_iter(y).skip(1).take(4).collect();
+        let reference = Scalar::from(1125u64);
+        let result = single_bilinearmap(&ai, &bj, &y_i);
+        //println!("Result {:?} = ", result);
+        assert_eq!(reference, result);
+    }
+    #[test]
+    fn bilinear_map_test() {
+        let a_scalar: Vec<_> = vec![
+            Scalar::from(7u64),
+            Scalar::from(6u64),
+            Scalar::from(1u64),
+            Scalar::from(5u64),
+            Scalar::from(3u64),
+            Scalar::from(4u64),
+            Scalar::from(2u64),
+            Scalar::from(8u64),
+            Scalar::from(9u64),
+        ];
+
+        let b_scalar: Vec<_> = vec![
+            Scalar::from(3u64),
+            Scalar::from(2u64),
+            Scalar::from(1u64),
+            Scalar::from(7u64),
+            Scalar::from(3u64),
+            Scalar::from(5u64),
+            Scalar::from(8u64),
+            Scalar::from(3u64),
+            Scalar::from(6u64),
+        ];
+        let a_2d = Array2D::from_row_major(&a_scalar, ROWS, COLUMNS);
+        let b_2d = Array2D::from_row_major(&b_scalar, ROWS, COLUMNS);
+
+        let a_0: Vec<_> = vec![Scalar::from(6u64), Scalar::from(2u64), Scalar::from(5u64)];
+        let b_m: Vec<_> = vec![Scalar::from(7u64), Scalar::from(1u64), Scalar::from(3u64)];
+
+        //Create Full A and B vector to be used in bilinearmap. Add a0 to A and bm to B
+        let a_orig_colums = a_2d.as_columns();
+        //for creating the new matrix
+        let a_columns = vec![
+            a_0,
+            a_orig_colums[0].clone(),
+            a_orig_colums[1].clone(),
+            a_orig_colums[2].clone(),
+        ];
+        let a_Array = Array2D::from_columns(&a_columns);
+
+        let b_orig_colums = b_2d.as_columns();
+        //for creating the new matrix
+        let b_columns = vec![
+            b_orig_colums[0].clone(),
+            b_orig_colums[1].clone(),
+            b_orig_colums[2].clone(),
+            b_m,
+        ];
+        let b_Array = Array2D::from_columns(&b_columns);
+        let y = Scalar::from(5u64);
+        let reference: Vec<Scalar> = vec![
+            Scalar::from_canonical_bytes([
+                87, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ])
+            .unwrap(),
+            Scalar::from_canonical_bytes([
+                30, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ])
+            .unwrap(),
+            Scalar::from_canonical_bytes([
+                106, 29, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ])
+            .unwrap(),
+            Scalar::from_canonical_bytes([
+                166, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ])
+            .unwrap(),
+            Scalar::from_canonical_bytes([
+                208, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ])
+            .unwrap(),
+            Scalar::from_canonical_bytes([
+                12, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ])
+            .unwrap(),
+            Scalar::from_canonical_bytes([
+                243, 37, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ])
+            .unwrap(),
+        ];
+        let result = bilinearmap(&a_Array, &b_Array, y);
+        //println!("Result {:?} = ", result);
+        assert_eq!(reference, result);
     }
 }

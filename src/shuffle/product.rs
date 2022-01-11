@@ -535,27 +535,32 @@ impl ZeroProof {
         // let b1x2: Vec<_> = b_cols[1].iter().map(|i| i * x_m_j[1]).collect();
         // let b2x: Vec<_> = b_cols[2].iter().map(|i| i * x_m_j[2]).collect();
         //convert ax abd bx to array2d for easy column access
-        let ax_columns_iter = Array2D::from_rows(&ax).column_iter();
-        let bx_columns_iter = Array2D::from_rows(&bx).columns_iter();
+        let ax_2d = Array2D::from_rows(&ax);
+        let bx_2d = Array2D::from_rows(&bx);
         let mut a_bar_vec = Vec::<Scalar>::new();
         let mut b_bar_vec = Vec::<Scalar>::new();
         //creating a_bar and b_bar
         //let mut temp = Scalar::zero();
         // let iter = ax.iter();
         // for rows in ax.iter{
-        //     let temp_a = Scalar::zero();
-        //     let temp_b = Scalar::zero();
+        //
         //     for x in rows.iter(){
 
         //     }
         //     a_bar_vec.push(temp_a);
         //     b_bar_vec.push(temp_b);
         // }
-        for column_iter in ax_columns_iter {
-            a_bar_vec.push(column_iter.unwrap().iter().sum());
-        }
-        for column_iter in bx_columns_iter {
-            b_bar_vec.push(column_iter.unwrap().iter().sum());
+        for i in 0..ROWS {
+            let mut temp_a = Scalar::zero();
+            let mut temp_b = Scalar::zero();
+            for element in ax_2d.column_iter(i) {
+                temp_a += element;
+            }
+            a_bar_vec.push(temp_a);
+            for ele in bx_2d.column_iter(i) {
+                temp_b += ele;
+            }
+            b_bar_vec.push(temp_b);
         }
 
         // for i in 0..ROWS {

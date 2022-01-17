@@ -5,26 +5,21 @@
 
 use crate::{
     accounts::{Account, Prover, Verifier},
-    elgamal::ElGamalCommitment,
     pedersen::vectorpedersen::VectorPedersenGens,
     ristretto::RistrettoPublicKey,
-    shuffle::product,
     shuffle::product::ProductProof,
     shuffle::vectorutil,
 };
 use array2d::Array2D;
 use bulletproofs::PedersenGens;
 use curve25519_dalek::traits::MultiscalarMul;
-use curve25519_dalek::traits::VartimeMultiscalarMul;
+
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
 use rand::{CryptoRng, Rng};
-use sha3::Sha3_512;
-use std::convert::TryInto;
 
 #[derive(Debug, Clone)]
 pub struct Permutation {

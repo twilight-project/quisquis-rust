@@ -3,17 +3,16 @@
 
 #![allow(non_snake_case)]
 
-use curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
-};
 use crate::{
     accounts::{Prover, Verifier},
     ristretto::RistrettoPublicKey,
     shuffle::vectorutil,
-   
 };
 use curve25519_dalek::traits::MultiscalarMul;
+use curve25519_dalek::{
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+};
 
 /*
 pub fn hadamard_product_proof_prover(tau: Array2D<Scalar>, pi: Permutation)->(Vec<RistrettoPoint>,Vec<RistrettoPoint>,Vec<RistrettoPoint>){
@@ -42,8 +41,8 @@ let rscalar_tau = Scalar::random(&mut OsRng);
 let rscalar_b = Scalar::random(&mut OsRng);
 let rscalar_b_dash = Scalar::random(&mut OsRng);
 
-//Create Xtended commitment on tau, b and b' 
-for i in 0..3{ 
+//Create Xtended commitment on tau, b and b'
+for i in 0..3{
     c_tau.push(extended_commit(&tau_cols[i], rscalar_tau, &gens));
     c_b.push(extended_commit(&b_cols[i], rscalar_b, &gens));
     c_b_dash.push(extended_commit(&b_dash_cols[i], rscalar_b_dash, &gens));
@@ -52,47 +51,50 @@ for i in 0..3{
 }
 
 */
-pub fn verify_update_ddh_prove(x: Scalar, pk: &Vec<RistrettoPublicKey>, rho: Scalar)->(Scalar, Scalar, CompressedRistretto,CompressedRistretto) 
-{
-// x^i
-let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
-// gather g, h from Public key
-let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
-let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-// (G, H) = sum of all i (pk_i * x^i)
-let G = RistrettoPoint::multiscalar_mul(exp_x.iter().clone(), g_i.iter().clone());
-let H = RistrettoPoint::multiscalar_mul(&exp_x, h_i.iter().clone());
-// x^i * rho
-let exp_x_rho: Vec<_> = exp_x.iter().map(|x| x * rho).collect();
-// (G', H')
-let G_dash = RistrettoPoint::multiscalar_mul(exp_x_rho.iter().clone(), g_i.iter().clone());
-let H_dash = RistrettoPoint::multiscalar_mul(&exp_x_rho, h_i.iter().clone());
+pub fn verify_update_ddh_prove(
+    x: Scalar,
+    pk: &Vec<RistrettoPublicKey>,
+    rho: Scalar,
+) -> (Scalar, Scalar, CompressedRistretto, CompressedRistretto) {
+    // x^i
+    let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
+    // gather g, h from Public key
+    let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
+    let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
+    // (G, H) = sum of all i (pk_i * x^i)
+    let G = RistrettoPoint::multiscalar_mul(exp_x.iter().clone(), g_i.iter().clone());
+    let H = RistrettoPoint::multiscalar_mul(&exp_x, h_i.iter().clone());
+    // x^i * rho
+    let exp_x_rho: Vec<_> = exp_x.iter().map(|x| x * rho).collect();
+    // (G', H')
+    let G_dash = RistrettoPoint::multiscalar_mul(exp_x_rho.iter().clone(), g_i.iter().clone());
+    let H_dash = RistrettoPoint::multiscalar_mul(&exp_x_rho, h_i.iter().clone());
 
-//create the ddh prove
-let (z,chal) = Prover::verify_update_ddh_prover(G, H, G_dash, H_dash, rho); 
-(z, chal, G_dash.compress(), H_dash.compress())
+    //create the ddh prove
+    let (z, chal) = Prover::verify_update_ddh_prover(G, H, G_dash, H_dash, rho);
+    (z, chal, G_dash.compress(), H_dash.compress())
 }
 
+pub fn verify_update_ddh_verify(
+    x: Scalar,
+    pk: &Vec<RistrettoPublicKey>,
+    g_dash: CompressedRistretto,
+    h_dash: CompressedRistretto,
+    z: Scalar,
+    chal: Scalar,
+) -> bool {
+    // x^i
+    let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
+    // gather g, h from Public key
+    let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
+    let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
+    // (G, H) = sum of all i (pk_i * x^i)
+    let G = RistrettoPoint::multiscalar_mul(exp_x.iter().clone(), g_i.iter().clone());
+    let H = RistrettoPoint::multiscalar_mul(&exp_x, h_i.iter().clone());
 
-pub fn verify_update_ddh_verify(x: Scalar, pk: &Vec<RistrettoPublicKey>, g_dash: CompressedRistretto, h_dash: CompressedRistretto, z: Scalar, chal:Scalar)-> bool
-{
- // x^i
-let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect(); 
-// gather g, h from Public key
-let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
-let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-// (G, H) = sum of all i (pk_i * x^i)
-let G = RistrettoPoint::multiscalar_mul(exp_x.iter().clone(), g_i.iter().clone());
-let H = RistrettoPoint::multiscalar_mul(&exp_x, h_i.iter().clone());
- 
-//verify the ddh prove
-Verifier::verify_update_ddh_verifier(G.compress(), H.compress(), g_dash, h_dash, z, chal)
-
+    //verify the ddh prove
+    Verifier::verify_update_ddh_verifier(G.compress(), H.compress(), g_dash, h_dash, z, chal)
 }
-
-
-
-
 
 // ------------------------------------------------------------------------
 // Tests
@@ -101,24 +103,16 @@ Verifier::verify_update_ddh_verifier(G.compress(), H.compress(), g_dash, h_dash,
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::accounts::Account;
     use crate::{
         keys::{PublicKey, SecretKey},
-        ristretto::{
-            RistrettoPublicKey,
-            RistrettoSecretKey
-        }
+        ristretto::{RistrettoPublicKey, RistrettoSecretKey},
     };
-    use crate::{
-        accounts::{Account},
-        shuffle::vectorutil,
-        shuffle::{Shuffle, Permutation},
-    };
-    use array2d::{Array2D};
+    //use array2d::Array2D;
     use rand::rngs::OsRng;
-    use crate::shuffle::shuffle::COLUMNS;
-    use crate::shuffle::shuffle::ROWS;      
-    const N: usize = 9;   //N - Length of vector
-   
+    //use crate::shuffle::shuffle::COLUMNS;
+    //use crate::shuffle::shuffle::ROWS;
+    //const N: usize = 9;   //N - Length of vector
     #[test]
     fn ddh_prove_test() {
         let mut account_vector: Vec<Account> = Vec::new();
@@ -133,17 +127,11 @@ mod test {
         let pk: Vec<RistrettoPublicKey> = account_vector.iter().map(|acc| acc.pk).collect();
         let x = Scalar::random(&mut OsRng);
         let rho = Scalar::random(&mut OsRng);
-        let xx = Scalar::from(2u64);
-        let yy = Scalar::from(6u64);
-        
-        let rho = Scalar::random(&mut OsRng);
-        let (z, chal, G_dash, H_dash) = verify_update_ddh_prove(x,&pk,rho);
+        let (z, chal, G_dash, H_dash) = verify_update_ddh_prove(x, &pk, rho);
         let verify = verify_update_ddh_verify(x, &pk, G_dash, H_dash, z, chal);
-        
         assert_eq!(verify, true);
     }
 
-    
     // #[test]
     // fn x_psi_test() {
     //     //let x = Scalar::random(&mut OsRng);
@@ -158,13 +146,11 @@ mod test {
     //     println!("{:?}",exp_x);
     //     println!("{:?}",perm_vec);
     //     println!("{:?}",x_psi);
-        
     //     //assert_eq!(exp_2[0], Scalar::from(1u64));
     // }
-    
     // #[test]
     // fn hadamard_product_test() {
-    //     let tau: Vec<_> = (0..9).map(|_| Scalar::random(&mut OsRng)).collect();       
+    //     let tau: Vec<_> = (0..9).map(|_| Scalar::random(&mut OsRng)).collect();
     //     let tau_2d = Array2D::from_row_major(&tau, 3, 3);
     //     let perm = Permutation::new(&mut OsRng, N);
     //     //let (t, b, bd) = hadamard_product_proof_prover(tau_2d, perm);

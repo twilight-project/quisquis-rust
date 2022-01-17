@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 use bulletproofs::r1cs::*;
 use bulletproofs::{BulletproofGens, PedersenGens};
 use curve25519_dalek::ristretto::RistrettoPoint;
@@ -107,7 +108,7 @@ impl<'a> Prover<'a> {
 
         let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
 
-        for i in 0..delta_accounts.iter().count() {
+        for _ in 0..delta_accounts.iter().count() {
             // Generate and collect three blindings
             r1_dash_vector.push(Scalar::random(&mut transcript_rng));
             r2_dash_vector.push(Scalar::random(&mut transcript_rng));
@@ -449,7 +450,7 @@ impl<'a> Prover<'a> {
         let witness = shuffle.pi.get_permutation_as_scalar_matrix();
         prover.scalars = witness.elements_row_major_iter().cloned().collect();
 
-        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+        let (mut prover, transcript_rng) = prover.prove_impl(); //confirm
 
         ShuffleProof::create_shuffle_proof(&mut prover, shuffle, &witness, pc_gens, xpc_gens)
     }
@@ -535,12 +536,12 @@ fn hadamard_product_prove(
         .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
         .unzip();
 
-    let (b_commitments, b_vars): (Vec<_>, Vec<_>) = a
+    let (b_commitments, b_vars): (Vec<_>, Vec<_>) = b
         .into_iter()
         .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
         .unzip();
 
-    let (c_commitments, c_vars): (Vec<_>, Vec<_>) = a
+    let (c_commitments, c_vars): (Vec<_>, Vec<_>) = c
         .into_iter()
         .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
         .unzip();
@@ -586,9 +587,9 @@ fn hadamard_gadget_verify(
     let mut verifier = Verifier::new(&mut transcript);
 
     // 2. Commit high-level variables
-    let a_vars: Vec<_> = a_commitments.iter().map(|V| verifier.commit(*V)).collect();
-    let b_vars: Vec<_> = a_commitments.iter().map(|V| verifier.commit(*V)).collect();
-    let c_vars: Vec<_> = a_commitments.iter().map(|V| verifier.commit(*V)).collect();
+    let a_vars: Vec<_> = a_commitments.iter().map(|v| verifier.commit(*v)).collect();
+    let b_vars: Vec<_> = b_commitments.iter().map(|v| verifier.commit(*v)).collect();
+    let c_vars: Vec<_> = c_commitments.iter().map(|v| verifier.commit(*v)).collect();
 
     // 3. Build a CS
     hadamard_gadget(&mut verifier, &a_vars, &b_vars, &c_vars);

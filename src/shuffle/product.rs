@@ -6,14 +6,13 @@
 use crate::shuffle::shuffle::COLUMNS;
 use crate::shuffle::shuffle::ROWS;
 use crate::{
-    accounts::{Account, Prover, Verifier},
+    accounts::{Prover, Verifier},
     pedersen::vectorpedersen::VectorPedersenGens,
     shuffle::singlevalueproduct::{SVPArgument, SVPProof},
     shuffle::vectorutil,
 };
 use array2d::Array2D;
 use bulletproofs::PedersenGens;
-use core::borrow::Borrow;
 use curve25519_dalek::traits::{MultiscalarMul, VartimeMultiscalarMul};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
@@ -212,25 +211,10 @@ impl MultiHadamardProof {
 
         //create b1,b2....bm using  columns of Matrix A. a1,a2...
         let perm_scalar_as_cols = pi_2d.as_columns();
-        let mut b_2d_vec = vec![perm_scalar_as_cols[0].clone()];
         // b1 =a1
         let b1 = perm_scalar_as_cols[0].clone();
         // b2 = a1 * a2
         let a2 = perm_scalar_as_cols[1].clone();
-        //b2 = a1a2,...,bm−1 = a1 ···a_m−1
-        // for i in 1..ROWS - 1 {
-        //     //for calculating b
-        //     let mut temp_b = perm_scalar_as_cols[0].clone();
-        //     for j in 0..i {
-        //         // for selecting a1...a_m-1
-        //         temp_b = temp_b
-        //             .iter()
-        //             .zip(perm_scalar_as_cols[j + 1].iter())
-        //             .map(|(c, d)| c * d)
-        //             .collect();
-        //     }
-        //     b_2d_vec.push(temp_b);
-        // }
         let b2: Vec<_> = b1.iter().zip(a2.iter()).map(|(i, j)| i * j).collect();
 
         //bm = b
@@ -241,7 +225,7 @@ impl MultiHadamardProof {
         //b_2d_vec.push(bvec.clone());
 
         //creating s vector before challenge.  s_1 = r_1, Pick s2,...,s_m−1 ← Zq , s_m = s from calling function
-        let mut s_vec_product: Vec<Scalar> = iter::once(r[0])
+        let s_vec_product: Vec<Scalar> = iter::once(r[0])
             .chain((1..COLUMNS - 1).map(|_| Scalar::random(&mut OsRng)))
             .chain(iter::once(s_3))
             .collect::<Vec<Scalar>>();
@@ -785,7 +769,7 @@ pub fn single_bilinearmap(ai: &[Scalar], bj: &[Scalar], yi: &[Scalar]) -> Scalar
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::shuffle::shuffle;
+    //use crate::shuffle::shuffle;
     use merlin::Transcript;
     //Matrix Size
 

@@ -53,7 +53,7 @@ pub struct MultiexpoProof {
 impl MultiexpoProof {
     pub fn create_multiexponential_elgamal_commit_proof(
         prover: &mut Prover,
-        commit: &Vec<ElGamalCommitment>,
+        commit: &[ElGamalCommitment],
         a_witness: &Array2D<Scalar>,
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
@@ -137,7 +137,7 @@ impl MultiexpoProof {
 
         //create challenge x for hiding a and b
         //let x = Scalar::random(&mut OsRng);
-        let x = Scalar::from(3u64);
+        //let x = Scalar::from(3u64);
         // set x = (x, x^2, x^3, x^4.., x^m). Thesis says length should be m but rebekkah has its length as 2m-2
         let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2 * ROWS).collect();
         let x_exp_m = &x_exp[1..ROWS + 1].to_vec();
@@ -192,7 +192,7 @@ impl MultiexpoProof {
         &self,
         verifier: &mut Verifier,
         multiexpo_statement: &MultiexpoStatement,
-        shuffle: &Shuffle,
+        accounts: &[Account],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
         pk: &RistrettoPublicKey,
@@ -218,18 +218,18 @@ impl MultiexpoProof {
 
         let x = verifier.get_challenge(b"xchallenege");
 
-        // set x = (x, x^2, x^3, x^4.., x^m). Thesis says length should be m but rebekkah has its length as 2m-2
+        // set x = (x, x^2, x^3, x^4.., x^N).
         let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2 * ROWS).collect();
         let x_exp_m = &x_exp[1..ROWS + 1].to_vec();
-        let x_k = &x_exp[1..2 * ROWS].to_vec();
         // Verify c_A_0 . c_A_vec^(x_vec) = com (a_vec,r)
         //compute C_A^x_vec
-        let c_a_x_vec = RistrettoPoint::optional_multiscalar_mul(
-            x_exp_m.iter(),
+        let c_a_0_c_a_x_vec = RistrettoPoint::optional_multiscalar_mul(
+            &x_exp[1..ROWS + 1],
             multiexpo_statement.c_A.iter().map(|pt| pt.decompress()),
-        );
-        //let trying = extended_commit(&ax, rx, &xpc_gens);
-        let c_a_0_c_a_x_vec = c_a_x_vec.unwrap() + self.c_A_0.decompress().unwrap();
+        )
+        .unwrap()
+            + self.c_A_0.decompress().unwrap();
+        // let c_a_0_c_a_x_vec = c_a_x_vec.unwrap() + self.c_A_0.decompress().unwrap();
         //compute comit(a_vec:r). The commitment is on the a_vec from second message.
         // let c_a_r = extended_commit(&a_vec, r, &xpc_gens);
         let c_a_r = xpc_gens.commit(&self.a_vec, self.r);
@@ -237,14 +237,14 @@ impl MultiexpoProof {
         //Verifying Cb_0 .. == comit(b;s)
         let comit_b_s = pc_gens.commit(self.b, self.s);
         //product of (c_B_k)^(x^k)
-        let len_cb = self.c_B_k.len();
-        let c_b_k = &self.c_B_k[1..len_cb].to_vec();
+        //let len_cb = self.c_B_k.len();
+        //let c_b_k = &self.c_B_k[1..len_cb].to_vec();
         let c_b_k_x_k = RistrettoPoint::optional_multiscalar_mul(
-            x_k.iter().clone(),
-            c_b_k.iter().map(|pt| pt.decompress()),
+            x_exp.iter(),
+            self.c_B_k.iter().map(|pt| pt.decompress()),
         );
         //c_B_0 + product of c_B_k..
-        let cb_sum = self.c_B_k[0].decompress().unwrap() + c_b_k_x_k.unwrap();
+        //let cb_sum = self.c_B_k[0].decompress().unwrap() + c_b_k_x_k.unwrap();
 
         //checking E_m == C . In this case C is product of all N Pk^x^i. Which is also G, and H. Check this later
         //Creating C on the prover and checking
@@ -258,95 +258,70 @@ impl MultiexpoProof {
         //Big verification
         //computing the left hand side. E0 + product of Ek^x^k
         //Ek^x^k for k = 1..2m-1
-        let ek_c_1_5 = &self.E_k_0[1..6].to_vec();
-        let ek_d_1_5 = &self.E_k_1[1..6].to_vec();
-        // println!("{:?}",x_k);
-        // println!("{:?}",ek_g);
         let E_k_c_x_k = RistrettoPoint::optional_multiscalar_mul(
-            x_k.iter(),
-            ek_c_1_5.iter().map(|pt| pt.decompress()),
+            x_exp.iter(),
+            self.E_k_0.iter().map(|pt| pt.decompress()),
         );
         let E_k_d_x_k = RistrettoPoint::optional_multiscalar_mul(
-            x_k.iter(),
-            ek_d_1_5.iter().map(|pt| pt.decompress()),
+            x_exp.iter(),
+            self.E_k_1.iter().map(|pt| pt.decompress()),
         );
-        // let E_k_g_x_k =
-        //     RistrettoPoint::multiscalar_mul(x_k.iter().clone(), ek_g_1_5.iter().clone());
-        // let E_k_h_x_k =
-        //     RistrettoPoint::multiscalar_mul(x_k.iter().clone(), ek_h_1_5.iter().clone());
-        let lhs_g = self.E_k_0[0].decompress().unwrap() + E_k_c_x_k.unwrap();
-        let lhs_h = self.E_k_1[0].decompress().unwrap() + E_k_d_x_k.unwrap();
 
         //computing the rhs.
         //extract commitments from accounts
-        let comm: Vec<ElGamalCommitment> = shuffle
-            .outputs
-            .as_row_major()
-            .iter()
-            .map(|acc| acc.comm)
-            .collect();
+        let comm: Vec<ElGamalCommitment> = accounts.iter().map(|acc| acc.comm).collect();
+
+        //extract c,d from commitments
+        let c: Vec<_> = comm.iter().map(|pt| pt.c.decompress().unwrap()).collect();
+        let d: Vec<_> = comm.iter().map(|pt| pt.d.decompress().unwrap()).collect();
         //convert to 2D array representation
-        let comm_matrix_as_rows = Array2D::from_row_major(&comm, ROWS, COLUMNS).as_rows();
-
-        //Preparing vectors for multiscalar
-        let c1 = &comm_matrix_as_rows[0];
-        let c2 = &comm_matrix_as_rows[1];
-        let c3 = &comm_matrix_as_rows[2];
-
-        // gather c, d from ElgamalCommitment
-        let c1_c: Vec<_> = c1.iter().map(|pt| pt.c.decompress().unwrap()).collect();
-        let c1_d: Vec<_> = c1.iter().map(|pt| pt.d.decompress().unwrap()).collect();
-        let c2_c: Vec<_> = c2.iter().map(|pt| pt.c.decompress().unwrap()).collect();
-        let c2_d: Vec<_> = c2.iter().map(|pt| pt.d.decompress().unwrap()).collect();
-        let c3_c: Vec<_> = c3.iter().map(|pt| pt.c.decompress().unwrap()).collect();
-        let c3_d: Vec<_> = c3.iter().map(|pt| pt.d.decompress().unwrap()).collect();
+        let c_2d_rows = Array2D::from_row_major(&c, ROWS, COLUMNS).as_rows();
+        let d_2d_rows = Array2D::from_row_major(&d, ROWS, COLUMNS).as_rows();
 
         //reencryption
         let c_bb = reencrypt_commitment(pk, self.t, self.b);
         //product of i ..m C_i^(x^m-i)a
         // for i = 1
         //computing the scalar x^3-1)a = x^2.a
-        let x_2 = x_exp_m[1];
-        let x_2_a: Vec<_> = self.a_vec.iter().map(|i| i * x_2).collect();
+        let x_1_a: Vec<_> = self.a_vec.iter().map(|i| i * x_exp[1]).collect();
+        let x_2_a: Vec<_> = self.a_vec.iter().map(|i| i * x_exp[2]).collect();
 
-        let c1_g_xa = RistrettoPoint::multiscalar_mul(x_2_a.clone(), c1_c.clone());
-        let c1_h_xa = RistrettoPoint::multiscalar_mul(x_2_a.clone(), c1_d.clone());
+        let c_c_x = RistrettoPoint::multiscalar_mul(
+            x_2_a.iter().chain(x_1_a.iter()).chain(self.a_vec.iter()),
+            c_2d_rows[0]
+                .iter()
+                .chain(c_2d_rows[1].iter())
+                .chain(c_2d_rows[2].iter()),
+        );
 
-        // for i = 2
-        //computing the scalar x^3-2)a = x.a
-        let x_1 = x_exp_m[0];
-        let x_1_a: Vec<_> = self.a_vec.iter().map(|i| i * x_1).collect();
-
-        let c2_g_xa = RistrettoPoint::multiscalar_mul(x_1_a.clone(), c2_c.clone());
-        let c2_h_xa = RistrettoPoint::multiscalar_mul(x_1_a.clone(), c2_d.clone());
-
-        // for i = 3
-        //computing the scalar x^3-3)a = a
-        let c3_g_xa = RistrettoPoint::multiscalar_mul(self.a_vec.clone(), c3_c.clone());
-        let c3_h_xa = RistrettoPoint::multiscalar_mul(self.a_vec.clone(), c3_d.clone());
-
-        //adding all points together
-        let c_g_x = c3_g_xa + c1_g_xa + c2_g_xa;
-        let c_h_x = c3_h_xa + c1_h_xa + c2_h_xa;
-
-        let rhs_g = c_g_x + c_bb.c.decompress().unwrap();
-        let rhs_h = c_h_x + c_bb.d.decompress().unwrap();
-        lhs_g == rhs_g && lhs_h == rhs_h && c_a_0_c_a_x_vec == c_a_r && comit_b_s == cb_sum
-        // if lhs_g == rhs_g && lhs_h == rhs_h {
-        //     println!("lhs == rhs TRUE");
-        // } else {
-        //     println!("Lhs ==rhs  FALSE");
-        // }
-        // if c_a_0_c_a_x_vec == c_a_r {
-        //     println!("CA TRUE");
-        // } else {
-        //     println!("CA FALSE");
-        // }
-        // if comit_b_s == cb_sum {
-        //     println!("CB TRUE");
-        // } else {
-        //     println!("CB FALSE");
-        // }
+        let c_d_x = RistrettoPoint::multiscalar_mul(
+            x_2_a.iter().chain(x_1_a.iter()).chain(self.a_vec.iter()),
+            d_2d_rows[0]
+                .iter()
+                .chain(d_2d_rows[1].iter())
+                .chain(d_2d_rows[2].iter()),
+        );
+        let rhs_c = c_c_x + c_bb.c.decompress().unwrap();
+        let rhs_d = c_d_x + c_bb.d.decompress().unwrap();
+        if E_k_c_x_k.unwrap() == rhs_c && E_k_d_x_k.unwrap() == rhs_d {
+            println!("lhs == rhs TRUE");
+        } else {
+            println!("Lhs ==rhs  FALSE");
+        }
+        if c_a_0_c_a_x_vec == c_a_r {
+            println!("CA TRUE");
+        } else {
+            println!("CA FALSE");
+        }
+        if comit_b_s == c_b_k_x_k.unwrap() {
+            println!("CB TRUE");
+        } else {
+            println!("CB FALSE");
+        }
+        E_k_c_x_k.unwrap() == rhs_c
+            && E_k_d_x_k.unwrap() == rhs_d
+            && c_a_0_c_a_x_vec == c_a_r
+            && comit_b_s == c_b_k_x_k.unwrap()
     }
 
     //b' is the witness and trated as A in the arguent described in paper
@@ -958,15 +933,15 @@ pub fn create_ek_common(
         perm_scalar_as_cols[3].iter(),
         cipher_mat_1_as_rows[0].iter(),
     ); //let e5_d = RistrettoPoint::multiscalar_mul(a3.iter().clone(), c1_d.iter().clone());
-    let e_c = vec![
-        e0_1.compress(),
-        e1_1.compress(),
-        e2_1.compress(),
-        e3_1.compress(),
-        e4_1.compress(),
-        e5_1.compress(),
-    ];
-    println!("E_c {:?}", e_c);
+       // let e_c = vec![
+       //     e0_1.compress(),
+       //     e1_1.compress(),
+       //     e2_1.compress(),
+       //     e3_1.compress(),
+       //     e4_1.compress(),
+       //     e5_1.compress(),
+       // ];
+       // println!("E_c {:?}", e_c);
     vec![e0_1, e1_1, e2_1, e3_1, e4_1, e5_1]
 }
 
@@ -1264,12 +1239,7 @@ mod test {
     use super::*;
     use crate::shuffle::shuffle::COLUMNS;
     use crate::shuffle::shuffle::ROWS;
-    use crate::{
-        accounts::Account,
-        shuffle::shuffle,
-        shuffle::vectorutil,
-        shuffle::{Permutation, Shuffle},
-    };
+    use crate::{accounts::Account, shuffle::shuffle, shuffle::vectorutil, shuffle::Shuffle};
     use crate::{
         keys::{PublicKey, SecretKey},
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
@@ -1277,7 +1247,7 @@ mod test {
     use array2d::Array2D;
     use merlin::Transcript;
     use rand::rngs::OsRng;
-    const N: usize = 9; //N - Length of vector
+    //const N: usize = 9; //N - Length of vector
     #[test]
     fn multiexpo_pk_prove_test() {
         let mut account_vector: Vec<Account> = Vec::new();
@@ -1432,7 +1402,7 @@ mod test {
         let verify = proof.verify_multiexponential_elgamal_commit_proof(
             &mut verifier,
             &multiexpo_arg,
-            &shuffle,
+            &shuffle.outputs.as_row_major(),
             &pc_gens,
             &xpc_gens,
             &pk,

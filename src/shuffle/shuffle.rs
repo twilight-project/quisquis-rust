@@ -333,6 +333,7 @@ pub fn create_b_b_dash(
     let perm = p.perm_matrix.as_row_major();
     //create x^i for i = 1..N
     let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
+    println!("x^i {:?}", exp_x);
     let mut x_psi: Vec<Scalar> = Vec::with_capacity(N);
 
     //create 1/tau

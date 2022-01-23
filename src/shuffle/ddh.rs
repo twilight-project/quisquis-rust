@@ -13,7 +13,110 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+use rand::rngs::OsRng;
+use std::iter;
 
+#[derive(Debug, Clone)]
+pub struct DDHStatement {
+    // G' = G ^ rho, H' = H ^ rho
+    pub G_dash: CompressedRistretto,
+    pub H_dash: CompressedRistretto,
+}
+///Multiexponential Proof
+///
+#[derive(Debug, Clone)]
+pub struct DDHProof {
+    x_chal: Scalar,
+    z: Scalar,
+}
+impl DDHProof {
+    pub fn create_verify_update_ddh_prove(
+        prover: &mut Prover,
+        x: Scalar,
+        pk: &[RistrettoPublicKey],
+        rho: Scalar,
+    ) -> (DDHProof, DDHStatement) {
+        //Create new transcript
+        prover.new_domain_sep(b"DDHTupleProof");
+
+        // x^i
+        let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
+        // gather g, h from Public key
+        let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
+        let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
+        // (G, H) = sum of all i (pk_i * x^i)
+        let G = RistrettoPoint::multiscalar_mul(exp_x.iter(), g_i.iter());
+        let H = RistrettoPoint::multiscalar_mul(exp_x.iter(), h_i.iter());
+        // x^i * rho
+        let exp_x_rho: Vec<_> = exp_x.iter().map(|x| x * rho).collect();
+        // (G', H')
+        let G_dash = RistrettoPoint::multiscalar_mul(exp_x_rho.iter(), g_i.iter()).compress();
+        let H_dash = RistrettoPoint::multiscalar_mul(exp_x_rho.iter(), h_i.iter()).compress();
+
+        // Generate a single blinding factor
+        let r_scalar = Scalar::random(&mut OsRng);
+        // first messasge
+        let g_r = (G * r_scalar).compress();
+        let h_r = (H * r_scalar).compress();
+
+        //allocates points to Transcript
+        prover.allocate_point(b"g", G.compress());
+        prover.allocate_point(b"g_dash", G_dash);
+        prover.allocate_point(b"h", H.compress());
+        prover.allocate_point(b"h_dash", H_dash);
+
+        prover.allocate_point(b"gr", g_r);
+        prover.allocate_point(b"hr", h_r);
+        // obtain a scalar challenge
+        let x_chal = prover.get_challenge(b"xchallenge");
+        //proof
+        let x_rho = x_chal * rho;
+        let z = r_scalar - x_rho;
+
+        (
+            DDHProof {
+                x_chal: x_chal,
+                z: z,
+            },
+            DDHStatement {
+                G_dash: G_dash,
+                H_dash: H_dash,
+            },
+        )
+    }
+    pub fn verify_ddh_proof(
+        &self,
+        verifier: &mut Verifier,
+        statement: &DDHStatement,
+        G: &RistrettoPoint,
+        H: &RistrettoPoint,
+    ) -> bool {
+        //recreate the challenge
+        verifier.new_domain_sep(b"DDHTupleProof");
+        //allocates points to Transcript
+        verifier.allocate_point(b"g", G.compress());
+        verifier.allocate_point(b"g_dash", statement.G_dash);
+        verifier.allocate_point(b"h", H.compress());
+        verifier.allocate_point(b"h_dash", statement.H_dash);
+        //lets recreate g_r & h_r from x and z
+        let combined_scalars = vec![self.z, self.x_chal];
+        let g_point = vec![G.compress(), statement.G_dash];
+        let g_r = Verifier::multiscalar_multiplication(&combined_scalars, &g_point)
+            .unwrap()
+            .compress();
+        let h_point = vec![H.compress(), statement.H_dash];
+        let h_r = Verifier::multiscalar_multiplication(&combined_scalars, &h_point)
+            .unwrap()
+            .compress();
+
+        verifier.allocate_point(b"gr", g_r);
+        verifier.allocate_point(b"hr", h_r);
+        //verify the ddh prove
+        // obtain a scalar challenge
+        let c = verifier.get_challenge(b"xchallenge");
+        self.x_chal == c
+    }
+}
 /*
 pub fn hadamard_product_proof_prover(tau: Array2D<Scalar>, pi: Permutation)->(Vec<RistrettoPoint>,Vec<RistrettoPoint>,Vec<RistrettoPoint>){
 //create pedersen generators for Xtended commitment
@@ -51,50 +154,6 @@ for i in 0..3{
 }
 
 */
-pub fn verify_update_ddh_prove(
-    x: Scalar,
-    pk: &Vec<RistrettoPublicKey>,
-    rho: Scalar,
-) -> (Scalar, Scalar, CompressedRistretto, CompressedRistretto) {
-    // x^i
-    let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
-    // gather g, h from Public key
-    let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
-    let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-    // (G, H) = sum of all i (pk_i * x^i)
-    let G = RistrettoPoint::multiscalar_mul(exp_x.iter().clone(), g_i.iter().clone());
-    let H = RistrettoPoint::multiscalar_mul(&exp_x, h_i.iter().clone());
-    // x^i * rho
-    let exp_x_rho: Vec<_> = exp_x.iter().map(|x| x * rho).collect();
-    // (G', H')
-    let G_dash = RistrettoPoint::multiscalar_mul(exp_x_rho.iter().clone(), g_i.iter().clone());
-    let H_dash = RistrettoPoint::multiscalar_mul(&exp_x_rho, h_i.iter().clone());
-
-    //create the ddh prove
-    let (z, chal) = Prover::verify_update_ddh_prover(G, H, G_dash, H_dash, rho);
-    (z, chal, G_dash.compress(), H_dash.compress())
-}
-
-pub fn verify_update_ddh_verify(
-    x: Scalar,
-    pk: &Vec<RistrettoPublicKey>,
-    g_dash: CompressedRistretto,
-    h_dash: CompressedRistretto,
-    z: Scalar,
-    chal: Scalar,
-) -> bool {
-    // x^i
-    let exp_x: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
-    // gather g, h from Public key
-    let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
-    let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-    // (G, H) = sum of all i (pk_i * x^i)
-    let G = RistrettoPoint::multiscalar_mul(exp_x.iter().clone(), g_i.iter().clone());
-    let H = RistrettoPoint::multiscalar_mul(&exp_x, h_i.iter().clone());
-
-    //verify the ddh prove
-    Verifier::verify_update_ddh_verifier(G.compress(), H.compress(), g_dash, h_dash, z, chal)
-}
 
 // ------------------------------------------------------------------------
 // Tests
@@ -109,7 +168,9 @@ mod test {
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
     };
     //use array2d::Array2D;
+    use merlin::Transcript;
     use rand::rngs::OsRng;
+
     //use crate::shuffle::shuffle::COLUMNS;
     //use crate::shuffle::shuffle::ROWS;
     //const N: usize = 9;   //N - Length of vector
@@ -127,9 +188,26 @@ mod test {
         let pk: Vec<RistrettoPublicKey> = account_vector.iter().map(|acc| acc.pk).collect();
         let x = Scalar::random(&mut OsRng);
         let rho = Scalar::random(&mut OsRng);
-        let (z, chal, G_dash, H_dash) = verify_update_ddh_prove(x, &pk, rho);
-        let verify = verify_update_ddh_verify(x, &pk, G_dash, H_dash, z, chal);
-        assert_eq!(verify, true);
+        //create Prover and verifier
+        let mut transcript_p = Transcript::new(b"ShuffleProof");
+        let mut prover = Prover::new(b"DDHTuple", &mut transcript_p);
+
+        let (proof, statement) = DDHProof::create_verify_update_ddh_prove(&mut prover, x, &pk, rho);
+
+        let mut transcript_v = Transcript::new(b"ShuffleProof");
+        let mut verifier = Verifier::new(b"DDHTuple", &mut transcript_v);
+
+        // create x^i
+        let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
+        // gather g, h from Public key
+        let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
+        let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
+        // (G, H) = sum of all i (pk_i * x^i)
+        let G = RistrettoPoint::multiscalar_mul(exp_x.iter(), g_i.iter());
+        let H = RistrettoPoint::multiscalar_mul(exp_x.iter(), h_i.iter());
+
+        let verify = proof.verify_ddh_proof(&mut verifier, &statement, &G, &H);
+        assert!(verify);
     }
 
     // #[test]

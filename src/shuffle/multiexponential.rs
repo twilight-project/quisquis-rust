@@ -8,6 +8,7 @@ use crate::shuffle::shuffle::ROWS;
 use crate::{
     accounts::{Account, Prover, Verifier},
     elgamal::ElGamalCommitment,
+    keys::PublicKey,
     pedersen::vectorpedersen::VectorPedersenGens,
     ristretto::RistrettoPublicKey,
     shuffle::vectorutil,
@@ -24,17 +25,35 @@ use curve25519_dalek::{
 };
 use rand::rngs::OsRng;
 use std::iter;
-///Multiexponential Proof Statement
-/// aGiven ciphertexts C_11,...,C_mn and C we will give in this section an argument of knowledge of openings
-//of commitments ~cA to A = {a_ij}i,j=1 to n,m
-///~C1,..., ~Cm ∈ H^n , C ∈ H and ~cA ∈ G^m
+
+#[derive(Debug, Clone)]
+pub enum CProver {
+    Commit(ElGamalCommitment),
+    Pk(RistrettoPublicKey),
+}
+
+impl CProver {
+    pub fn compare(&self, x: CompressedRistretto, y: CompressedRistretto) -> bool {
+        match self {
+            CProver::Commit(val) => x == val.c && y == val.d,
+            CProver::Pk(val) => x == val.gr && y == val.grsk,
+            _ => false,
+        }
+    }
+    pub fn print(&self) {
+        match self {
+            CProver::Commit(val) => println!("c = {:?}, d = {:?} ", val.c, val.d),
+            CProver::Pk(val) => println!("g = {:?}, h = {:?} ", val.gr, val.grsk),
+        }
+    }
+}
 #[derive(Debug, Clone)]
 pub struct MultiexpoStatement {
     //Vector of lenght m
     pub c_A: Vec<CompressedRistretto>,
-    pub C: CompressedRistretto,
-    // C1,..., ~Cm Vectors.  Figure out an enum to support both commit and Pubkeys
-    //pub cipher: array2d<>
+    // C = Enc_pk(1; rho). product of i..m (C_i^a_i)
+    pub C: CProver,
+    // C1,..., ~Cm Vectors.
 }
 ///Multiexponential Proof
 ///
@@ -57,9 +76,9 @@ impl MultiexpoProof {
         a_witness: &Array2D<Scalar>,
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-        pk: &RistrettoPublicKey,
+        base_pk: &RistrettoPublicKey,
         rho: Scalar,
-    ) -> (MultiexpoProof, Vec<RistrettoPoint>) {
+    ) -> (MultiexpoProof, MultiexpoStatement) {
         //Create new transcript
         prover.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
 
@@ -105,7 +124,17 @@ impl MultiexpoProof {
         //let (ek_c, ek_d) = create_ek_comm(&shuf.outputs, &a_witness, &a_0, pk, &b_vec, &tau_vec);
         let e_k_c = create_ek_common(&comm_matrix_c_rows, &perm_2d);
         let e_k_d = create_ek_common(&comm_matrix_d_rows, &perm_2d);
-        let (E_K_c, E_K_d) = reencrypt_commitment_ek(&e_k_c, &e_k_d, &pk, &b_vec, &tau_vec);
+        let (E_K_c, E_K_d) = reencrypt_commitment_ek(&e_k_c, &e_k_d, &base_pk, &b_vec, &tau_vec);
+
+        //create C = Enc_pk(1; rho). product of i..m (C_i^a_i)
+        let c_prover = create_C_comit_prover(
+            &comm_matrix_c_rows,
+            &comm_matrix_d_rows,
+            &perm_scalar_as_cols,
+            &base_pk,
+            rho,
+        );
+
         //send C_A_0, cb_k and E_k to the Verifier. 1st Message
         //add to Transcript for challenge x
         prover.allocate_point(b"A0Commitment", c_A_0);
@@ -144,7 +173,10 @@ impl MultiexpoProof {
                 s: sx,
                 t: tx,
             },
-            comit_a_vec,
+            MultiexpoStatement {
+                c_A: comit_a_vec.iter().map(|a| a.compress()).collect(),
+                C: CProver::Commit(c_prover),
+            },
         )
     }
     pub fn verify_multiexponential_elgamal_commit_proof(
@@ -154,7 +186,7 @@ impl MultiexpoProof {
         accounts: &[Account],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-        pk: &RistrettoPublicKey,
+        base_pk: &RistrettoPublicKey,
     ) -> bool {
         //Check cA0,cB0,...,cB2m−1 ∈ G and E0,...,E2m−1 ∈ H and ~a ∈ Z_q^n
         assert_eq!(self.a_vec.len(), COLUMNS);
@@ -162,7 +194,16 @@ impl MultiexpoProof {
         //let comit_b_m = self.c_B_k[ROWS];
         let comit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
         assert_eq!(comit_0_0.compress(), self.c_B_k[ROWS]);
-
+        //checking E_m == C
+        // let e_m = ElGamalCommitment {
+        //     c: self.E_k_0[ROWS],
+        //     d: self.E_k_1[ROWS],
+        // };
+        let verify_C = multiexpo_statement
+            .C
+            .compare(self.E_k_0[ROWS], self.E_k_1[ROWS]);
+        println!("Verify C == Em {:?}", verify_C);
+        //assert_eq!(self.E_k_0[ROWS], C.c);
         //Create new transcript
         verifier.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
         //recreate Challenge from Transcript
@@ -179,15 +220,6 @@ impl MultiexpoProof {
 
         // set x = (x, x^2, x^3, x^4.., x^N).
         let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2 * ROWS).collect();
-
-        //checking E_m == C . In this case C is product of all N Pk^x^i. Which is also G, and H. Check this later
-        //Creating C on the prover and checking
-        // let (em_g, em_h) = create_C_comit_prover(&shuf.outputs, &a_witness, pk, rho);
-        // if ek_c[ROWS] == em_g && ek_d[ROWS] == em_h {
-        //     println!("Em == Cprover  TRUE");
-        // } else {
-        //     println!("Em ==Cprover  FALSE");
-        // }
 
         // Verify c_A_0 . c_A_vec^(x_vec) = com (a_vec,r)
         //Verifying Cb_0 .. == comit(b;s)
@@ -209,7 +241,7 @@ impl MultiexpoProof {
         let d: Vec<_> = comm.iter().map(|pt| pt.d.decompress().unwrap()).collect();
 
         //reencryption
-        let c_bb = reencrypt_commitment(pk, self.t, self.b);
+        let c_bb = reencrypt_commitment(base_pk, self.t, self.b);
         //product of i ..m C_i^(x^m-i)a
         // for i = 1
         //computing the scalar x^3-1)a = x^2.a
@@ -231,9 +263,8 @@ impl MultiexpoProof {
         a_witness: &Array2D<Scalar>,
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-        G: RistrettoPoint,
-        H: RistrettoPoint,
-    ) -> (MultiexpoProof, Vec<RistrettoPoint>) {
+        base_pk: &RistrettoPublicKey,
+    ) -> (MultiexpoProof, MultiexpoStatement) {
         //Create new transcript
         prover.new_domain_sep(b"MultiExponentialPubKeyProof");
         //create random number s' to vector commit on witness. The commitment is on columns of A matrix
@@ -271,8 +302,10 @@ impl MultiexpoProof {
         let e_k_g = create_ek_common(&pk_matrix_g_rows, &perm_2d);
         let e_k_h = create_ek_common(&pk_matrix_h_rows, &perm_2d);
         //reencryption
-        let (ek_g, ek_h) = reencrypt_publickey_ek(&e_k_g, &e_k_h, G, H, &b_vec);
-        //let (ek_g, ek_h) = create_ek_pk(&shuf.outputs, &a_witness, &a_0, G, H, &b_vec);
+        let (ek_g, ek_h) = reencrypt_publickey_ek(&e_k_g, &e_k_h, &base_pk, &b_vec);
+        //create C = Enc_pk(1; rho). product of i..m (C_i^a_i)
+        let c_prover =
+            create_C_pk_prover(&pk_matrix_g_rows, &pk_matrix_h_rows, &perm_scalar_as_cols);
 
         //send C_A_0, cb_k and E_k to the Verifier. 1st Message
         //add to Transcript for challenge x
@@ -307,7 +340,10 @@ impl MultiexpoProof {
                 s: sx,
                 t: Scalar::zero(),
             },
-            comit_a_vec,
+            MultiexpoStatement {
+                c_A: comit_a_vec.iter().map(|a| a.compress()).collect(),
+                C: CProver::Pk(c_prover),
+            },
         )
     }
     fn multiexpo_proof_inital_message_common(
@@ -382,8 +418,7 @@ impl MultiexpoProof {
         accounts: &[Account],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-        G: RistrettoPoint,
-        H: RistrettoPoint,
+        base_pk: &RistrettoPublicKey,
     ) -> bool {
         //Check cA0,cB0,...,cB2m−1 ∈ G and E0,...,E2m−1 ∈ H and ~a ∈ Z_q^n
         assert_eq!(self.a_vec.len(), COLUMNS);
@@ -392,15 +427,16 @@ impl MultiexpoProof {
         let comit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
         assert_eq!(comit_0_0.compress(), self.c_B_k[ROWS]);
 
-        //checking E_m == C . In this case C is product of all N Pk^x^i. Which is also G, and H. Check this later
-        // if self.E_k_0[ROWS] == G.compress() && self.E_k_1[ROWS] == H.compress() {
-        //   println!("Em == C^x  TRUE");
-        //} else {
-        //  println!("Em == C^x  FALSE");
-        // }
-        //assert_eq!(self.E_k_0[ROWS], G.compress());
-        //assert_eq!(self.E_k_1[ROWS], H.compress());
-
+        //checking E_m == C
+        // let c_m = RistrettoPublicKey {
+        //     gr: self.E_k_0[ROWS],
+        //     grsk: self.E_k_1[ROWS],
+        // };
+        // assert_eq!(c_m, multiexpo_statement.C);
+        let verify_C = multiexpo_statement
+            .C
+            .compare(self.E_k_0[ROWS], self.E_k_1[ROWS]);
+        println!("Verify C {:?}", verify_C);
         //Create new transcript
         verifier.new_domain_sep(b"MultiExponentialPubKeyProof");
         //recreate Challenge from Transcript
@@ -428,8 +464,8 @@ impl MultiexpoProof {
         let g: Vec<_> = pks.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
         let h: Vec<_> = pks.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
         //reencryption (G,H)^b
-        let g_bb = G * self.b;
-        let h_bb = H * self.b;
+        let g_bb = base_pk.gr.decompress().unwrap() * self.b;
+        let h_bb = base_pk.grsk.decompress().unwrap() * self.b;
         //product of i ..m C_i^(x^m-i)a, Ek^x^k for k = 1..2m-1
         let (E_k_g_x_k, E_k_h_x_k, c_g_x, c_h_x) = self.verify_multiexpo_ek(&x_exp, &g, &h);
 
@@ -522,108 +558,56 @@ impl MultiexpoProof {
     }
 }
 
-pub fn create_C_comit_prover(
-    accounts: &Array2D<Account>,
-    pi: &Array2D<Scalar>,
-    pk: &RistrettoPublicKey,
+fn create_C_comit_prover(
+    c_matrix: &Array2D<RistrettoPoint>,
+    d_matrix: &Array2D<RistrettoPoint>,
+    pi: &Vec<Vec<Scalar>>,
+    base_pk: &RistrettoPublicKey,
     rho: Scalar,
-) -> (RistrettoPoint, RistrettoPoint) {
-    //extract commitments from accounts
-    let comm: Vec<ElGamalCommitment> = accounts.as_row_major().iter().map(|acc| acc.comm).collect();
-    //convert to 2D array representation
-    let comm_matrix_as_rows = Array2D::from_row_major(&comm, ROWS, COLUMNS).as_rows();
-
-    //convert to column major representation
-    let perm_scalar_as_cols = pi.as_columns();
-
-    //Creating ek's as individual entites. Should be refactored later. this is only done for testing purposes
-
-    //Preparing vectors for multiscalar
-    let c1 = &comm_matrix_as_rows[0];
-    let c2 = &comm_matrix_as_rows[1];
-    let c3 = &comm_matrix_as_rows[2];
-
-    // gather c, d from ElgamalCommitment
-    let c1_c: Vec<_> = c1.iter().map(|pt| pt.c.decompress().unwrap()).collect();
-    let c1_d: Vec<_> = c1.iter().map(|pt| pt.d.decompress().unwrap()).collect();
-    let c2_c: Vec<_> = c2.iter().map(|pt| pt.c.decompress().unwrap()).collect();
-    let c2_d: Vec<_> = c2.iter().map(|pt| pt.d.decompress().unwrap()).collect();
-    let c3_c: Vec<_> = c3.iter().map(|pt| pt.c.decompress().unwrap()).collect();
-    let c3_d: Vec<_> = c3.iter().map(|pt| pt.d.decompress().unwrap()).collect();
-
-    //Column vectors for A
-    let a1 = &perm_scalar_as_cols[0];
-    let a2 = &perm_scalar_as_cols[1];
-    let a3 = &perm_scalar_as_cols[2];
-
-    // (e3_c, e3_d) = product of all i -> m  (C_i^(a_i))
-    let mut combined_scalars = a1.clone();
-    combined_scalars.extend(a2.clone());
-    combined_scalars.extend(a3.clone());
-    let mut point_c = c1_c.clone();
-    point_c.extend(c2_c.clone());
-    point_c.extend(c3_c.clone());
-    let mut point_d = c1_d.clone();
-    point_d.extend(c2_d.clone());
-    point_d.extend(c3_d.clone());
-    let e3_c = RistrettoPoint::multiscalar_mul(combined_scalars.iter(), point_c.iter());
-    let e3_d = RistrettoPoint::multiscalar_mul(combined_scalars.iter(), point_d.iter());
+) -> ElGamalCommitment {
+    let e3_c = C_linearmap(&c_matrix.as_rows(), &pi);
+    let e3_d = C_linearmap(&d_matrix.as_rows(), &pi);
 
     // reencryption
     let xero = Scalar::zero();
-    let comit = reencrypt_commitment(pk, rho, xero);
+    let comit = reencrypt_commitment(base_pk, rho, xero);
     let C_c = e3_c + comit.c.decompress().unwrap();
     let C_d = e3_d + comit.d.decompress().unwrap();
-    (C_c, C_d)
+    ElGamalCommitment {
+        c: C_c.compress(),
+        d: C_d.compress(),
+    }
 }
-
-pub fn create_C_pk_prover(
-    accounts: &Array2D<Account>,
-    pi: &Array2D<Scalar>,
-) -> (RistrettoPoint, RistrettoPoint) {
-    //extract commitments from accounts
-    let comm: Vec<RistrettoPublicKey> = accounts.as_row_major().iter().map(|acc| acc.pk).collect();
-    //convert to 2D array representation
-    let comm_matrix_as_rows = Array2D::from_row_major(&comm, ROWS, COLUMNS).as_rows();
-
+fn C_linearmap(cipher: &Vec<Vec<RistrettoPoint>>, pi: &Vec<Vec<Scalar>>) -> RistrettoPoint {
     //convert to column major representation
-    let perm_scalar_as_cols = pi.as_columns();
-    //println!("{:?}",perm_scalar_as_cols);
-    //Creating ek's as individual entites. Should be refactored later. this is only done for testing purposes
-
-    //Preparing vectors for multiscalar
-    let c1 = &comm_matrix_as_rows[0];
-    let c2 = &comm_matrix_as_rows[1];
-    let c3 = &comm_matrix_as_rows[2];
-
-    // gather c, d from ElgamalCommitment
-    let c1_c: Vec<_> = c1.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
-    let c1_d: Vec<_> = c1.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-    let c2_c: Vec<_> = c2.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
-    let c2_d: Vec<_> = c2.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-    let c3_c: Vec<_> = c3.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
-    let c3_d: Vec<_> = c3.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-
-    //Column vectors for A
-    let a1 = &perm_scalar_as_cols[0];
-    let a2 = &perm_scalar_as_cols[1];
-    let a3 = &perm_scalar_as_cols[2];
-
-    // (e3_c, e3_d) = product of all i -> m  (C_i^(a_i))
-    let mut combined_scalars = a1.clone();
-    combined_scalars.extend(a2.clone());
-    combined_scalars.extend(a3.clone());
-    let mut point_c = c1_c.clone();
-    point_c.extend(c2_c.clone());
-    point_c.extend(c3_c.clone());
-    let mut point_d = c1_d.clone();
-    point_d.extend(c2_d.clone());
-    point_d.extend(c3_d.clone());
-    let e3_c = RistrettoPoint::multiscalar_mul(combined_scalars.iter(), point_c.iter());
-    let e3_d = RistrettoPoint::multiscalar_mul(combined_scalars.iter(), point_d.iter());
-
+    /*let mut iter = pi[0].iter();
+    let mut iter_points = cipher[0].iter();
+    for i in 1..ROWS {
+        iter = iter.chain(pi[i].iter());
+        iter_points.chain(cipher[i].iter());
+    }*/
+    //RistrettoPoint::multiscalar_mul(iter, iter_points)
+    RistrettoPoint::multiscalar_mul(
+        pi[0].iter().chain(pi[1].iter()).chain(pi[2].iter()),
+        cipher[0]
+            .iter()
+            .chain(cipher[1].iter())
+            .chain(cipher[2].iter()),
+    )
+}
+pub fn create_C_pk_prover(
+    cipher_matrix_1: &Array2D<RistrettoPoint>,
+    cipher_matrix_2: &Array2D<RistrettoPoint>,
+    pi: &Vec<Vec<Scalar>>,
+) -> RistrettoPublicKey {
+    let c_g = C_linearmap(&cipher_matrix_1.as_rows(), &pi);
+    let c_h = C_linearmap(&cipher_matrix_2.as_rows(), &pi);
     // let encrypt_1_rho =
-    (e3_c, e3_d)
+
+    RistrettoPublicKey {
+        gr: c_g.compress(),
+        grsk: c_h.compress(),
+    }
 }
 
 //Explicit generation of Ek for 3x3 matrix
@@ -743,14 +727,14 @@ pub fn create_ek_common_loop(
 fn reencrypt_commitment_ek(
     e_k_c: &Vec<RistrettoPoint>,
     e_k_d: &Vec<RistrettoPoint>,
-    pk: &RistrettoPublicKey,
+    base_pk: &RistrettoPublicKey,
     b_random: &Vec<Scalar>,
     tau: &Vec<Scalar>,
 ) -> (Vec<CompressedRistretto>, Vec<CompressedRistretto>) {
     let encrypt_comit: Vec<_> = b_random
         .iter()
         .zip(tau.iter())
-        .map(|(b, i)| reencrypt_commitment(pk, *i, *b))
+        .map(|(b, i)| reencrypt_commitment(base_pk, *i, *b))
         .collect();
 
     let c_encrypt: Vec<_> = encrypt_comit.iter().map(|com| com.c.decompress()).collect();
@@ -773,10 +757,12 @@ fn reencrypt_commitment_ek(
 fn reencrypt_publickey_ek(
     e_k_g: &Vec<RistrettoPoint>,
     e_k_h: &Vec<RistrettoPoint>,
-    G: RistrettoPoint,
-    H: RistrettoPoint,
+    base_pk: &RistrettoPublicKey,
     b_random: &Vec<Scalar>,
 ) -> (Vec<CompressedRistretto>, Vec<CompressedRistretto>) {
+    //get base_pk
+    let G = base_pk.gr.decompress().unwrap();
+    let H = base_pk.grsk.decompress().unwrap();
     let g_reencrypt = iter::once(G)
         .chain(iter::once(G))
         .chain(iter::once(G))
@@ -828,7 +814,9 @@ mod test {
     use super::*;
     use crate::shuffle::shuffle::COLUMNS;
     use crate::shuffle::shuffle::ROWS;
-    use crate::{accounts::Account, shuffle::shuffle, shuffle::vectorutil, shuffle::Shuffle};
+    use crate::{
+        accounts::Account, shuffle::ddh, shuffle::shuffle, shuffle::vectorutil, shuffle::Shuffle,
+    };
     use crate::{
         keys::{PublicKey, SecretKey},
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
@@ -859,9 +847,11 @@ mod test {
         //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
         let (_, b_dash) =
             shuffle::create_b_b_dash(x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
-        //Create Pk^x^ for testing purposes here. Should be refactored later.
+        //Create Pk^x^ for testing purposes here. Should be refactored later.0o0
         // x^i
-        let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
+        let exp_xx: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
+        println!("xx^i {:?}", exp_xx);
+
         // gather g, h from Public key
         // gather g, h from Public key
         let pk: Vec<RistrettoPublicKey> = shuffle
@@ -871,10 +861,37 @@ mod test {
             .map(|acc| acc.pk)
             .collect();
         let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
+        let g_i_2d = Array2D::from_row_major(&g_i, ROWS, COLUMNS);
         let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-        // (G, H) = sum of all i (pk_i * x^i)
-        let G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
-        let H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
+        let h_i_2d = Array2D::from_row_major(&h_i, ROWS, COLUMNS);
+        // (G, H) = sum of all i (pk_i ^ x_i)
+        let x_matrix = Array2D::from_row_major(&exp_xx, ROWS, COLUMNS).as_columns();
+
+        let G = RistrettoPoint::multiscalar_mul(exp_xx.iter(), g_i.iter());
+        let H = RistrettoPoint::multiscalar_mul(exp_xx.iter(), h_i.iter());
+
+        let pk_x = create_C_pk_prover(&g_i_2d, &h_i_2d, &x_matrix);
+        //TESTING pk^b' == pk^ xi
+        let pk: Vec<RistrettoPublicKey> = shuffle
+            .outputs
+            .as_row_major()
+            .iter()
+            .map(|acc| acc.pk)
+            .collect();
+        let g_outs_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
+        let h_outs_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
+        // (G, H) = sum of all i (pk_i ^ x_i)
+        let G_out = RistrettoPoint::multiscalar_mul(b_dash.as_row_major().iter(), g_outs_i.iter());
+        let h_out = RistrettoPoint::multiscalar_mul(b_dash.as_row_major().iter(), h_outs_i.iter());
+        if G == G_out && H == h_out {
+            println!("G out = pk^x_i = {:?}", true);
+            println!("G = {:?} && G_out = {:?}", G.compress(), G_out.compress());
+            println!("H = {:?} && H_out = {:?}", H.compress(), h_out.compress());
+        } else {
+            println!("G out = pk^x_i = {:?}", false);
+        }
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+
         //create Prover and verifier
         let mut transcript_p = Transcript::new(b"ShuffleProof");
         let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
@@ -885,31 +902,28 @@ mod test {
             .iter()
             .map(|acc| acc.pk)
             .collect();
-        let (proof, argCommitment) = MultiexpoProof::create_multiexponential_pubkey_proof(
+        let (proof, multiexpo_arg) = MultiexpoProof::create_multiexponential_pubkey_proof(
             &mut prover,
             &rpk,
             &b_dash,
             &pc_gens,
             &xpc_gens,
-            G,
-            H,
+            &base_pk,
         );
-        let multiexpo_arg = MultiexpoStatement {
-            c_A: argCommitment.iter().map(|a| a.compress()).collect(),
-            C: CompressedRistretto::default(),
-        };
 
         let mut transcript_v = Transcript::new(b"ShuffleProof");
         let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
-
+        let v = multiexpo_arg.C.compare(pk_x.gr, pk_x.grsk);
+        println!("Verify C = pk^x_i = {:?}", v);
+        println!("Pk_x_g = {:?} && Pk_x_h = {:?}", pk_x.gr, pk_x.grsk);
+        multiexpo_arg.C.print();
         let verify = proof.verify_multiexponential_pubkey_proof(
             &mut verifier,
             &multiexpo_arg,
             &shuffle.outputs.as_row_major(),
             &pc_gens,
             &xpc_gens,
-            G,
-            H,
+            &base_pk,
         );
         println! {"Verify PubKey Multiexpo{:?} ", verify}
         assert_eq!(true, true);
@@ -950,22 +964,23 @@ mod test {
         let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
         let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
         // (G, H) = sum of all i (pk_i * x^i)
-        let G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
-        let H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
-        let pk = RistrettoPublicKey {
+        let G = RistrettoPoint::multiscalar_mul(exp_xx.iter(), g_i.iter());
+        let H = RistrettoPoint::multiscalar_mul(exp_xx.iter(), h_i.iter());
+        // let base_pk = RistrettoPublicKey::generate_base_pk();
+        let base_pk = RistrettoPublicKey {
             gr: G.compress(),
             grsk: H.compress(),
         };
-
         //create vector of -rho of length N
         let neg_rho = -shuffle.rho;
-        let rho_vec: Vec<Scalar> = vec![
-            neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho,
-        ];
+        // let rho_vec: Vec<Scalar> = vec![
+        //     neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho,
+        // ];
 
         //create rho = -rho . b
-        let rho_b = vectorutil::vector_multiply_scalar(&rho_vec, &b_mat.as_row_major());
-
+        //let rho_b = vectorutil::vector_multiply_scalar(&rho_vec, &b_mat.as_row_major());
+        //testing Quisquis verification check
+        //let (_, _, G_dash, H_dash) = ddh::verify_update_ddh_prove(x, &pk, shuffle.rho);
         //create Prover and verifier
         let mut transcript_p = Transcript::new(b"ShuffleProof");
         let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
@@ -976,21 +991,17 @@ mod test {
             .iter()
             .map(|acc| acc.comm)
             .collect();
-        let (proof, argCommitment) = MultiexpoProof::create_multiexponential_elgamal_commit_proof(
+        let (proof, multiexpo_arg) = MultiexpoProof::create_multiexponential_elgamal_commit_proof(
             &mut prover,
             &comm,
             &b_mat,
             &pc_gens,
             &xpc_gens,
-            &pk,
-            rho_b,
+            &base_pk,
+            neg_rho,
         );
         // multiexp_commit_prove(&shuffle, &b_mat, &pc_gens, &xpc_gens, &pk, rho_b);
-        let multiexpo_arg = MultiexpoStatement {
-            c_A: argCommitment.iter().map(|a| a.compress()).collect(),
-            C: CompressedRistretto::default(),
-        };
-
+        //commit_C_check(&shuffle, &multiexpo_arg, G_dash, H_dash, x);
         let mut transcript_v = Transcript::new(b"ShuffleProof");
         let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
 
@@ -1000,12 +1011,44 @@ mod test {
             &shuffle.outputs.as_row_major(),
             &pc_gens,
             &xpc_gens,
-            &pk,
+            &base_pk,
         );
         println! {"Verify Commit Multiexpo{:?} ", verify}
         assert_eq!(true, true);
     }
+    fn commit_C_check(
+        shuffle: &Shuffle,
+        statement: &MultiexpoStatement,
+        G_dash: CompressedRistretto,
+        H_dash: CompressedRistretto,
+        x: Scalar,
+    ) {
+        let input_comm: Vec<ElGamalCommitment> = shuffle
+            .inputs
+            .as_row_major()
+            .iter()
+            .map(|acc| acc.comm)
+            .collect();
+        let c: Vec<_> = input_comm
+            .iter()
+            .map(|pt| pt.c.decompress().unwrap())
+            .collect();
+        let d: Vec<_> = input_comm
+            .iter()
+            .map(|pt| pt.d.decompress().unwrap())
+            .collect();
 
+        let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
+        let cxi = RistrettoPoint::multiscalar_mul(exp_xx.iter(), c.iter());
+        let dxi = RistrettoPoint::multiscalar_mul(exp_xx.iter(), d.iter());
+        let cxiGdash = G_dash.decompress().unwrap() + cxi;
+        let dxiHdash = H_dash.decompress().unwrap() + dxi;
+
+        let v = statement
+            .C
+            .compare(cxiGdash.compress(), dxiHdash.compress());
+        println!("Verify C = com^x_i = {:?}", v);
+    }
     #[test]
     fn ek_creation_test() {
         let mut account_vector: Vec<Account> = Vec::new();
@@ -1062,7 +1105,7 @@ mod test {
         //     &b_vec,
         //     &tau_vec,
         // );
-        create_ek_pk(&shuffle.outputs, &b_dash, &a_0.clone(), G, H, &b_vec);
+        //create_ek_pk(&shuffle.outputs, &b_dash, &a_0.clone(), G, H, &b_vec);
         //     &tau_vec,)
         //create 2DArrays
         let comm: Vec<ElGamalCommitment> = shuffle
@@ -1144,35 +1187,21 @@ mod test {
         let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
         // gather g, h from Public key
         // gather g, h from Public key
-        let pk: Vec<RistrettoPublicKey> = shuffle
-            .inputs
-            .as_row_major()
-            .iter()
-            .map(|acc| acc.pk)
-            .collect();
-        let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
-        let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
-        // (G, H) = sum of all i (pk_i * x^i)
-        let G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
-        let H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
-        let pk = RistrettoPublicKey {
-            gr: G.compress(),
-            grsk: H.compress(),
-        };
+        let base_pk = RistrettoPublicKey::generate_base_pk();
 
         let a_0: Vec<Scalar> = vec![Scalar::from(3u64), Scalar::from(2u64), Scalar::from(1u64)];
 
         //Calling create ek_comm function directly
         let b_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
         let tau_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let (E_K_C, E_K_D) = create_ek_comm(
-            &shuffle.outputs,
-            &b_mat,
-            &a_0.clone(),
-            &pk,
-            &b_vec,
-            &tau_vec,
-        );
+        // let (E_K_C, E_K_D) = create_ek_comm(
+        //     &shuffle.outputs,
+        //     &b_mat,
+        //     &a_0.clone(),
+        //     &pk,
+        //     &b_vec,
+        //     &tau_vec,
+        // );
         //create_ek_pk(&shuffle.outputs, &b_dash, &a_0.clone(), G, H, &b_vec);
         //     &tau_vec,)
         //create 2DArrays
@@ -1198,9 +1227,9 @@ mod test {
 
         let e_k_c = create_ek_common(&comm_matrix_c_as_rows, &input);
         let e_k_d = create_ek_common(&comm_matrix_d_as_rows, &input);
-        let (e_K_c, e_K_d) = reencrypt_commitment_ek(&e_k_c, &e_k_d, &pk, &b_vec, &tau_vec);
-        assert_eq!(E_K_C, e_K_c);
-        assert_eq!(E_K_D, e_K_d);
+        let (e_K_c, e_K_d) = reencrypt_commitment_ek(&e_k_c, &e_k_d, &base_pk, &b_vec, &tau_vec);
+        // assert_eq!(E_K_C, e_K_c);
+        // assert_eq!(E_K_D, e_K_d);
     }
     #[test]
     fn E_k_pubkey_creation_test() {
@@ -1246,7 +1275,7 @@ mod test {
         //Calling create ek_comm function directly
         let b_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
 
-        let (E_K_G, E_K_H) = create_ek_pk(&shuffle.outputs, &b_dash, &a_0.clone(), G, H, &b_vec);
+        //  let (E_K_G, E_K_H) = (&shuffle.outputs, &b_dash, &a_0.clone(), G, H, &b_vec);
         //     &tau_vec,)
         //create 2DArrays
         let pkk: Vec<RistrettoPublicKey> = shuffle
@@ -1268,12 +1297,12 @@ mod test {
             perm_scalar_as_cols[2].clone(),
         ];
         let input = Array2D::from_columns(&perm_scalar_dash);
-
+        let base_pk = RistrettoPublicKey::generate_base_pk();
         let e_k_g = create_ek_common(&gr_matrix_as_rows, &input);
         let e_k_h = create_ek_common(&grsk_matrix_as_rows, &input);
-        let (e_K_g, e_K_h) = reencrypt_publickey_ek(&e_k_g, &e_k_h, G, H, &b_vec);
-        assert_eq!(E_K_G, e_K_g);
-        assert_eq!(E_K_H, e_K_h);
+        let (e_K_g, e_K_h) = reencrypt_publickey_ek(&e_k_g, &e_k_h, &base_pk, &b_vec);
+        // assert_eq!(E_K_G, e_K_g);
+        // assert_eq!(E_K_H, e_K_h);
     }
     #[test]
     fn just_test() {

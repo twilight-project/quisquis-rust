@@ -844,12 +844,12 @@ mod test {
 
         //create challenge x for b and b' vectors
         let x = Scalar::random(&mut OsRng);
+        let exp_xx: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
         //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
         let (_, b_dash) =
-            shuffle::create_b_b_dash(x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
+            shuffle::create_b_b_dash(&exp_xx, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
         //Create Pk^x^ for testing purposes here. Should be refactored later.0o0
         // x^i
-        let exp_xx: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
         println!("xx^i {:?}", exp_xx);
 
         // gather g, h from Public key
@@ -947,12 +947,12 @@ mod test {
 
         //create challenge x for b and b' vectors
         let x = Scalar::random(&mut OsRng);
-        //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
-        let (b_mat, _) =
-            shuffle::create_b_b_dash(x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
         //Create Pk^x^ for testing purposes here. Should be refactored later.
         // x^i
-        let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
+        let exp_xx: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
+        //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
+        let (b_mat, _) =
+            shuffle::create_b_b_dash(&exp_xx, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
         // gather g, h from Public key
         // gather g, h from Public key
         let pk: Vec<RistrettoPublicKey> = shuffle
@@ -1068,12 +1068,12 @@ mod test {
 
         //create challenge x for b and b' vectors
         let x = Scalar::random(&mut OsRng);
+        // x^i
+        let exp_xx: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
         //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
         let (b_mat, b_dash) =
-            shuffle::create_b_b_dash(x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
+            shuffle::create_b_b_dash(&exp_xx, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
         //Create Pk^x^ for testing purposes here. Should be refactored later.
-        // x^i
-        let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
         // gather g, h from Public key
         // gather g, h from Public key
         let pk: Vec<RistrettoPublicKey> = shuffle
@@ -1180,11 +1180,11 @@ mod test {
         //create challenge x for b and b' vectors
         let x = Scalar::random(&mut OsRng);
         //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
-        let (b_mat, _) =
-            shuffle::create_b_b_dash(x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
-        //Create Pk^x^ for testing purposes here. Should be refactored later.
         // x^i
-        let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
+        let exp_xx: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
+        let (b_mat, _) =
+            shuffle::create_b_b_dash(&exp_xx, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
+        //Create Pk^x^ for testing purposes here. Should be refactored later.
         // gather g, h from Public key
         // gather g, h from Public key
         let base_pk = RistrettoPublicKey::generate_base_pk();
@@ -1250,9 +1250,11 @@ mod test {
 
         //create challenge x for b and b' vectors
         let x = Scalar::random(&mut OsRng);
+        let exp_xx: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
+
         //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
         let (_, b_dash) =
-            shuffle::create_b_b_dash(x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
+            shuffle::create_b_b_dash(&exp_xx, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
         //Create Pk^x^ for testing purposes here. Should be refactored later.
         // x^i
         let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();

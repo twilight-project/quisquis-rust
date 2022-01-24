@@ -12,7 +12,10 @@ use crate::{
     elgamal::{elgamal::ElGamalCommitment, signed_integer::SignedInteger},
     pedersen::VectorPedersenGens,
     ristretto::{RistrettoPublicKey, RistrettoSecretKey},
-    shuffle::{shuffle::ShuffleProof, Shuffle},
+    shuffle::{
+        shuffle::{ShuffleProof, ShuffleStatement},
+        Shuffle,
+    },
 };
 use curve25519_dalek::traits::MultiscalarMul;
 use curve25519_dalek::{
@@ -435,77 +438,24 @@ impl<'a> Prover<'a> {
             let _ = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
         }
     }
-    ///!Prover view of the Shuffle Argument proof
-    ///
-    pub fn complete_shuffle_argument_prover(
-        shuffle: &Shuffle,
-        pc_gens: &PedersenGens,
-        xpc_gens: &VectorPedersenGens,
-    ) -> ShuffleProof {
-        //Computes product and multiexponential argument to produce Shuffle proof.
-        // lets start a transcript and a prover script
-        let mut transcript = Transcript::new(b"ShuffleProof");
-        let mut prover = Prover::new(b"ShuffleProver", &mut transcript);
-        //get permuatation matrix as witness to shuffle
-        let witness = shuffle.pi.get_permutation_as_scalar_matrix();
-        prover.scalars = witness.elements_row_major_iter().cloned().collect();
+    // /!Prover view of the Shuffle Argument proof
+    // /
+    // pub fn complete_shuffle_argument_prover(
+    //     shuffle: &Shuffle,
+    //     pc_gens: &PedersenGens,
+    //     xpc_gens: &VectorPedersenGens,
+    // ) -> (ShuffleProof, ShuffleStatement) {
+    //     //Computes product and multiexponential argument to produce Shuffle proof.
+    //     // lets start a transcript and a prover script
+    //     let mut transcript = Transcript::new(b"ShuffleProof");
+    //     let mut prover = Prover::new(b"ShuffleProver", &mut transcript);
+    //     //get permuatation matrix as witness to shuffle
+    //     let witness = shuffle.pi.get_permutation_as_scalar_matrix();
+    //     prover.scalars = witness.elements_row_major_iter().cloned().collect();
 
-        let (mut prover, transcript_rng) = prover.prove_impl(); //confirm
+    //     let (mut prover, _transcript_rng) = prover.prove_impl(); //confirm
 
-        ShuffleProof::create_shuffle_proof(&mut prover, shuffle, &witness, pc_gens, xpc_gens)
-    }
-
-    // verify_update_ddh_prover confirms if (G,H,G',H') is a DDH tuple and (G,H) is updated correctly using rho
-    pub fn verify_update_ddh_prover(
-        g: RistrettoPoint,
-        h: RistrettoPoint,
-        g_dash: RistrettoPoint,
-        h_dash: RistrettoPoint,
-        rho: Scalar,
-    ) -> (Scalar, Scalar) {
-        // lets create random scalar r with the transcript
-        let mut transcript = Transcript::new(b"VerifyUpdateDDH");
-        let mut prover = Prover::new(b"DDHTuple", &mut transcript);
-
-        prover.scalars.push(rho);
-
-        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
-
-        // Generate a single blinding factor
-        let r_scalar = Scalar::random(&mut transcript_rng);
-        // first messasge
-        let g_r = g * r_scalar;
-        let h_r = h * r_scalar;
-
-        //allocates points to Transcript
-        prover.allocate_point(b"g", g.compress());
-        prover.allocate_point(b"g_dash", g_dash.compress());
-        prover.allocate_point(b"h", h.compress());
-        prover.allocate_point(b"h_dash", h_dash.compress());
-
-        prover.allocate_point(b"gr", g_r.compress());
-        prover.allocate_point(b"hr", h_r.compress());
-        // obtain a scalar challenge
-        let x = transcript.get_challenge(b"chal");
-        //proof
-        let x_rho = x * rho;
-        let z = r_scalar - x_rho;
-
-        return (z, x);
-    }
-
-    // Shuffle proof prover implementation.
-    // pub fn shuffle_proof_prover() -> (Scalar,Scalar){
-    //     // lets create random scalar r with the transcript
-    //     let mut transcript = Transcript::new(b"VerifyUpdateDDH");
-    //     let mut prover = Prover::new(b"DDHTuple", &mut transcript);
-
-    //     prover.scalars.push(rho);
-
-    //     let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
-
-    //     // Generate a single blinding factor
-    //     let r_scalar = Scalar::random(&mut transcript_rng);
+    //     ShuffleProof::create_shuffle_proof(&mut prover, shuffle, &witness, pc_gens, xpc_gens)
     // }
 }
 // Prover's scope

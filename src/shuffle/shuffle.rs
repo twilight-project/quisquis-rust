@@ -7,6 +7,7 @@ use crate::{
     accounts::{Account, Prover, Verifier},
     pedersen::vectorpedersen::VectorPedersenGens,
     ristretto::RistrettoPublicKey,
+    shuffle::ddh::{DDHProof, DDHStatement},
     shuffle::multiexponential::{MultiexpoProof, MultiexpoStatement},
     shuffle::product::{ProductProof, ProductStatement},
     shuffle::vectorutil,
@@ -89,6 +90,7 @@ pub struct ShuffleStatement {
     pub product_state: ProductStatement,
     pub multiexpo_pk_state: MultiexpoStatement,
     pub multiexpo_comit_state: MultiexpoStatement,
+    pub ddh_statement: DDHStatement,
 }
 #[derive(Debug, Clone)]
 pub struct ShuffleProof {
@@ -97,6 +99,7 @@ pub struct ShuffleProof {
     pub product_proof: ProductProof,
     pub multiexpo_pk: MultiexpoProof,
     pub multiexpo_comit: MultiexpoProof,
+    pub ddh_proof: DDHProof,
 }
 
 impl Shuffle {
@@ -295,6 +298,9 @@ impl ShuffleProof {
         //  println!("True OUT");
         //}
 
+        //create DDH Proof
+        let (ddh_proof, ddh_statement) =
+            DDHProof::create_verify_update_ddh_prove(prover, x, &pk, shuffle.rho);
         //create -rho as witness for Multiexpo_commitment_proof
 
         let neg_rho = -shuffle.rho;
@@ -335,11 +341,13 @@ impl ShuffleProof {
                 product_proof: product_proof,
                 multiexpo_pk: multiexpo_pk_proof,
                 multiexpo_comit: multiexpo_comit_proof,
+                ddh_proof: ddh_proof,
             },
             ShuffleStatement {
                 product_state: product_state,
                 multiexpo_pk_state: multiexpo_pk_state,
                 multiexpo_comit_state: multiexpo_comit_state,
+                ddh_statement: ddh_statement,
             },
         )
     }
@@ -392,6 +400,7 @@ impl ShuffleProof {
             &xpc_gens,
             &base_pk,
         );
+
         let pk: Vec<RistrettoPublicKey> = shuffle
             .inputs
             .as_row_major()
@@ -408,7 +417,9 @@ impl ShuffleProof {
             gr: G.compress(),
             grsk: H.compress(),
         };
-
+        let verify_ddh =
+            self.ddh_proof
+                .verify_ddh_proof(verifier, &statement.ddh_statement, &G, &H);
         let verify_comit_multi = self
             .multiexpo_comit
             .verify_multiexponential_elgamal_commit_proof(
@@ -419,7 +430,7 @@ impl ShuffleProof {
                 &xpc_gens,
                 &pk_GH,
             );
-        verify_comit_multi && verify_pk_multi && verify_product
+        verify_comit_multi && verify_pk_multi && verify_product && verify_ddh
     }
 }
 /// Prepare b and b' vector to be passed as witness to multiexponentiation proof

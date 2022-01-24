@@ -21,7 +21,7 @@ use crate::shuffle::shuffle::COLUMNS;
 ///Single value Product argument
 ///
 #[derive(Debug, Clone)]
-pub struct SVPArgument {
+pub struct SVPStatement {
     pub commitment_a: CompressedRistretto,
     pub b: Scalar,
 }
@@ -152,7 +152,7 @@ impl SVPProof {
     pub fn verify(
         &self,
         verifier: &mut Verifier,
-        svparg: &SVPArgument,
+        svparg: &SVPStatement,
         /* x: Scalar,*/ xpc_gens: &VectorPedersenGens,
     ) -> bool {
         //Verification Code
@@ -285,7 +285,7 @@ mod test {
             s,
             &bvec,
         );
-        let arg = SVPArgument {
+        let arg = SVPStatement {
             commitment_a: cb.compress(),
             b: b,
         };

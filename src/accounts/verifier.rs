@@ -281,46 +281,6 @@ impl<'a> Verifier<'a> {
             let _ = rp_verifier.range_proof_verifier(epsilon_account[i].comm.d);
         }
     }
-
-    // verify_update_ddh_prover confirms if (G,H,G',H') is a DDH tuple and (G,H) is updated correctly
-    pub fn verify_update_ddh_verifier(
-        g: CompressedRistretto,
-        h: CompressedRistretto,
-        g_dash: CompressedRistretto,
-        h_dash: CompressedRistretto,
-        z: Scalar,
-        x: Scalar,
-    ) -> bool {
-        // lets create random scalar r with the transcript
-        let mut transcript = Transcript::new(b"VerifyUpdateDDH");
-        let mut verifier = Verifier::new(b"DDHTuple", &mut transcript);
-
-        //allocates points to Transcript
-        verifier.allocate_point(b"g", g);
-        verifier.allocate_point(b"g_dash", g_dash);
-        verifier.allocate_point(b"h", h);
-        verifier.allocate_point(b"h_dash", h_dash);
-        //recreate g_r and h_r
-        let combined_scalars = vec![z, x];
-        let g_point = vec![g, g_dash];
-        let g_r = Verifier::multiscalar_multiplication(&combined_scalars, &g_point)
-            .unwrap()
-            .compress();
-        let h_point = vec![h, h_dash];
-        let h_r = Verifier::multiscalar_multiplication(&combined_scalars, &h_point)
-            .unwrap()
-            .compress();
-
-        verifier.allocate_point(b"gr", g_r);
-        verifier.allocate_point(b"hr", h_r);
-        // obtain a scalar challenge
-        let c = transcript.get_challenge(b"chal");
-        if x == c {
-            return true;
-        } else {
-            return false;
-        }
-    }
 }
 
 // ------------------------------------------------------------------------

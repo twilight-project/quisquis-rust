@@ -7,13 +7,15 @@ use crate::{
     accounts::{Account, Prover, Verifier},
     pedersen::vectorpedersen::VectorPedersenGens,
     ristretto::RistrettoPublicKey,
-    shuffle::product::ProductProof,
+    shuffle::multiexponential::{MultiexpoProof, MultiexpoStatement},
+    shuffle::product::{ProductProof, ProductStatement},
     shuffle::vectorutil,
 };
 use array2d::Array2D;
 use bulletproofs::PedersenGens;
 use curve25519_dalek::traits::MultiscalarMul;
 
+use crate::keys::PublicKey;
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
@@ -82,12 +84,19 @@ pub struct Shuffle {
 }
 ///Shuffle argument proof
 ///
+/// #[derive(Debug, Clone)]
+pub struct ShuffleStatement {
+    pub product_state: ProductStatement,
+    pub multiexpo_pk_state: MultiexpoStatement,
+    pub multiexpo_comit_state: MultiexpoStatement,
+}
 #[derive(Debug, Clone)]
 pub struct ShuffleProof {
     pub c_A: Vec<CompressedRistretto>,
     pub c_tau: Vec<CompressedRistretto>,
     pub product_proof: ProductProof,
-    //add multiexpo proof here
+    pub multiexpo_pk: MultiexpoProof,
+    pub multiexpo_comit: MultiexpoProof,
 }
 
 impl Shuffle {
@@ -213,20 +222,19 @@ impl ShuffleProof {
         witness: &Array2D<Scalar>,
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-    ) -> ShuffleProof {
+    ) -> (ShuffleProof, ShuffleStatement) {
         //commitment on Witness A using r
         let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
         //convert to column major representation
         let perm_scalar_as_cols = witness.as_columns();
 
-        //compute Xcomit on columns of A
+        //compute Xcomit on columns of A.
         let mut comit_A = Vec::<CompressedRistretto>::new();
         for i in 0..COLUMNS {
             comit_A.push(xpc_gens.commit(&perm_scalar_as_cols[i], r[i]).compress());
         }
 
         //commitment on tau using r'
-        //commitment on Witness A using r
         let r_dash: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
         //convert to column major representation
         let tau_as_cols = shuffle.shuffled_tau.as_columns();
@@ -236,7 +244,7 @@ impl ShuffleProof {
         for i in 0..COLUMNS {
             comit_tau.push(xpc_gens.commit(&tau_as_cols[i], r_dash[i]).compress());
         }
-
+        //Tau commitment from HadamardProduct should be used here.
         //add comit_A and comit_tau in Transcript
         for i in 0..comit_A.iter().count() {
             prover.allocate_point(b"ACommitment", comit_A[i]);
@@ -245,13 +253,15 @@ impl ShuffleProof {
         //create challenge x for b and b' vectors
         let x = prover.get_challenge(b"xchallenge");
         //let x = Scalar::random(&mut OsRng);
+        //create x^i for i = 1..N
+        let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
         //create b and b' vectors to be used for Multiexponentiationa and hadamard proof later
-        let (b_mat, b_dash) = create_b_b_dash(x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
+
+        let (b_matrix, b_dash_matrix) =
+            create_b_b_dash(&exp_x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
         // println!("{:?}", b_mat);
 
-        //Create Pk^x^ for testing purposes here. Should be refactored later.
-        // x^i
-        let exp_xx: Vec<_> = vectorutil::exp_iter(x).take(9).collect();
+        //Create G,H for DDH and Multiexpo proof generation
         // gather g, h from Public key
         // gather g, h from Public key
         let pk: Vec<RistrettoPublicKey> = shuffle
@@ -263,14 +273,15 @@ impl ShuffleProof {
         let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
         let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
         // (G, H) = sum of all i (pk_i * x^i)
-        let G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
-        let H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
+        let G = RistrettoPoint::multiscalar_mul(exp_x.iter(), g_i.iter());
+        let H = RistrettoPoint::multiscalar_mul(exp_x.iter(), h_i.iter());
 
-        let pk = RistrettoPublicKey {
+        let pk_GH = RistrettoPublicKey {
             gr: G.compress(),
             grsk: H.compress(),
         };
-
+        let (product_proof, product_state) =
+            ProductProof::create_product_argument_prove(prover, &b_matrix, &pc_gens, &xpc_gens, x);
         //JUST FOR CHECKING
         /*  let pk_out: Vec<RistrettoPublicKey> = self.outputs.as_row_major().iter().map(|acc| acc.pk).collect();
         let g_i_out: Vec<_> = pk_out.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
@@ -284,28 +295,53 @@ impl ShuffleProof {
         //  println!("True OUT");
         //}
 
-        //create vector of -rho of length N
-        let neg_rho = -shuffle.rho;
-        let rho_vec: Vec<Scalar> = vec![
-            neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho, neg_rho,
-        ];
+        //create -rho as witness for Multiexpo_commitment_proof
 
-        //create rho = -rho . b
-        let rho_b = vectorutil::vector_multiply_scalar(&rho_vec, &b_mat.as_row_major());
+        let neg_rho = -shuffle.rho;
 
         //Calling Multiexponentiation Prove for PK Update and shuffle
-        //self.multiexp_pubkey_prove(&b_dash, &pc_gens , &xpc_gens, G, H);
+        //create the ciphertext vector
+        let rpk: Vec<RistrettoPublicKey> = shuffle
+            .outputs
+            .as_row_major()
+            .iter()
+            .map(|acc| acc.pk)
+            .collect();
+        let (multiexpo_pk_proof, multiexpo_pk_state) =
+            MultiexpoProof::create_multiexponential_pubkey_proof(
+                prover,
+                &rpk,
+                &b_dash_matrix,
+                &pc_gens,
+                &xpc_gens,
+                &pk_GH,
+            );
         //Calling Multiexponentiation Prove for COMIT Update and shuffle
         // self.multiexp_commit_prove(&b_mat, &pc_gens, &xpc_gens, &pk, rho_b);
-
-        let (product_proof, x) =
-            ProductProof::create_product_argument_prove(prover, &b_mat, &pc_gens, &xpc_gens, x);
-
-        ShuffleProof {
-            c_A: comit_A,
-            c_tau: comit_tau,
-            product_proof: product_proof,
-        }
+        let comm: Vec<_> = shuffle
+            .outputs
+            .as_row_major()
+            .iter()
+            .map(|acc| acc.comm)
+            .collect();
+        let (multiexpo_comit_proof, multiexpo_comit_state) =
+            MultiexpoProof::create_multiexponential_elgamal_commit_proof(
+                prover, &comm, &b_matrix, &pc_gens, &xpc_gens, &pk_GH, neg_rho,
+            );
+        (
+            ShuffleProof {
+                c_A: comit_A,
+                c_tau: comit_tau,
+                product_proof: product_proof,
+                multiexpo_pk: multiexpo_pk_proof,
+                multiexpo_comit: multiexpo_comit_proof,
+            },
+            ShuffleStatement {
+                product_state: product_state,
+                multiexpo_pk_state: multiexpo_pk_state,
+                multiexpo_comit_state: multiexpo_comit_state,
+            },
+        )
     }
 
     ///!Shuffle Proof Verification
@@ -313,27 +349,90 @@ impl ShuffleProof {
     pub fn verify(
         &self,
         verifier: &mut Verifier,
+        statement: &ShuffleStatement,
+        shuffle: &Shuffle,
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-    ) /*-> bool*/
-    {
+    ) -> bool {
         //check if C_A and C_B ∈ G^m
         //all vectors should be of length m
-        //assert_eq!(a_comit.len(), ROWS);
-        //assert_eq!(b_comit.len(), ROWS);
+        assert_eq!(
+            statement.product_state.multi_hadamard_statement.c_A.len(),
+            ROWS
+        );
+        assert_eq!(
+            statement
+                .product_state
+                .multi_hadamard_statement
+                .zero_statement
+                .c_B
+                .len(),
+            ROWS
+        );
+        //recreate challenge x
+        //add comit_A and comit_tau in Transcript
+        for i in 0..self.c_A.iter().count() {
+            verifier.allocate_point(b"ACommitment", self.c_A[i]);
+            verifier.allocate_point(b"tauCommitment", self.c_tau[i]);
+        }
+        //create challenge x for b and b' vectors
+        let x = verifier.get_challenge(b"xchallenge");
+        //create x^i for i = 1..N
+        let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
+
+        let verify_product =
+            self.product_proof
+                .verify(verifier, &statement.product_state, &pc_gens, &xpc_gens, x);
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+        let verify_pk_multi = self.multiexpo_pk.verify_multiexponential_pubkey_proof(
+            verifier,
+            &statement.multiexpo_pk_state,
+            &shuffle.outputs.as_row_major(),
+            &pc_gens,
+            &xpc_gens,
+            &base_pk,
+        );
+        let pk: Vec<RistrettoPublicKey> = shuffle
+            .inputs
+            .as_row_major()
+            .iter()
+            .map(|acc| acc.pk)
+            .collect();
+        let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
+        let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
+        // (G, H) = sum of all i (pk_i * x^i)
+        let G = RistrettoPoint::multiscalar_mul(exp_x.iter(), g_i.iter());
+        let H = RistrettoPoint::multiscalar_mul(exp_x.iter(), h_i.iter());
+
+        let pk_GH = RistrettoPublicKey {
+            gr: G.compress(),
+            grsk: H.compress(),
+        };
+
+        let verify_comit_multi = self
+            .multiexpo_comit
+            .verify_multiexponential_elgamal_commit_proof(
+                verifier,
+                &statement.multiexpo_comit_state,
+                &shuffle.outputs.as_row_major(),
+                &pc_gens,
+                &xpc_gens,
+                &pk_GH,
+            );
+        verify_comit_multi && verify_pk_multi && verify_product
     }
 }
 /// Prepare b and b' vector to be passed as witness to multiexponentiation proof
 ///
 pub fn create_b_b_dash(
-    x: Scalar,
-    tau: &Vec<Scalar>,
+    exp_x: &[Scalar],
+    tau: &[Scalar],
     p: &Permutation,
 ) -> (Array2D<Scalar>, Array2D<Scalar>) {
     let perm = p.perm_matrix.as_row_major();
     //create x^i for i = 1..N
-    let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
-    println!("x^i {:?}", exp_x);
+    // let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
+    // println!("x^i {:?}", exp_x);
     let mut x_psi: Vec<Scalar> = Vec::with_capacity(N);
 
     //create 1/tau
@@ -362,6 +461,41 @@ mod test {
         keys::{PublicKey, SecretKey},
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
     };
+    use merlin::Transcript;
+    #[test]
+    fn shuffle_proof_test() {
+        let mut account_vector: Vec<Account> = Vec::new();
+        // lets create these accounts and associated keypairs
+        for _ in 0..9 {
+            let mut rng = rand::thread_rng();
+            let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
+            let acc = Account::generate_account(pk);
+            account_vector.push(acc);
+        }
+        let result = Shuffle::output_shuffle(&account_vector);
+        let shuffle = result.unwrap();
+        let pc_gens = PedersenGens::default();
+        //generate Xcomit generator points of length m+1
+        let xpc_gens = VectorPedersenGens::new(ROWS + 1);
+
+        let mut transcript_p = Transcript::new(b"ShuffleProof");
+        let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
+        let witness = shuffle.pi.get_permutation_as_scalar_matrix();
+        let (proof, statement) = ShuffleProof::create_shuffle_proof(
+            &mut prover,
+            &shuffle,
+            &witness,
+            &pc_gens,
+            &xpc_gens,
+        );
+
+        let mut transcript_v = Transcript::new(b"ShuffleProof");
+        let mut verifier = Verifier::new(b"Shuffle", &mut transcript_p);
+        let verify = proof.verify(&mut verifier, &statement, &shuffle, &pc_gens, &xpc_gens);
+        assert!(verify);
+    }
+
     #[test]
     fn permutation_matrix_test() {
         let perm = Permutation::new(&mut OsRng, N);
@@ -501,8 +635,9 @@ mod test {
         let tau: Vec<_> = (0..9).map(|_| Scalar::random(&mut OsRng)).collect();
         let perm = Permutation::new(&mut OsRng, N);
         //let perm_vec = perm.perm_matrix.as_row_major();
-
-        let (b, b_dash) = create_b_b_dash(x, &tau, &perm);
+        //create x^i for i = 1..N
+        let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
+        let (b, b_dash) = create_b_b_dash(&exp_x, &tau, &perm);
         //test
         let b_dash_tau: Vec<Scalar> = b_dash
             .as_row_major()
@@ -522,7 +657,9 @@ mod test {
         let matrix = Array2D::from_row_major(&vec![2, 1, 3, 8, 7, 6, 4, 5, 9], ROWS, COLUMNS);
         let mut permutation = Permutation::new(&mut OsRng, N);
         permutation.set(matrix);
-        let (b, _) = create_b_b_dash(x, &tau, &permutation);
+        //create x^i for i = 1..N
+        let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
+        let (b, _) = create_b_b_dash(&exp_x, &tau, &permutation);
 
         let b_reference: Vec<Scalar> = vec![
             Scalar::from(9u64),

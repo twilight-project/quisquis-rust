@@ -202,7 +202,7 @@ impl MultiexpoProof {
         let verify_C = multiexpo_statement
             .C
             .compare(self.E_k_0[ROWS], self.E_k_1[ROWS]);
-        println!("Verify C == Em {:?}", verify_C);
+        // println!("Verify C == Em {:?}", verify_C);
         //assert_eq!(self.E_k_0[ROWS], C.c);
         //Create new transcript
         verifier.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
@@ -249,11 +249,11 @@ impl MultiexpoProof {
         let (E_k_c_x_k, E_k_d_x_k, c_c_x, c_d_x) = self.verify_multiexpo_ek(&x_exp, &c, &d);
         let rhs_c = c_c_x + c_bb.c.decompress().unwrap();
         let rhs_d = c_d_x + c_bb.d.decompress().unwrap();
-        if E_k_c_x_k.unwrap() == rhs_c && E_k_d_x_k.unwrap() == rhs_d {
-            println!("lhs == rhs TRUE");
-        } else {
-            println!("Lhs ==rhs  FALSE");
-        }
+        // if E_k_c_x_k.unwrap() == rhs_c && E_k_d_x_k.unwrap() == rhs_d {
+        //     println!("lhs == rhs TRUE");
+        // } else {
+        //     println!("Lhs ==rhs  FALSE");
+        // }
         E_k_c_x_k.unwrap() == rhs_c && E_k_d_x_k.unwrap() == rhs_d && verify_scalars
     }
     //b' is the witness and trated as A in the arguent described in paper
@@ -436,7 +436,7 @@ impl MultiexpoProof {
         let verify_C = multiexpo_statement
             .C
             .compare(self.E_k_0[ROWS], self.E_k_1[ROWS]);
-        println!("Verify C {:?}", verify_C);
+        // println!("Verify C {:?}", verify_C);
         //Create new transcript
         verifier.new_domain_sep(b"MultiExponentialPubKeyProof");
         //recreate Challenge from Transcript
@@ -499,16 +499,16 @@ impl MultiexpoProof {
             x_exp.iter(),
             self.c_B_k.iter().map(|pt| pt.decompress()),
         );
-        if c_a_0_c_a_x_vec == c_a_r {
-            println!("CA TRUE");
-        } else {
-            println!("CA FALSE");
-        }
-        if comit_b_s == c_b_k_x_k.unwrap() {
-            println!("CB TRUE");
-        } else {
-            println!("CB FALSE");
-        }
+        // if c_a_0_c_a_x_vec == c_a_r {
+        //     println!("CA TRUE");
+        // } else {
+        //     println!("CA FALSE");
+        // }
+        // if comit_b_s == c_b_k_x_k.unwrap() {
+        //     println!("CB TRUE");
+        // } else {
+        //     println!("CB FALSE");
+        // }
         c_a_0_c_a_x_vec == c_a_r && comit_b_s == c_b_k_x_k.unwrap()
     }
     fn verify_multiexpo_ek(

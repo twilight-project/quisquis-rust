@@ -89,8 +89,8 @@ pub struct Shuffle {
 /// #[derive(Debug, Clone)]
 pub struct ShuffleStatement {
     pub product_state: ProductStatement,
-    pub multiexpo_pk_state: MultiexpoStatement,
-    pub multiexpo_comit_state: MultiexpoStatement,
+    // pub multiexpo_pk_state: MultiexpoStatement,
+    // pub multiexpo_comit_state: MultiexpoStatement,
     pub ddh_statement: DDHStatement,
 }
 #[derive(Debug, Clone)]
@@ -230,25 +230,25 @@ impl ShuffleProof {
         xpc_gens: &VectorPedersenGens,
     ) -> (ShuffleProof, ShuffleStatement) {
         //commitment on Witness A using r
-        let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let r: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
         //convert to column major representation
-        let perm_scalar_as_cols = witness.as_columns();
+        let perm_scalar_as_rows = witness.as_rows();
 
-        //compute Xcomit on columns of A.
+        //compute Xcomit on rows of A.
         let mut comit_A = Vec::<CompressedRistretto>::new();
-        for i in 0..COLUMNS {
-            comit_A.push(xpc_gens.commit(&perm_scalar_as_cols[i], r[i]).compress());
+        for i in 0..ROWS {
+            comit_A.push(xpc_gens.commit(&perm_scalar_as_rows[i], r[i]).compress());
         }
 
         //commitment on tau using r'
-        let r_dash: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let r_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
         //convert to column major representation
-        let tau_as_cols = shuffle.shuffled_tau.as_columns();
+        let tau_as_rows = shuffle.shuffled_tau.as_rows();
 
         //compute Xcomit on columns of tau
         let mut comit_tau = Vec::<CompressedRistretto>::new();
         for i in 0..COLUMNS {
-            comit_tau.push(xpc_gens.commit(&tau_as_cols[i], r_dash[i]).compress());
+            comit_tau.push(xpc_gens.commit(&tau_as_rows[i], r_dash[i]).compress());
         }
         //Tau commitment from HadamardProduct should be used here.
         //add comit_A and comit_tau in Transcript
@@ -268,22 +268,22 @@ impl ShuffleProof {
             create_b_b_dash(&exp_x, &shuffle.shuffled_tau.as_row_major(), &shuffle.pi);
         // println!("{:?}", b_mat);
         //convert to column major representation
-        let b_as_cols = b_matrix.as_columns();
+        let b_as_rows = b_matrix.as_rows();
         //compute Xcomit on columns of b
         //commitment on b using s
-        let s: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let s: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
         let mut comit_b = Vec::<CompressedRistretto>::new();
-        for i in 0..COLUMNS {
-            comit_b.push(xpc_gens.commit(&b_as_cols[i], s[i]).compress());
+        for i in 0..ROWS {
+            comit_b.push(xpc_gens.commit(&b_as_rows[i], s[i]).compress());
         }
         //convert to column major representation
-        let b_dash_as_cols = b_dash_matrix.as_columns();
+        let b_dash_as_rows = b_dash_matrix.as_rows();
         //compute Xcomit on columns of b'
         //commitment on b' using s'
-        let s_dash: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let s_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
         let mut comit_b_dash = Vec::<CompressedRistretto>::new();
-        for i in 0..COLUMNS {
-            comit_b_dash.push(xpc_gens.commit(&b_dash_as_cols[i], s_dash[i]).compress());
+        for i in 0..ROWS {
+            comit_b_dash.push(xpc_gens.commit(&b_dash_as_rows[i], s_dash[i]).compress());
         }
         //add comit_b and comit_b_dash in Transcript
         for i in 0..comit_b.iter().count() {
@@ -306,7 +306,7 @@ impl ShuffleProof {
         let t: Vec<_> = r.iter().zip(s.iter()).map(|(r, s)| r * y + s).collect();
 
         let e: Vec<_> = f.iter().map(|f| f - z).collect();
-        let e_2d = Array2D::from_row_major(&e, ROWS, COLUMNS);
+        let e_2d = Array2D::from_column_major(&e, ROWS, COLUMNS);
         let (product_proof, product_state) =
             ProductProof::create_product_argument_prove(prover, &e_2d, &t, &pc_gens, &xpc_gens);
         //Create G,H for DDH and Multiexpo proof generation
@@ -353,28 +353,28 @@ impl ShuffleProof {
         // create base pk pair for reencryption in proof
         let base_pk = RistrettoPublicKey::generate_base_pk();
         //Calling Multiexponentiation Prove for Pk Update and shuffle
-        let (multiexpo_pk_proof, multiexpo_pk_state) =
-            MultiexpoProof::create_multiexponential_pubkey_proof(
-                prover,
-                &upk,
-                &b_dash_matrix,
-                &pc_gens,
-                &xpc_gens,
-                &base_pk,
-            );
+        let multiexpo_pk_proof = MultiexpoProof::create_multiexponential_pubkey_proof(
+            prover,
+            &upk,
+            &b_dash_matrix,
+            &s_dash,
+            &pc_gens,
+            &xpc_gens,
+            &base_pk,
+        );
         //create -rho as witness for Multiexpo_commitment_proof
         let neg_rho = -shuffle.rho;
         //Calling Multiexponentiation Prove for Commitment Update and shuffle
-        let (multiexpo_comit_proof, multiexpo_comit_state) =
-            MultiexpoProof::create_multiexponential_elgamal_commit_proof(
-                prover,
-                &commitment,
-                &b_matrix,
-                &pc_gens,
-                &xpc_gens,
-                &pk_GH,
-                neg_rho,
-            );
+        let multiexpo_comit_proof = MultiexpoProof::create_multiexponential_elgamal_commit_proof(
+            prover,
+            &commitment,
+            &b_matrix,
+            &s,
+            &pc_gens,
+            &xpc_gens,
+            &pk_GH,
+            neg_rho,
+        );
         (
             ShuffleProof {
                 c_A: comit_A,
@@ -388,8 +388,8 @@ impl ShuffleProof {
             },
             ShuffleStatement {
                 product_state: product_state,
-                multiexpo_pk_state: multiexpo_pk_state,
-                multiexpo_comit_state: multiexpo_comit_state,
+                //multiexpo_pk_state: multiexpo_pk_state,
+                //multiexpo_comit_state: multiexpo_comit_state,
                 ddh_statement: ddh_statement,
             },
         )
@@ -495,21 +495,24 @@ impl ShuffleProof {
         );
         let verify_pk_multi = self.multiexpo_pk.verify_multiexponential_pubkey_proof(
             verifier,
-            &statement.multiexpo_pk_state,
+            &self.c_B_dash,
             &shuffle.outputs.as_row_major(),
             &pc_gens,
             &xpc_gens,
             &base_pk,
+            &pk_GH,
         );
         let verify_comit_multi = self
             .multiexpo_comit
             .verify_multiexponential_elgamal_commit_proof(
                 verifier,
-                &statement.multiexpo_comit_state,
+                &self.c_B,
                 &shuffle.outputs.as_row_major(),
+                &shuffle.inputs.as_row_major(),
                 &pc_gens,
                 &xpc_gens,
                 &pk_GH,
+                &exp_x,
             );
         println!(
             "MC {:?}, MPK {:?}, P {:?}, DDH {:?}",

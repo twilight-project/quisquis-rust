@@ -80,8 +80,8 @@ pub struct ProductProof {
 impl ProductProof {
     pub fn create_product_argument_prove(
         prover: &mut Prover,
-        witness_matrix: &Array2D<Scalar>, //witness
-        witness_r: &[Scalar],             //random scalar for Commiting on witness
+        witness_matrix: &Array2D<Scalar>, //witness in column major order
+        witness_r: &[Scalar], //random scalar vector of length m for Commiting on witness
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
     ) -> (ProductProof, ProductStatement) {
@@ -89,15 +89,16 @@ impl ProductProof {
         let witness_as_cols = witness_matrix.as_columns();
 
         //compute Xcomit on Witness Matrix
-        let mut c_A = Vec::<RistrettoPoint>::new();
-        for i in 0..COLUMNS {
-            c_A.push(xpc_gens.commit(&witness_as_cols[i], witness_r[i]));
+        let mut c_prod_A = Vec::<RistrettoPoint>::new();
+        for i in 0..ROWS {
+            c_prod_A.push(xpc_gens.commit(&witness_as_cols[i], witness_r[i]));
         }
         // cb = com(product (from 1 to m) a1j, ..., product (from 1 to m)
         //println!("{:?}",pi_2d);
         let mut bvec = Vec::<Scalar>::new();
+        let mut product: Scalar;
         for row_iter in witness_matrix.rows_iter() {
-            let mut product = Scalar::one();
+            product = Scalar::one();
             for element in row_iter {
                 product = product * element;
             }
@@ -125,7 +126,7 @@ impl ProductProof {
                 &pc_gens,
                 &xpc_gens,
                 &bvec,
-                &c_A,
+                &c_prod_A,
                 &cb,
                 witness_r,
                 s,
@@ -153,7 +154,7 @@ impl ProductProof {
         &self,
         verifier: &mut Verifier,
         prod_statement: &ProductStatement,
-        c_A: &[RistrettoPoint],
+        c_prod_A: &[RistrettoPoint],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
     ) -> bool {
@@ -164,7 +165,7 @@ impl ProductProof {
         self.multi_hadamard_proof.verify(
             verifier,
             &prod_statement.multi_hadamard_statement,
-            c_A,
+            c_prod_A,
             pc_gens,
             xpc_gens,
         ) && self /*check Single Value Product Proof*/

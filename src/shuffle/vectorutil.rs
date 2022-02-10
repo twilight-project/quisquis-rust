@@ -61,6 +61,13 @@ pub fn vector_multiply_scalar(row: &[Scalar], col: &[Scalar]) -> Scalar {
         .fold(Scalar::zero(), |sum, (i, j)| sum + i * j)
 }
 
+pub fn hadamard_product(a: &[Scalar], b: &[Scalar]) -> Vec<Scalar> {
+    if a.len() != b.len() {
+        panic!("hadamard_product(a,b): lengths of vectors do not match");
+    }
+    a.iter().zip(b.iter()).map(|(i, j)| i * j).collect()
+}
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------

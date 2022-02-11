@@ -144,6 +144,20 @@ impl Polynomial {
         }
     }
 
+    //Polynomial Scalar Divide: a(X) / c
+    fn divide_scalar(&self, scalar: Scalar) -> Self {
+        //create polynomial with zero coefficients with the highest term
+        let mut coefficients = self.coefficients.clone();
+        let inv_scalar = scalar.invert();
+        for i in 0..=self.degree {
+            coefficients[i] = coefficients[i] * inv_scalar;
+        }
+        Self {
+            coefficients,
+            degree: self.degree,
+        }
+    }
+
     // Polynomial Multipliucation modulo m: a(X) * b(X)
     fn multiply(&self, other: &Self) -> Self {
         // If either polynomial is zero, return zero
@@ -170,8 +184,77 @@ impl Polynomial {
             degree: degree,
         }
     }
-}
+    //Polynomial Division modulo m
+    //Works correctly only for this protocol
+    //Assumes that the polynomial is monic
+    //Assumes that the polynomial a(X) has higher degree than b(X)
+    //Assumes that both the polynomials have degree greater than 0
+    //Evaluates (a(X) / b(X))
+    //REMOVED: Also checks correctness of resulting polynomial for protocol
+    pub fn polynomial_division(&mut self, other: &mut Self) -> Self {
+        self.poly_deg_adjust();
+        other.poly_deg_adjust();
 
+        let degree = self.degree - other.degree;
+
+        let mut result_coeff: Vec<Scalar> = vec![Scalar::from(0u64); degree + 1];
+
+        // while (self.degree >= other.degree) {
+        //     let poly_t = create_ND_poly(self.coefficients[self.degree], self.degree - other.degree);
+        //     result_coeff[degree] = poly_t.coefficients[degree];
+        //     degree = degree - 1;
+        //     let poly_d = other * poly_t;
+        //     other = &N - &d;
+        //     self.poly_deg_adjust();
+        // }
+        Self {
+            coefficients: result_coeff,
+            degree: degree,
+        }
+    }
+    /// This evaluates a provided polynomial (in coefficient form) at `x`.
+    pub fn evaluate_polynomial(&self, x: Scalar) -> Scalar {
+        // TODO: parallelize?
+        self.coefficients
+            .iter()
+            .rev()
+            .fold(Scalar::zero(), |acc, coeff| acc * x + coeff)
+    }
+}
+fn distinct(x: Scalar, a: &[Scalar]) -> bool {
+    for i in 0..3 {
+        if x == a[i] {
+            return false;
+        }
+    }
+    return true;
+}
+//Create "l(X)" and "li(X)" polynomials
+fn create_l_x_polynomial(w:&[Scalar])-> Polynomial
+{
+    //Create l(X)
+	let mut l = create_1D_poly(Scalar::from(1u64), -w[1]);
+	for i in 2..w.len(){
+		l = &l * &create_1D_poly(Scalar::from(1u64), -w[i]);
+    }
+	
+	return l;
+}
+//Create "l(X)" and "li(X)" polynomials
+fn create_l_i_x_polynomial(w:&[Scalar])-> Polynomial
+{
+    //Create li(X)
+	for (int i = 1; i <= dim; i++)
+	{
+		int denom = 1; //Denominator
+		poly_division(poly_copy(l[0]), create_1D_poly(1, -w[i]), l[i]);
+		for (int j = 1; j <= dim; j++)
+			if (i != j)	denom = denom * (w[i] - w[j]);
+		denom = ((denom % m) + m) % m;
+		int inv = mul_inv(m, denom);
+		l[i] = poly_product(l[i], create_1D_poly(0, inv));
+	}
+}
 //Polynomial Addition modulo m: a(X) + b(X)
 impl<'a, 'b> Add<&'a Polynomial> for &'b Polynomial {
     type Output = Polynomial;

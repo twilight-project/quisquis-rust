@@ -14,7 +14,7 @@ use itertools::Itertools;
 use rand::rngs::OsRng;
 use rand::{CryptoRng, Rng};
 use std::ops::Add;
-use std::ops::Sub;
+use std::ops::{Sub, SubAssign};
 //scalar_zero = Scalar::zero();
 fn pretty_print_coefficients(coefficients: &[Scalar], deg: usize) -> String {
     if coefficients.is_empty() {
@@ -110,17 +110,17 @@ impl Polynomial {
                 continue;
             } else {
                 h_term = i;
-                println!("{:?}", i);
+                //  println!("{:?}", i);
             }
         }
         self.degree = h_term;
-        println!("{:?}", self.degree);
+        //println!("{:?}", self.degree);
         let mut newcoeff = Vec::<Scalar>::with_capacity(h_term);
         for i in 0..=self.degree {
             newcoeff.push(self.coefficients[i]);
         }
         self.coefficients = newcoeff;
-        self.print_polynomial();
+        //self.print_polynomial();
     }
     // Remove trailing zeros from coefficients
     // Borrow mutably when you mutate the data, but don't want to consume it
@@ -191,22 +191,28 @@ impl Polynomial {
     //Assumes that both the polynomials have degree greater than 0
     //Evaluates (a(X) / b(X))
     //REMOVED: Also checks correctness of resulting polynomial for protocol
-    pub fn polynomial_division(&mut self, other: &mut Self) -> Self {
+    pub fn divide(&mut self, denom: &mut Self, deg: usize) -> Self {
         self.poly_deg_adjust();
-        other.poly_deg_adjust();
+        denom.poly_deg_adjust();
 
-        let degree = self.degree - other.degree;
-
+        //let mut degree = self.degree - denom.degree;
+        let mut degree: usize = deg;
+        println!("degree {:?}", degree);
         let mut result_coeff: Vec<Scalar> = vec![Scalar::from(0u64); degree + 1];
 
-        // while (self.degree >= other.degree) {
-        //     let poly_t = create_ND_poly(self.coefficients[self.degree], self.degree - other.degree);
-        //     result_coeff[degree] = poly_t.coefficients[degree];
-        //     degree = degree - 1;
-        //     let poly_d = other * poly_t;
-        //     other = &N - &d;
-        //     self.poly_deg_adjust();
-        // }
+        while self.degree >= denom.degree {
+            let poly_t = create_ND_poly(self.coefficients[self.degree], self.degree - denom.degree);
+            result_coeff[degree] = poly_t.coefficients[degree];
+            degree = degree - 1 as usize;
+            degree = match degree.checked_sub(1) {
+                Some(val) => val,
+                None => 0,
+            };
+            let poly_d = multiply_mut(denom, &poly_t);
+            *self -= &poly_d;
+            //self.sub_assign(&poly_d);
+            self.poly_deg_adjust();
+        }
         Self {
             coefficients: result_coeff,
             degree: degree,
@@ -220,6 +226,10 @@ impl Polynomial {
             .rev()
             .fold(Scalar::zero(), |acc, coeff| acc * x + coeff)
     }
+    // pub fn subtract_mut(a: &mut Polynomial, b: &Polynomial) {
+    //     let result = (a as &Polynomial) - b;
+    //     *a = result;
+    // }
 }
 fn distinct(x: Scalar, a: &[Scalar]) -> bool {
     for i in 0..3 {
@@ -229,31 +239,74 @@ fn distinct(x: Scalar, a: &[Scalar]) -> bool {
     }
     return true;
 }
-//Create "l(X)" and "li(X)" polynomials
-fn create_l_x_polynomial(w:&[Scalar])-> Polynomial
-{
-    //Create l(X)
-	let mut l = create_1D_poly(Scalar::from(1u64), -w[1]);
-	for i in 2..w.len(){
-		l = &l * &create_1D_poly(Scalar::from(1u64), -w[i]);
+// Polynomial Multipliucation with mutable parameters modulo m: a(X) * b(X)
+fn multiply_mut(a: &mut Polynomial, b: &Polynomial) -> Polynomial {
+    // If either polynomial is zero, return zero
+
+    if a.coefficients.is_empty() || b.coefficients.is_empty() {
+        return Polynomial {
+            coefficients: vec![],
+            degree: 0,
+        };
     }
-	
-	return l;
+    let degree = a.degree + b.degree;
+    //let self_degree = self.degree;
+    //let other_degree = other.degree;
+    let mut result_coeff: Vec<Scalar> = vec![Scalar::from(0u64); degree + 1];
+
+    for i in 0..=a.degree {
+        for j in 0..=b.degree {
+            let mul = a.coefficients[i] * b.coefficients[j];
+            result_coeff[i + j] += mul;
+        }
+    }
+    Polynomial {
+        coefficients: result_coeff,
+        degree: degree,
+    }
+}
+
+//product of polynomials. (X-w_i)
+fn create_l_x_polynomial(w: &[Scalar]) -> Polynomial {
+    //Create l(X)
+    let mut l = create_1D_poly(Scalar::from(1u64), -w[0]);
+    for i in 1..w.len() {
+        l = multiply_mut(&mut l, &create_1D_poly(Scalar::from(1u64), -w[i]));
+    }
+    return l;
 }
 //Create "l(X)" and "li(X)" polynomials
-fn create_l_i_x_polynomial(w:&[Scalar])-> Polynomial
-{
-    //Create li(X)
-	for (int i = 1; i <= dim; i++)
-	{
-		int denom = 1; //Denominator
-		poly_division(poly_copy(l[0]), create_1D_poly(1, -w[i]), l[i]);
-		for (int j = 1; j <= dim; j++)
-			if (i != j)	denom = denom * (w[i] - w[j]);
-		denom = ((denom % m) + m) % m;
-		int inv = mul_inv(m, denom);
-		l[i] = poly_product(l[i], create_1D_poly(0, inv));
-	}
+fn create_l_i_x_polynomial(w: &[Scalar]) -> [Polynomial; 4] {
+    //create l(X)
+    let l_x = create_l_x_polynomial(&w[1..]);
+
+    //Create l_1(X) assuming length of w = 3
+    let poly_num_1 = create_l_x_polynomial(&w[2..]);
+    let poly_denom_1 = (w[1] - w[2]) * (w[1] - w[3]);
+    let l_1_x = poly_num_1.divide_scalar(poly_denom_1);
+    l_1_x.print_polynomial();
+    //Create l_2(X) assuming length of w = 3
+    let scalar: Vec<Scalar> = vec![w[1], w[3]];
+    let poly_num_2 = create_l_x_polynomial(&scalar);
+    let poly_denom_2 = (w[1] - w[2]) * (w[1] - w[3]);
+    let l_2_x = poly_num_2.divide_scalar(poly_denom_2);
+    l_2_x.print_polynomial();
+    //Create l_3(X) assuming length of w = 3
+    let poly_num_3 = create_l_x_polynomial(&w[1..3]);
+    let poly_denom_3 = (w[3] - w[1]) * (w[3] - w[2]);
+    let l_3_x = poly_num_3.divide_scalar(poly_denom_3);
+    l_3_x.print_polynomial();
+    //0 -> l(X), 1-> l_1(X), 2-> l_2(X), 3-> l_3(X)
+    [l_x, l_1_x, l_2_x, l_3_x]
+    // for i in 1..w.len() {
+    // 	int denom = 1; //Denominator
+    // 	poly_division(poly_copy(l[0]), create_1D_poly(1, -w[i]), l[i]);
+    // 	for (int j = 1; j <= dim; j++)
+    // 		if (i != j)	denom = denom * (w[i] - w[j]);
+    // 	denom = ((denom % m) + m) % m;
+    // 	int inv = mul_inv(m, denom);
+    // 	l[i] = poly_product(l[i], create_1D_poly(0, inv));
+    // }
 }
 //Polynomial Addition modulo m: a(X) + b(X)
 impl<'a, 'b> Add<&'a Polynomial> for &'b Polynomial {
@@ -308,6 +361,12 @@ impl<'a, 'b> Sub<&'a Polynomial> for &'b Polynomial {
             coefficients: diff,
             degree: degree,
         }
+    }
+}
+impl<'b> SubAssign<&'b Polynomial> for Polynomial {
+    fn sub_assign(&mut self, rhs: &Polynomial) {
+        let result = (self as &Polynomial) - rhs;
+        *self = result;
     }
 }
 #[cfg(test)]
@@ -427,6 +486,32 @@ mod test {
         //assert_eq!(reference, exp_2);
     }
     #[test]
+    fn subassign_polynomial_test() {
+        let mut polya = Polynomial {
+            coefficients: vec![
+                Scalar::from(2u64),
+                Scalar::from(3u64),
+                Scalar::from(4u64),
+                Scalar::from(6u64),
+            ],
+            degree: 3,
+        };
+        let polyb = Polynomial {
+            coefficients: vec![
+                Scalar::from(1u64),
+                Scalar::from(2u64),
+                Scalar::from(3u64),
+                Scalar::from(4u64),
+            ],
+            degree: 3,
+        };
+        polya -= &polyb;
+        // let add = polya.sub(&polyb);
+        polya.print_polynomial();
+
+        //assert_eq!(reference, exp_2);
+    }
+    #[test]
     fn sub_polynomial_different_degree_test() {
         let polya = Polynomial {
             coefficients: vec![Scalar::from(2u64), Scalar::from(3u64)],
@@ -459,6 +544,17 @@ mod test {
         //assert_eq!(reference, exp_2);
     }
     #[test]
+    fn divide_scalar_test() {
+        let polya = Polynomial {
+            coefficients: vec![Scalar::from(4u64), Scalar::from(2u64)],
+            degree: 1,
+        };
+        let res = polya.divide_scalar(Scalar::from(2u64));
+        res.print_polynomial();
+
+        //assert_eq!(reference, exp_2);
+    }
+    #[test]
     fn multiply_polynomial_test() {
         let polya = Polynomial {
             coefficients: vec![Scalar::from(2u64), Scalar::from(3u64)],
@@ -473,11 +569,68 @@ mod test {
 
         //assert_eq!(reference, exp_2);
     }
-}
+    #[test]
+    fn divide_polynomial_test() {
+        let s = Scalar::from(35u64);
+        let mut num = Polynomial {
+            coefficients: vec![
+                Scalar::from(0u64),
+                Scalar::from(0u64),
+                -s,
+                Scalar::from(21u64),
+            ],
+            degree: 3,
+        };
+        let mut denom = Polynomial {
+            coefficients: vec![Scalar::from(0u64), Scalar::from(7u64)],
+            degree: 1,
+        };
+        let res = num.divide(&mut denom, 2);
+        res.print_polynomial();
 
-// let c_degree = if self.degree >= other.degree{
-//             self.degree;
-//         }
-//         else{
-//             other.degree;
-//         };
+        //assert_eq!(reference, exp_2);
+    }
+    #[test]
+    fn l_x_polynomial_test() {
+        let w: Vec<Scalar> = vec![Scalar::from(1u64), Scalar::from(2u64), Scalar::from(3u64)];
+        let poly = create_l_x_polynomial(&w);
+        poly.print_polynomial();
+
+        //assert_eq!(reference, exp_2);
+    }
+    #[test]
+    fn l_i_x_polynomial_test() {
+        let w: Vec<Scalar> = vec![
+            Scalar::from(5u64),
+            Scalar::from(1u64),
+            Scalar::from(2u64),
+            Scalar::from(3u64),
+        ];
+        let _poly = create_l_i_x_polynomial(&w);
+        // poly.print_polynomial();
+
+        //assert_eq!(reference, exp_2);
+    }
+    #[test]
+    fn evaluate_polynomial_test() {
+        let polya = Polynomial {
+            coefficients: vec![Scalar::from(2u64), Scalar::from(3u64)],
+            degree: 1,
+        };
+        let x: Scalar = Scalar::from(3u64);
+        let polyb = Polynomial {
+            coefficients: vec![
+                Scalar::from(1u64),
+                Scalar::from(2u64),
+                Scalar::from(3u64),
+                Scalar::from(4u64),
+            ],
+            degree: 3,
+        };
+
+        // println!("Polya {:?}", polya.evaluate_polynomial(x));
+        // println!("Polyb {:?}", polyb.evaluate_polynomial(x));
+        assert_eq!(polya.evaluate_polynomial(x), Scalar::from(11u64));
+        assert_eq!(polyb.evaluate_polynomial(x), Scalar::from(142u64));
+    }
+}

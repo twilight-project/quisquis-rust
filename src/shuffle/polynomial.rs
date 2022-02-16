@@ -170,7 +170,7 @@ impl Polynomial {
     }
 
     // Polynomial Multipliucation modulo m: a(X) * b(X)
-    fn multiply(&self, other: &Self) -> Self {
+    pub fn multiply(&self, other: &Self) -> Self {
         // If either polynomial is zero, return zero
 
         if self.coefficients.is_empty() || other.coefficients.is_empty() {
@@ -437,6 +437,24 @@ impl PartialEq for Polynomial {
     }
 }
 
+pub fn compute_polynomial_expression(
+    l_x_vec: &[Polynomial],
+    a: &Array2D<Scalar>,
+    a_0: &[Scalar],
+) -> Vec<Polynomial> {
+    //convert witness Matrices to row major order
+    let a_row = a.as_rows();
+    let a_0_l_x = l_x_vec[0].polynomial_vector_product(&a_0);
+    let a_1_l_1_x = l_x_vec[1].polynomial_vector_product(&a_row[0]);
+    let a_2_l_2_x = l_x_vec[2].polynomial_vector_product(&a_row[1]);
+    let a_3_l_3_x = l_x_vec[3].polynomial_vector_product(&a_row[2]);
+
+    polynomial_vectorial_add(
+        &polynomial_vectorial_add(&polynomial_vectorial_add(&a_0_l_x, &a_1_l_1_x), &a_2_l_2_x),
+        &a_3_l_3_x,
+    )
+}
+
 pub fn create_hadamard_proof(
     a: &Array2D<Scalar>,
     b: &Array2D<Scalar>,
@@ -475,11 +493,17 @@ pub fn create_hadamard_proof(
     let l_x_vec = create_l_poly(&w);
     //check if the vector is constructed properly
     if l_x_vec.len() != 4 {
-        panic!("L polynomials are not constructed properly");
+        panic!("L(X) polynomials are not constructed properly");
     }
+
     //Finding Delta_i for 0 <= i <= 3 from Step 4 equation (Page 84) of Stephanie Bayer Thesis
-    //Need a loop if committed vectors are "k", here k = 2, since we have a0, a1, a2
+    //Need a loop if committed vectors are "k", here k = 3, since we have a0, a1, a2, a3
     //RHS of the equation is directly calculated below
+
+    let a_expression = compute_polynomial_expression(&l_x_vec, a, &a_0);
+    let b_expression = compute_polynomial_expression(&l_x_vec, b, &b_0);
+    let c_expression = compute_polynomial_expression(&l_x_vec, c, &c_0);
+
     // poly * A = poly_vectorial_add(
     //     poly_vectorial_add(poly_vec_product(l[0], a0), poly_vec_product(l[1], a1)),
     //     poly_vec_product(l[2], a2),
@@ -493,6 +517,122 @@ pub fn create_hadamard_proof(
     //     poly_vectorial_add(poly_vec_product(l[0], c0), poly_vec_product(l[1], c1)),
     //     poly_vec_product(l[2], c2),
     // );
+
+    //Evaluates (a.l(X) x b.l(X)) - cl(X))
+    let a_b_c: Vec<_> = a_expression
+        .iter()
+        .zip(b_expression.iter())
+        .zip(c_expression.iter())
+        .map(|((a, b), c)| &a.multiply(b) - c)
+        .collect();
+    println!("abc size {}", a_b_c.len());
+    //Evaluates (a.l(X) x b.l(X)) - cl(X)) / l(X)
+    let div_res: Vec<Polynomial> = a_b_c
+        .into_iter()
+        .map(|mut poly| poly.divide(&mut l_x_vec[0].clone(), poly.degree - l_x_vec[0].degree))
+        .collect();
+    println!("res size {}", div_res.len());
+    div_res[0].print_polynomial();
+    div_res[1].print_polynomial();
+    div_res[2].print_polynomial();
+
+    //extract delta_i from delta_i * X^i
+    // for (int i = 0; i < (2 + 1); i++)
+    // 	for (int j = 0; j < dim; j++)
+    // 		Delta[i][j] = RHS[j].coeff[i];
+    let mut delta_vec: Vec<Vec<Scalar>> = Vec::new();
+    for i in 0..4 {
+        let mut inner_vec: Vec<Scalar> = Vec::new();
+        for j in 0..3 {
+            inner_vec.push(div_res[j].coefficients[i]);
+        }
+        delta_vec.push(inner_vec);
+    }
+    println!("{:?}", delta_vec);
+
+    //commit on Delta vector
+    let rho: Vec<_> = (0..a.num_rows() + 1)
+        .map(|_| Scalar::random(&mut OsRng))
+        .collect();
+    let mut comit_delta_vec = Vec::<RistrettoPoint>::new();
+
+    for (i, row) in delta_vec.iter().enumerate() {
+        comit_delta_vec.push(xpc_gens.commit(row, rho[i]));
+    }
+
+    //Send: ca0,cb0,cc0,c 0,...,c m
+
+    //Challenge: x Z⇤q \ ⌦
+
+    let x = Scalar::random(&mut OsRng);
+
+    //Prover evaluates a_bar, b_bar, c_bar, r_bar, s_bar, t_bar, rho_bar
+    let mut a_bar: [Scalar; 3] = [Scalar::zero(), Scalar::zero(), Scalar::zero()];
+    let mut b_bar: [Scalar; 3] = [Scalar::zero(), Scalar::zero(), Scalar::zero()];
+    let mut c_bar: [Scalar; 3] = [Scalar::zero(), Scalar::zero(), Scalar::zero()];
+    for i in 0..3
+    // <dim
+    {
+        a_bar[i] = a_expression[i].evaluate_polynomial(x);
+        b_bar[i] = b_expression[i].evaluate_polynomial(x);
+        c_bar[i] = c_expression[i].evaluate_polynomial(x);
+    }
+    let mut eval = l_x_vec[0].evaluate_polynomial(x);
+    let mut r_bar = r_0 * eval;
+    let mut s_bar = s_0 * eval;
+    let mut t_bar = t_0 * eval;
+    for i in 0..3 {
+        eval = l_x_vec[i + 1].evaluate_polynomial(x);
+        r_bar = r_bar + (witness_r[i] * eval);
+        s_bar = s_bar + (witness_s[i] * eval);
+        t_bar = t_bar + (witness_t[i] * eval);
+    }
+    let exp_x: Vec<_> = vectorutil::exp_iter(x).take(4).collect();
+    let x_i_rho_i: Scalar = exp_x.iter().zip(rho.iter()).map(|(x, r)| x * r).sum();
+    let rho_bar = l_x_vec[0].evaluate_polynomial(x) * x_i_rho_i;
+    // Send: a_bar, b_bar, c_bar, r_bar, s_bar, t_bar, rho_bar
+    //Verifier checks commitments and accept accordingly
+    //Check for a_bar
+    let comit_a_bar = xpc_gens.commit(&a_bar, r_bar);
+    let comit_b_bar = xpc_gens.commit(&b_bar, s_bar);
+    let comit_c_bar = xpc_gens.commit(&c_bar, t_bar);
+
+    let mut eval_l = l_x_vec[0].evaluate_polynomial(x);
+    let mut comit_a_0: RistrettoPoint = c_a_0.decompress().unwrap() * eval_l;
+    let mut comit_b_0: RistrettoPoint = c_b_0.decompress().unwrap() * eval_l;
+    let mut comit_c_0: RistrettoPoint = c_c_0.decompress().unwrap() * eval_l;
+
+    for i in 0..3 {
+        eval_l = l_x_vec[i + 1].evaluate_polynomial(x);
+        comit_a_0 = comit_a_0 + (comit_a[i] * eval_l);
+        comit_b_0 = comit_b_0 + (comit_b[i] * eval_l);
+        comit_c_0 = comit_c_0 + (comit_c[i] * eval_l);
+    }
+
+    //check
+    if comit_a_0 == comit_a_bar && comit_b_0 == comit_b_bar && comit_c_0 == comit_c_bar {
+        println!("true");
+    } else {
+        println!("false");
+    }
+    //check delta
+    let mut commitment_delta: RistrettoPoint = comit_delta_vec[0];
+    for i in 1..4 {
+        commitment_delta = commitment_delta + (comit_delta_vec[i] * exp_x[i]);
+    }
+    let lhs = commitment_delta * l_x_vec[0].evaluate_polynomial(x);
+    let a_bar_b_bar = vectorutil::hadamard_product(&a_bar, &b_bar);
+    let a_bar_b_bar_c_bar: Vec<_> = a_bar_b_bar
+        .iter()
+        .zip(c_bar.iter())
+        .map(|(ab, c)| ab - c)
+        .collect();
+    let rhs = xpc_gens.commit(&a_bar_b_bar_c_bar, rho_bar);
+    if lhs == rhs {
+        println!("LHS true");
+    } else {
+        println!("LHS false");
+    }
 }
 
 #[cfg(test)]
@@ -849,5 +989,83 @@ mod test {
         // println!("Polyb {:?}", polyb.evaluate_polynomial(x));
         assert_eq!(polya.evaluate_polynomial(x), Scalar::from(11u64));
         assert_eq!(polyb.evaluate_polynomial(x), Scalar::from(142u64));
+    }
+
+    #[test]
+    fn create_hadamard_proof_test() {
+        //generate Xcomit generator points of length m+1
+        let xpc_gens = VectorPedersenGens::new(ROWS + 1);
+        let pc_gens = PedersenGens::default();
+        let a_scalar: Vec<_> = vec![
+            Scalar::from(7u64),
+            Scalar::from(6u64),
+            Scalar::from(1u64),
+            Scalar::from(5u64),
+            Scalar::from(3u64),
+            Scalar::from(4u64),
+            Scalar::from(2u64),
+            Scalar::from(8u64),
+            Scalar::from(9u64),
+        ];
+
+        let b_scalar: Vec<_> = vec![
+            Scalar::from(3u64),
+            Scalar::from(2u64),
+            Scalar::from(1u64),
+            Scalar::from(7u64),
+            Scalar::from(3u64),
+            Scalar::from(5u64),
+            Scalar::from(8u64),
+            Scalar::from(3u64),
+            Scalar::from(6u64),
+        ];
+
+        let c_scalar = vectorutil::hadamard_product(&a_scalar, &b_scalar);
+        let a_2d = Array2D::from_row_major(&a_scalar, ROWS, COLUMNS);
+        let b_2d = Array2D::from_row_major(&b_scalar, ROWS, COLUMNS);
+        let c_2d = Array2D::from_row_major(&c_scalar, ROWS, COLUMNS);
+
+        let r: Vec<_> = vec![Scalar::from(6u64), Scalar::from(2u64), Scalar::from(5u64)];
+        let s: Vec<_> = vec![Scalar::from(7u64), Scalar::from(1u64), Scalar::from(3u64)];
+        let t: Vec<_> = vec![Scalar::from(5u64), Scalar::from(2u64), Scalar::from(1u64)];
+
+        let a_2d_as_rows = a_2d.as_rows();
+        //let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let mut comit_a_vec = Vec::<RistrettoPoint>::new();
+        for i in 0..COLUMNS {
+            comit_a_vec.push(xpc_gens.commit(&a_2d_as_rows[i], r[i]));
+        }
+
+        let b_2d_as_rows = b_2d.as_rows();
+        //let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let mut comit_b_vec = Vec::<RistrettoPoint>::new();
+        for i in 0..COLUMNS {
+            comit_b_vec.push(xpc_gens.commit(&b_2d_as_rows[i], s[i]));
+        }
+        let c_2d_as_rows = c_2d.as_rows();
+        //let r: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let mut comit_c_vec = Vec::<RistrettoPoint>::new();
+        for i in 0..COLUMNS {
+            comit_c_vec.push(xpc_gens.commit(&c_2d_as_rows[i], t[i]));
+        }
+
+        create_hadamard_proof(
+            &a_2d,
+            &b_2d,
+            &c_2d,
+            &r,
+            &s,
+            &t,
+            &comit_a_vec,
+            &comit_b_vec,
+            &comit_c_vec,
+            &pc_gens,
+            &xpc_gens,
+        )
+
+        // println!("Polya {:?}", polya.evaluate_polynomial(x));
+        // println!("Polyb {:?}", polyb.evaluate_polynomial(x));
+        //  assert_eq!(polya.evaluate_polynomial(x), Scalar::from(11u64));
+        // assert_eq!(polyb.evaluate_polynomial(x), Scalar::from(142u64));
     }
 }

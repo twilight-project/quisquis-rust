@@ -6,4 +6,5 @@ mod singlevalueproduct;
 mod vectorutil;
 // Re-export
 pub use self::{shuffle::Permutation, shuffle::Shuffle, vectorutil::ScalarExp};
+pub mod hadamard;
 pub mod polynomial;

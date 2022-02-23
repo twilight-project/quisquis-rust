@@ -157,18 +157,20 @@ impl ProductProof {
         c_prod_A: &[RistrettoPoint],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-    ) -> bool {
+    ) -> Result<bool, &'static str> {
         //The verifier accepts if cb ∈ G and both SHVZK arguments (Mutihadamard and SingleValue Product) are convincing.
         // cb ∈ G is always valid if cb is a CompressedRistretto
 
         //check Mutihadamard Proof
-        self.multi_hadamard_proof.verify(
+        let _verify_multi_hadamard = self.multi_hadamard_proof.verify(
             verifier,
             &prod_statement.multi_hadamard_statement,
             c_prod_A,
             pc_gens,
             xpc_gens,
-        ) && self /*check Single Value Product Proof*/
+        )?;
+
+        self /*check Single Value Product Proof*/
             .svp_proof
             .verify(verifier, &prod_statement.svp_statement, xpc_gens)
     }
@@ -345,52 +347,62 @@ impl MultiHadamardProof {
         c_A: &[RistrettoPoint],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-    ) -> bool {
-        //Create new transcript
-        verifier.new_domain_sep(b"MultiHadamardProductProof");
-        //Recreate x, y challenge by adding Commit C_B vector to Transcript
-        for cr in self.c_B.iter() {
-            verifier.allocate_point(b"BVectorCommitment", *cr);
-        }
+    ) -> Result<bool, &'static str> {
         //Check c_B2,...,c_Bm−1 ∈ G
         //Always true if received as CompressedRistretto
-        //Check  cB1 = cA1
-        assert_eq!(c_A[0].compress(), self.c_B[0]);
-        //Check  cA2 = zerostatement.CA1
-        assert_eq!(c_A[1].compress(), statement.zero_statement.c_A[0]);
-        assert_eq!(c_A[2].compress(), statement.zero_statement.c_A[1]);
+        //Check  cB1 = cA1 &&  cA2 = zerostatement.CA1
 
-        //Check  cBm = cb
-        assert_eq!(statement.c_b, self.c_B[ROWS - 1]);
+        // assert_eq!(c_A[0].compress(), self.c_B[0]);
+        // assert_eq!(c_A[1].compress(), statement.zero_statement.c_A[0]);
+        // assert_eq!(c_A[2].compress(), statement.zero_statement.c_A[1]);
+        if c_A[0].compress() == self.c_B[0]
+            && c_A[1].compress() == statement.zero_statement.c_A[0]
+            && c_A[2].compress() == statement.zero_statement.c_A[1]
+        {
+            //Check  cBm = cb
+            //assert_eq!(statement.c_b, self.c_B[ROWS - 1]);
+            if statement.c_b == self.c_B[ROWS - 1] {
+                //Create new transcript
+                verifier.new_domain_sep(b"MultiHadamardProductProof");
+                //Recreate x, y challenge by adding Commit C_B vector to Transcript
+                for cr in self.c_B.iter() {
+                    verifier.allocate_point(b"BVectorCommitment", *cr);
+                }
 
-        //redefine cD_i = (c_B_i)^(x_i)
-        let x = verifier.get_challenge(b"XChallenge");
-        let y_chal = verifier.get_challenge(b"YChallenge");
-        let x_exp: Vec<_> = vectorutil::exp_iter(x).take(ROWS + 1).collect();
-        //  let C_D
-        let c_D1 = self.c_B[0].decompress().unwrap() * x_exp[1];
-        let c_D2 = self.c_B[1].decompress().unwrap() * x_exp[2];
-        let c_D3 = self.c_B[2].decompress().unwrap() * x_exp[3];
-        //c_D = c_B_2 ^ x c_B_3^x^2
-        let c_D = self.c_B[1].decompress().unwrap() * x_exp[1]
-            + self.c_B[2].decompress().unwrap() * x_exp[2];
-        //redefine c−1 = comck(−~1; 0)
-        let scalar_one_inv = -Scalar::one();
-        let scalars: Vec<Scalar> = (0..ROWS).map(|_| scalar_one_inv.clone()).collect();
-        let c_minus_one = xpc_gens.commit(&scalars, Scalar::zero()).compress();
-        //create THESE VECTORS INdependently
-        let c_D = vec![c_D1, c_D2, c_D];
-        let mut c_zero_A = vec![
-            statement.zero_statement.c_A[0],
-            statement.zero_statement.c_A[1],
-            statement.zero_statement.c_A[2],
-        ];
-        if c_zero_A[ROWS - 1] != c_minus_one {
-            c_zero_A[ROWS - 1] = c_minus_one;
+                //redefine cD_i = (c_B_i)^(x_i)
+                let x = verifier.get_challenge(b"XChallenge");
+                let y_chal = verifier.get_challenge(b"YChallenge");
+                let x_exp: Vec<_> = vectorutil::exp_iter(x).take(ROWS + 1).collect();
+                //  let C_D
+                let c_D1 = self.c_B[0].decompress().unwrap() * x_exp[1];
+                let c_D2 = self.c_B[1].decompress().unwrap() * x_exp[2];
+                let c_D3 = self.c_B[2].decompress().unwrap() * x_exp[3];
+                //c_D = c_B_2 ^ x c_B_3^x^2
+                let c_D = self.c_B[1].decompress().unwrap() * x_exp[1]
+                    + self.c_B[2].decompress().unwrap() * x_exp[2];
+                //redefine c−1 = comck(−~1; 0)
+                let scalar_one_inv = -Scalar::one();
+                let scalars: Vec<Scalar> = (0..ROWS).map(|_| scalar_one_inv.clone()).collect();
+                let c_minus_one = xpc_gens.commit(&scalars, Scalar::zero()).compress();
+                //create THESE VECTORS INdependently
+                let c_D = vec![c_D1, c_D2, c_D];
+                let mut c_zero_A = vec![
+                    statement.zero_statement.c_A[0],
+                    statement.zero_statement.c_A[1],
+                    statement.zero_statement.c_A[2],
+                ];
+                if c_zero_A[ROWS - 1] != c_minus_one {
+                    c_zero_A[ROWS - 1] = c_minus_one;
+                }
+                // Accept if the zero argument is valid.
+                self.zero_proof
+                    .verify(verifier, &c_zero_A, xpc_gens, pc_gens, &c_D, y_chal)
+            } else {
+                Err("Multihadamard Product Proof Verify: c_B_m == c_b Failed")
+            }
+        } else {
+            Err("Multihadamard Product Proof Verify: c_B_1 == c_A_1 Failed")
         }
-        // Accept if the zero argument is valid.
-        self.zero_proof
-            .verify(verifier, &c_zero_A, xpc_gens, pc_gens, &c_D, y_chal)
     }
 }
 
@@ -590,95 +602,102 @@ impl ZeroProof {
         pc_gens: &PedersenGens,
         c_B: &[RistrettoPoint],
         chal_y: Scalar,
-    ) -> bool {
+    ) -> Result<bool, &'static str> {
         //check lengths of vectors
-        assert_eq!(self.c_D.len(), 2 * ROWS + 1);
-        assert_eq!(self.a_vec.len(), COLUMNS);
-        assert_eq!(self.b_vec.len(), COLUMNS);
+        // assert_eq!(self.c_D.len(), 2 * ROWS + 1);
+        //assert_eq!(self.a_vec.len(), COLUMNS);
+        // assert_eq!(self.b_vec.len(), COLUMNS);
+        if self.c_D.len() == 2 * ROWS + 1
+            && self.a_vec.len() == COLUMNS
+            && self.b_vec.len() == COLUMNS
+        {
+            //Verifying c_d_m+1 = com(0,0)
+            let comit_d_m_1 = self.c_D[ROWS + 1].decompress().unwrap();
+            let comit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
+            if comit_0_0 == comit_d_m_1 {
+                //Create new transcript
+                verifier.new_domain_sep(b"ZeroArgumentProof");
+                //recreate Transcript for Z challenge generation by adding C_A_0 and C_B_m and C_D
+                verifier.allocate_point(b"A0Commitment", self.c_A_0);
+                verifier.allocate_point(b"BmCommitment", self.c_B_m);
+                for cd in self.c_D.iter() {
+                    verifier.allocate_point(b"DCommitment", *cd);
+                }
 
-        //Create new transcript
-        verifier.new_domain_sep(b"ZeroArgumentProof");
-        //recreate Transcript for Z challenge generation by adding C_A_0 and C_B_m and C_D
-        verifier.allocate_point(b"A0Commitment", self.c_A_0);
-        verifier.allocate_point(b"BmCommitment", self.c_B_m);
-        for cd in self.c_D.iter() {
-            verifier.allocate_point(b"DCommitment", *cd);
+                // prod i=0..m (c_Ai^x^i ) = com(a_bar,r)
+                //Com_A_0 ^ X^0 = com_a0
+                let challenge = verifier.get_challenge(b"challenge");
+                //recreate x_exp_m
+                let x_exp: Vec<_> = vectorutil::exp_iter(challenge).take(2 * ROWS + 1).collect();
+                //can use multiscalar_multiplication. should be done for all elements.
+                let x_m_1 = &x_exp[1..ROWS + 1]; //necessary to create an iterator
+
+                let temp_a = RistrettoPoint::optional_multiscalar_mul(
+                    x_m_1.iter(),
+                    c_A.iter().map(|pt| pt.decompress()),
+                );
+                let comit_a_product = self.c_A_0.decompress().unwrap() + temp_a.unwrap();
+
+                //com(a_bar,r)
+                let comit_a_bar = xpc_gens.commit(&self.a_vec, self.r);
+                if comit_a_bar == comit_a_product {
+                    // prod j=0..m (c_Bj^x^(m-j) ) = com(b_bar,s)
+                    //Com_B_m ^ X^0 = com_b3
+                    let x_exp_m = &x_exp[1..ROWS + 1]; //necessary to create an iterator
+
+                    let mut comit_b_full =
+                        RistrettoPoint::multiscalar_mul(x_exp_m.iter().rev(), c_B.into_iter());
+                    comit_b_full = comit_b_full + self.c_B_m.decompress().unwrap();
+
+                    //com(b_bar,s)
+                    let comit_b_bar = xpc_gens.commit(&self.b_vec, self.s);
+                    // Verify for k=0..2m c_D_k ^(x ^k)  ==  com(a_bar * b_bar; t) where * is bilinear map
+
+                    //com(a_bar * b_bar; t)
+                    //create y^i
+                    let y_i: Vec<_> = vectorutil::exp_iter(chal_y).skip(1).take(ROWS).collect();
+                    //let y_i = &y_exp[1..4].to_vec();
+                    let a_bar_b_bar = single_bilinearmap(&self.a_vec, &self.b_vec, &y_i);
+                    let comit_a_bar_b_bar = pc_gens.commit(a_bar_b_bar, self.t);
+
+                    if comit_b_bar == comit_b_full {
+                        //k=0..2m c_D_k ^(x ^k)
+                        let c_D_x_k = RistrettoPoint::optional_multiscalar_mul(
+                            x_exp.iter(),
+                            self.c_D.iter().map(|pt| pt.decompress()),
+                        );
+                        if comit_a_bar_b_bar == c_D_x_k.unwrap() {
+                            Ok(true)
+                        } else {
+                            Err("Zero Argument Proof Verify: com(a_bar * b_bar, t) verification check Failed")
+                        }
+                    } else {
+                        Err("Zero Argument Proof Verify: com(b_bar, s) verification check Failed")
+                    }
+                } else {
+                    Err("Zero Argument Proof Verify: com(a_bar, r) verification check Failed")
+                }
+            // if comit_a_bar_b_bar == c_D_x_k.unwrap() {
+            //     println!(" c_D_x_k Verifies");
+            // } else {
+            //     println!(" c_D_x_k Veification fails");
+            // }
+            // if comit_a_bar == comit_a_product {
+            //     println!(" comit_a_bar Verifies");
+            // } else {
+            //     println!(" comit_a_bar Veification fails");
+            // }
+            // if comit_b_bar == comit_b_full {
+            //     println!(" comit_b_bar Verifies");
+            // } else {
+            //     println!(" comit_b_bar Veification fails");
+            // }
+            } else {
+                Err("Zero Argument Proof Verify: c_d_(m+1) == com(0,0) Failed")
+            }
+        } else {
+            Err("Zero Argument Proof Verify: Size check failed")
         }
-
-        //VERIFICATION CODE HERE.
-        //Verifying c_d_m+1 = com(0,0)
-        let comit_d_m_1 = self.c_D[ROWS + 1].decompress().unwrap();
-        let comit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
-        assert_eq!(comit_0_0, comit_d_m_1);
-        // if comit_0_0 == comit_d_m_1 {
-        //     println!("Cdm+1 TRUE");
-        // }
-
-        // prod i=0..m (c_Ai^x^i ) = com(a_bar,r)
-        //Com_A_0 ^ X^0 = com_a0
-        let challenge = verifier.get_challenge(b"challenge");
-        //recreate x_exp_m
-        let x_exp: Vec<_> = vectorutil::exp_iter(challenge).take(2 * ROWS + 1).collect();
-        //can use multiscalar_multiplication. should be done for all elements.
-        let x_m_1 = &x_exp[1..ROWS + 1]; //necessary to create an iterator
-
-        let temp_a = RistrettoPoint::optional_multiscalar_mul(
-            x_m_1.iter(),
-            c_A.iter().map(|pt| pt.decompress()),
-        );
-        let comit_a_product = self.c_A_0.decompress().unwrap() + temp_a.unwrap();
-
-        //com(a_bar,r)
-        let comit_a_bar = xpc_gens.commit(&self.a_vec, self.r);
-        // prod j=0..m (c_Bj^x^(m-j) ) = com(b_bar,s)
-        //Com_B_m ^ X^0 = com_b3
-        let x_exp_m = &x_exp[1..ROWS + 1]; //necessary to create an iterator
-                                           // let comit_b_full = RistrettoPoint::optional_multiscalar_mul(
-                                           //     x_exp_m.iter().rev(),
-                                           //     arg.c_B
-                                           //         .iter()
-                                           //         .map(|pt| pt.decompress())
-                                           //         .chain(iter::once(self.c_B_m.decompress())),
-                                           // );
-
-        let mut comit_b_full =
-            RistrettoPoint::multiscalar_mul(x_exp_m.iter().rev(), c_B.into_iter());
-        comit_b_full = comit_b_full + self.c_B_m.decompress().unwrap();
-
-        //com(b_bar,s)
-        let comit_b_bar = xpc_gens.commit(&self.b_vec, self.s);
-        // Verify for k=0..2m c_D_k ^(x ^k)  ==  com(a_bar * b_bar; t) where * is bilinear map
-
-        //com(a_bar * b_bar; t)
-        //create y^i
-        let y_i: Vec<_> = vectorutil::exp_iter(chal_y).skip(1).take(ROWS).collect();
-        //let y_i = &y_exp[1..4].to_vec();
-        let a_bar_b_bar = single_bilinearmap(&self.a_vec, &self.b_vec, &y_i);
-        let comit_a_bar_b_bar = pc_gens.commit(a_bar_b_bar, self.t);
-
-        //k=0..2m c_D_k ^(x ^k)
-        let c_D_x_k = RistrettoPoint::optional_multiscalar_mul(
-            x_exp.iter(),
-            self.c_D.iter().map(|pt| pt.decompress()),
-        );
-        // if comit_a_bar_b_bar == c_D_x_k.unwrap() {
-        //     println!(" c_D_x_k Verifies");
-        // } else {
-        //     println!(" c_D_x_k Veification fails");
-        // }
-        // if comit_a_bar == comit_a_product {
-        //     println!(" comit_a_bar Verifies");
-        // } else {
-        //     println!(" comit_a_bar Veification fails");
-        // }
-        // if comit_b_bar == comit_b_full {
-        //     println!(" comit_b_bar Verifies");
-        // } else {
-        //     println!(" comit_b_bar Veification fails");
-        // }
-        comit_a_bar_b_bar == c_D_x_k.unwrap()
-            && comit_a_bar == comit_a_product
-            && comit_b_bar == comit_b_full
     }
 }
 
@@ -848,7 +867,7 @@ mod test {
         //     c_b: cb.compress(),
         // };
         let verify = had_proof.verify(&mut verifier, &had_arg, &comit_a_vec, &pc_gens, &xpc_gens);
-        assert!(verify);
+        assert!(verify.unwrap());
 
         //println!("Verify Hadamard and Zero {:?}", verify)
     }
@@ -893,7 +912,7 @@ mod test {
             &pc_gens,
             &xpc_gens,
         );
-
+        // prod_state.svp_statement.b = Scalar::zero();
         let mut transcript_v = Transcript::new(b"ShuffleProof");
         let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
 
@@ -904,7 +923,9 @@ mod test {
             &pc_gens,
             &xpc_gens,
         );
-        assert!(verify);
+        //eprintln!("Product Argument Verify {:?}", verify);
+
+        assert!(verify.unwrap());
 
         //println!("Product Argument Verify {:?}", verify)
     }

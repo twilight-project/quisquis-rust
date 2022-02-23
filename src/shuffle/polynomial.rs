@@ -298,74 +298,76 @@ fn create_l_x_polynomial(w: &[Scalar]) -> Polynomial {
     return l;
 }
 //Create "l(X)" and "li(X)" polynomials
-fn create_l_i_x_polynomial(w: &[Scalar]) -> [Polynomial; 4] {
+pub fn create_l_i_x_polynomial(w: &[Scalar]) -> [Polynomial; 4] {
+    //check length of vector
+    assert_eq!(w.len(), 3);
     //create l(X)
-    let l_x = create_l_x_polynomial(&w[1..]);
+    let l_x = create_l_x_polynomial(&w[0..]);
     l_x.print_polynomial();
     //Create l_1(X) assuming length of w = 3
-    let poly_num_1 = create_l_x_polynomial(&w[2..]);
-    let poly_denom_1 = (w[1] - w[2]) * (w[1] - w[3]);
+    let poly_num_1 = create_l_x_polynomial(&w[1..]);
+    let poly_denom_1 = (w[0] - w[1]) * (w[0] - w[2]);
     let l_1_x = poly_num_1.divide_scalar(poly_denom_1);
     l_1_x.print_polynomial();
     //Create l_2(X) assuming length of w = 3
-    let scalar: Vec<Scalar> = vec![w[1], w[3]];
+    let scalar: Vec<Scalar> = vec![w[0], w[2]];
     let poly_num_2 = create_l_x_polynomial(&scalar);
-    let poly_denom_2 = (w[2] - w[1]) * (w[2] - w[3]);
+    let poly_denom_2 = (w[1] - w[0]) * (w[1] - w[2]);
     let l_2_x = poly_num_2.divide_scalar(poly_denom_2);
     l_2_x.print_polynomial();
     //Create l_3(X) assuming length of w = 3
-    let poly_num_3 = create_l_x_polynomial(&w[1..3]);
-    let poly_denom_3 = (w[3] - w[1]) * (w[3] - w[2]);
+    let poly_num_3 = create_l_x_polynomial(&w[0..2]);
+    let poly_denom_3 = (w[2] - w[0]) * (w[2] - w[1]);
     let l_3_x = poly_num_3.divide_scalar(poly_denom_3);
     l_3_x.print_polynomial();
     //0 -> l(X), 1-> l_1(X), 2-> l_2(X), 3-> l_3(X)
     [l_x, l_1_x, l_2_x, l_3_x]
 }
 
-//Create "l(X)" and "li(X)" polynomials
-pub fn create_l_poly(w: &[Scalar]) -> [Polynomial; 4] {
-    // let mut result_poly: Vec<Polynomial> = Vec::<Polynomial>::with_capacity(4);
-    println!("  ");
-    println!("In New");
-    //create l(X)
-    let l_x = create_l_x_polynomial(&w[1..]);
-    l_x.print_polynomial();
-    //result_poly.push(l_x.clone());
-    //Create li(X)
-    let num_1 = l_x
-        .clone()
-        .divide(&mut create_1D_poly(Scalar::from(1u64), -w[1]), 2);
-    let poly_denom_1 = (w[1] - w[2]) * (w[1] - w[3]);
-    let l_1_x = num_1.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_1.invert()));
-    l_1_x.print_polynomial();
+// //Create "l(X)" and "li(X)" polynomials
+// pub fn create_l_poly(w: &[Scalar]) -> [Polynomial; 4] {
+//     // let mut result_poly: Vec<Polynomial> = Vec::<Polynomial>::with_capacity(4);
+//     println!("  ");
+//     println!("In New");
+//     //create l(X)
+//     let l_x = create_l_x_polynomial(&w[1..]);
+//     l_x.print_polynomial();
+//     //result_poly.push(l_x.clone());
+//     //Create li(X)
+//     let num_1 = l_x
+//         .clone()
+//         .divide(&mut create_1D_poly(Scalar::from(1u64), -w[1]), 2);
+//     let poly_denom_1 = (w[1] - w[2]) * (w[1] - w[3]);
+//     let l_1_x = num_1.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_1.invert()));
+//     l_1_x.print_polynomial();
 
-    let num_2 = l_x
-        .clone()
-        .divide(&mut create_1D_poly(Scalar::from(1u64), -w[2]), 2);
-    let poly_denom_2 = (w[2] - w[1]) * (w[2] - w[3]);
-    let l_2_x = num_2.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_2.invert()));
-    l_2_x.print_polynomial();
+//     let num_2 = l_x
+//         .clone()
+//         .divide(&mut create_1D_poly(Scalar::from(1u64), -w[2]), 2);
+//     let poly_denom_2 = (w[2] - w[1]) * (w[2] - w[3]);
+//     let l_2_x = num_2.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_2.invert()));
+//     l_2_x.print_polynomial();
 
-    let num_3 = l_x
-        .clone()
-        .divide(&mut create_1D_poly(Scalar::from(1u64), -w[3]), 2);
-    let poly_denom_3 = (w[3] - w[1]) * (w[3] - w[2]);
-    let l_3_x = num_3.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_3.invert()));
-    l_3_x.print_polynomial();
+//     let num_3 = l_x
+//         .clone()
+//         .divide(&mut create_1D_poly(Scalar::from(1u64), -w[3]), 2);
+//     let poly_denom_3 = (w[3] - w[1]) * (w[3] - w[2]);
+//     let l_3_x = num_3.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_3.invert()));
+//     l_3_x.print_polynomial();
 
-    // for i in 1..4
-    // {
-    // 	let denom = Scalar::from(1u64); //Denominator
-    // 	let num = l_x.divide(&mut create_1D_poly(Scalar::from(1u64), -w[i]), 2);
-    // 	for (int j = 1; j <= dim; j++)
-    // 		if (i != j)	denom = denom * (w[i] - w[j]);
-    // 	denom = ((denom % m) + m) % m;
-    // 	int inv = mul_inv(m, denom);
-    // 	l[i] = poly_product(l[i], create_1D_poly(0, inv));
-    // }
+//     // for i in 1..4
+//     // {
+//     // 	let denom = Scalar::from(1u64); //Denominator
+//     // 	let num = l_x.divide(&mut create_1D_poly(Scalar::from(1u64), -w[i]), 2);
+//     // 	for (int j = 1; j <= dim; j++)
+//     // 		if (i != j)	denom = denom * (w[i] - w[j]);
+//     // 	denom = ((denom % m) + m) % m;
+//     // 	int inv = mul_inv(m, denom);
+//     // 	l[i] = poly_product(l[i], create_1D_poly(0, inv));
+//     // }
 
-    [l_x, l_1_x, l_2_x, l_3_x]
-}
+//     [l_x, l_1_x, l_2_x, l_3_x]
+// }
 //Polynomial Addition modulo m: a(X) + b(X)
 impl<'a, 'b> Add<&'a Polynomial> for &'b Polynomial {
     type Output = Polynomial;
@@ -489,8 +491,8 @@ pub fn create_hadamard_proof(
     //Both Prover and Verifier agrees on w_i (omega) values
     //w_0 is not used
 
-    let w: Vec<_> = (0..4).map(|_| Scalar::random(&mut OsRng)).collect();
-    let l_x_vec = create_l_poly(&w);
+    let w: Vec<_> = (0..3).map(|_| Scalar::random(&mut OsRng)).collect();
+    let l_x_vec = create_l_i_x_polynomial(&w);
     //check if the vector is constructed properly
     if l_x_vec.len() != 4 {
         panic!("L(X) polynomials are not constructed properly");
@@ -963,7 +965,7 @@ mod test {
             Scalar::from(3u64),
         ];
         let _poly = create_l_i_x_polynomial(&w);
-        let _poly2 = create_l_poly(&w);
+        // let _poly2 = create_l_poly(&w);
         // poly.print_polynomial();
 
         //assert_eq!(reference, exp_2);

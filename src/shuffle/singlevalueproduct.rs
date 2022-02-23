@@ -153,60 +153,70 @@ impl SVPProof {
         &self,
         verifier: &mut Verifier,
         svparg: &SVPStatement,
-        /* x: Scalar,*/ xpc_gens: &VectorPedersenGens,
-    ) -> bool {
+        xpc_gens: &VectorPedersenGens,
+    ) -> Result<bool, &'static str> {
         //Verification Code
         //checking the length of a_twildle and b_twildle vectors
-        assert_eq!(self.a_twildle.len(), COLUMNS);
-        assert_eq!(self.b_twildle.len(), COLUMNS);
+        if self.a_twildle.len() == COLUMNS && self.b_twildle.len() == COLUMNS {
+            if self.a_twildle[0] == self.b_twildle[0] {
+                //Create new transcript
+                verifier.new_domain_sep(b"SingleValueProductProof");
+                //RECREATE X FROM MERLIN HERE
+                //Add variables to Merlin transcript for challenge generation
+                verifier.allocate_point(b"DeltaSmall", self.commitment_delta_small);
+                verifier.allocate_point(b"DeltaCapital", self.commitment_delta_capital);
+                verifier.allocate_point(b"d", self.commitment_d);
 
-        //Create new transcript
-        verifier.new_domain_sep(b"SingleValueProductProof");
-        //RECREATE X FROM MERLIN HERE
-        //Add variables to Merlin transcript for challenge generation
-        verifier.allocate_point(b"DeltaSmall", self.commitment_delta_small);
-        verifier.allocate_point(b"DeltaCapital", self.commitment_delta_capital);
-        verifier.allocate_point(b"d", self.commitment_d);
+                let x = verifier.get_challenge(b"challenge");
+                // b_bar_n == b * x
+                let xb = svparg.b * x;
 
-        let x = verifier.get_challenge(b"challenge");
-        //c_a^x * c_d == com(abar;rbar)
-        //Compute vector commitment on a_twildle
-        let comit_a_bar = xpc_gens.commit(&self.a_twildle, self.r_twildle);
-        //compute comit_a * challenge x
-        let cax = svparg.commitment_a.decompress().unwrap() * x;
-        let caxcd = cax + self.commitment_d.decompress().unwrap();
+                if xb == self.b_twildle[COLUMNS - 1] {
+                    //c_a^x * c_d == com(abar;rbar)
+                    //Compute vector commitment on a_twildle
+                    let comit_a_bar = xpc_gens.commit(&self.a_twildle, self.r_twildle);
+                    //compute comit_a * challenge x
+                    let cax = svparg.commitment_a.decompress().unwrap() * x;
+                    let caxcd = cax + self.commitment_d.decompress().unwrap();
+                    if caxcd == comit_a_bar {
+                        //c_∆^x . c_δ = com_ck(x ̃b2 − ̃b1 ̃a2,...,x ̃bn − ̃bn−1 ̃an;  ̃s)
 
-        //c_∆^x . c_δ = com_ck(x ̃b2 − ̃b1 ̃a2,...,x ̃bn − ̃bn−1 ̃an;  ̃s)
+                        let cdelta_cap_x = self.commitment_delta_capital.decompress().unwrap() * x;
+                        let cdelta_cap_x_delta_small =
+                            cdelta_cap_x + self.commitment_delta_small.decompress().unwrap();
 
-        let cdelta_cap_x = self.commitment_delta_capital.decompress().unwrap() * x;
-        let cdelta_cap_x_delta_small =
-            cdelta_cap_x + self.commitment_delta_small.decompress().unwrap();
+                        let mut comvec = Vec::<Scalar>::new();
+                        // comvec[i] = x * b_bar[i+1] - b_bar[i]a_bar[i+1]
 
-        let mut comvec = Vec::<Scalar>::new();
-        // comvec[i] = x * b_bar[i+1] - b_bar[i]a_bar[i+1]
+                        for i in 0..COLUMNS - 1 {
+                            comvec.push(
+                                (self.b_twildle[i + 1] * x)
+                                    - (self.b_twildle[i] * self.a_twildle[i + 1]),
+                            );
+                        }
 
-        for i in 0..COLUMNS - 1 {
-            comvec.push((self.b_twildle[i + 1] * x) - (self.b_twildle[i] * self.a_twildle[i + 1]));
-        }
-
-        //create new CommitmentGens to accomodate for smaller lengths
-        let xpc_gens_trun = VectorPedersenGens::new(comvec.len() + 1);
-        let comit_verify = xpc_gens_trun.commit(&comvec, self.s_twildle);
-        // b_bar_n == b * x
-        let xb = svparg.b * x;
-
-        if cdelta_cap_x_delta_small == comit_verify
-            && caxcd == comit_a_bar
-            && self.a_twildle[0] == self.b_twildle[0]
-            && caxcd == comit_a_bar
-            && xb == self.b_twildle[COLUMNS - 1]
-        {
-            //println!("SVP verified");
-            return true;
+                        //create new CommitmentGens to accomodate for smaller lengths
+                        let xpc_gens_trun = VectorPedersenGens::new(comvec.len() + 1);
+                        let comit_verify = xpc_gens_trun.commit(&comvec, self.s_twildle);
+                        if cdelta_cap_x_delta_small == comit_verify {
+                            Ok(true)
+                        } else {
+                            Err("SingleValue Product Proof Verify: Failed")
+                        }
+                    } else {
+                        Err("SingleValue Product Proof Verify: Failed")
+                    }
+                } else {
+                    Err("SingleValue Product Proof Verify: Failed")
+                }
+            } else {
+                Err("SingleValue Product Proof Verify: Failed")
+            }
         } else {
-            //println!("SVP Failed");
-            return false;
+            Err("SingleValue Product Proof Verify: Size check failed")
         }
+        //assert_eq!(self.a_twildle.len(), COLUMNS);
+        //assert_eq!(self.b_twildle.len(), COLUMNS);
         // a_bar1 == b_bar1
         //  if self.a_twildle[0][0] == self.b_twildle[0] {
         //    println!("a1 == b1");
@@ -293,7 +303,7 @@ mod test {
         let mut transcript_v = Transcript::new(b"SingleValue");
         let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
         let verify = proof.verify(&mut verifier, &arg, &xpc_gens);
-        assert!(verify);
+        assert!(verify.unwrap());
         // println!("Verification {:?}",verify);
     }
 }

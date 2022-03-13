@@ -8,22 +8,12 @@ use rand::thread_rng;
 
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
 use crate::{
-    accounts::Account,
-    elgamal::{elgamal::ElGamalCommitment, signed_integer::SignedInteger},
-    pedersen::VectorPedersenGens,
-    ristretto::{RistrettoPublicKey, RistrettoSecretKey},
-    shuffle::{
-        shuffle::{ShuffleProof, ShuffleStatement},
-        Shuffle,
-    },
+    accounts::Account, elgamal::signed_integer::SignedInteger, ristretto::RistrettoSecretKey,
 };
-use curve25519_dalek::traits::MultiscalarMul;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
 use merlin::Transcript;
-
-use rand::rngs::OsRng;
 
 pub struct Prover<'a> {
     transcript: &'a mut Transcript,
@@ -96,6 +86,7 @@ impl<'a> Prover<'a> {
         for value in value_vector.iter() {
             v_dash_vector.push(SignedInteger::into(SignedInteger::from(*value as u64)));
         }
+        println!("Value vector : {:?}", value_vector);
 
         prover.scalars = rscalar1
             .iter()
@@ -118,7 +109,7 @@ impl<'a> Prover<'a> {
             v_doubledash_vector.push(Scalar::random(&mut transcript_rng));
         }
 
-        // let e_delta = &delta_accounts[i].pk.gr.decompress().unwrap() * &r1_dash;
+        // lets create e_delta
         let e_delta = delta_accounts
             .iter()
             .zip(r1_dash_vector.iter())
@@ -291,111 +282,109 @@ impl<'a> Prover<'a> {
     }
 
     // verify_account_prover creates a signature for the sender account
-    // it proves the sender has secretkey and enough balance
+    // it proves the sender has secretkey and enough balance using rangeproof
     pub fn verify_account_prover(
-        updated_delta_account: &Vec<Account>,
-        epsilon_account: &Vec<Account>,
-        bl: Vec<i64>,
-        sk: &Vec<RistrettoSecretKey>,
-        rscalar: Vec<Scalar>,
+        updated_delta_account_sender: &[Account],
+        epsilon_account_sender: &[Account],
+        bl: &[i64],
+        sk: &[RistrettoSecretKey],
+        rscalar: &[Scalar],
         rp_prover: &mut RangeProofProver,
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
-        let mut r_dash_vector: Vec<Scalar> = Vec::new();
-        let mut rv_vector: Vec<Scalar> = Vec::new();
-        let mut rsk_vector: Vec<Scalar> = Vec::new();
-        let mut v_dash_vector: Vec<Scalar> = Vec::new();
-
         // lets start a transcript and a prover script
         let mut transcript = Transcript::new(b"VerifyAccountProver");
         let mut prover = Prover::new(b"DLEQProof", &mut transcript);
 
-        for balance in bl.iter() {
-            v_dash_vector.push(SignedInteger::into(SignedInteger::from(*balance as u64)));
-        }
+        //adding witness to initialze transcript RNG (Random Number Generator)
+        let v_vector: Vec<Scalar> = bl
+            .iter()
+            .map(|balance| Scalar::from(*balance as u64))
+            .collect();
+        //for balance in bl {
+        //    v_dash_vector.push(SignedInteger::into(SignedInteger::from(balance as u64)));
+        //}
 
         prover.scalars = rscalar
             .iter()
             .cloned()
-            .chain(v_dash_vector.iter().cloned())
+            .chain(v_vector.iter().cloned())
             .collect();
-
-        for i in 0..updated_delta_account.iter().count() {
-            prover.allocate_account(b"delta_account", updated_delta_account[i]);
-            prover.allocate_account(b"epsilon_account", epsilon_account[i]);
+        //add statement accounts to transcript
+        for i in 0..updated_delta_account_sender.iter().count() {
+            prover.allocate_account(b"delta_account", updated_delta_account_sender[i]);
+            prover.allocate_account(b"epsilon_account", epsilon_account_sender[i]);
         }
 
         let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
 
-        for _ in 0..bl.iter().count() {
-            // Generate and collect three blindings
-            rv_vector.push(Scalar::random(&mut transcript_rng));
-            rsk_vector.push(Scalar::random(&mut transcript_rng));
-            r_dash_vector.push(Scalar::random(&mut transcript_rng));
-        }
+        // create random vectors of r_v, r_sk and r_dash
+        let rv_vector: Vec<Scalar> = (0..bl.len())
+            .map(|_| Scalar::random(&mut transcript_rng))
+            .collect();
+        let rsk_vector: Vec<Scalar> = (0..bl.len())
+            .map(|_| Scalar::random(&mut transcript_rng))
+            .collect();
+        let r_dash_vector: Vec<Scalar> = (0..bl.len())
+            .map(|_| Scalar::random(&mut transcript_rng))
+            .collect();
 
-        //let create e_delta
-        let e_delta = updated_delta_account
+        //let create e_delta = g_delta * r_sk
+        let e_delta = updated_delta_account_sender
             .iter()
             .zip(rsk_vector.iter())
-            .map(|(u, rsk)| u.pk.gr.decompress().unwrap() * rsk)
+            .map(|(updated_account, rsk)| updated_account.pk.gr.decompress().unwrap() * rsk)
             .collect::<Vec<_>>();
-        // lets generate f_delta
 
-        let g_rv = epsilon_account
+        // lets create f_delta = g * r_v + c_delta * r_sk
+        let g_rv = epsilon_account_sender
             .iter()
             .zip(rv_vector.iter())
-            .map(|(e, rv)| e.pk.gr.decompress().unwrap() * rv)
+            .map(|(epsilon, rv)| epsilon.pk.gr.decompress().unwrap() * rv)
             .collect::<Vec<_>>();
 
-        let c_rsk = updated_delta_account
+        let c_rsk = updated_delta_account_sender
             .iter()
             .zip(rsk_vector.iter())
-            .map(|(e, rsk)| e.comm.c.decompress().unwrap() * rsk)
+            .map(|(updated_account, rsk)| updated_account.comm.c.decompress().unwrap() * rsk)
             .collect::<Vec<_>>();
-
         let f_delta = g_rv
             .iter()
             .zip(c_rsk.iter())
             .map(|(grv, crsk)| grv + crsk)
             .collect::<Vec<_>>();
-        //let create e_epsilon
-        let e_epsilon = epsilon_account
-            .iter()
-            .zip(r_dash_vector.iter())
-            .map(|(g, rdash)| g.pk.gr.decompress().unwrap() * rdash)
-            .collect::<Vec<_>>();
-        // lets generate f_epsilon
 
-        let h_rdash = epsilon_account
+        //let create e_epsilon = g * r_dash
+        let e_epsilon = epsilon_account_sender
             .iter()
             .zip(r_dash_vector.iter())
-            .map(|(e, rdash)| e.pk.grsk.decompress().unwrap() * rdash)
+            .map(|(epsilon, rdash)| epsilon.pk.gr.decompress().unwrap() * rdash)
+            .collect::<Vec<_>>();
+
+        // lets create f_epsilon = g * r_v + h * r_dash
+        let h_rdash = epsilon_account_sender
+            .iter()
+            .zip(r_dash_vector.iter())
+            .map(|(epsilon, rdash)| epsilon.pk.grsk.decompress().unwrap() * rdash)
             .collect::<Vec<_>>();
 
         let f_epsilon = g_rv
             .iter()
             .zip(h_rdash.iter())
-            .map(|(g, h)| g + h)
+            .map(|(grv, hrdash)| grv + hrdash)
             .collect::<Vec<_>>();
 
-        for i in 0..bl.iter().count() {
-            prover.allocate_point(b"e_delta", e_delta[i].compress());
+        //adding e,f to transcript
+        for (i, e_delta) in e_delta.iter().enumerate() {
+            prover.allocate_point(b"e_delta", e_delta.compress());
             prover.allocate_point(b"f_delta", f_delta[i].compress());
             prover.allocate_point(b"e_epsilon", e_epsilon[i].compress());
             prover.allocate_point(b"f_epsilon", f_epsilon[i].compress());
-            println!("{:?}", e_delta[i].compress());
-            println!("{:?}", f_delta[i].compress());
-            println!("{:?}", e_epsilon[i].compress());
-            println!("{:?}", f_epsilon[i].compress());
         }
         // obtain a scalar challenge
-        let x = transcript.get_challenge(b"chal");
+        let x = transcript.get_challenge(b"challenge");
 
-        // lets create zv
-        let xv_dash_vector = v_dash_vector
-            .iter()
-            .map(|v_dash| v_dash * x)
-            .collect::<Vec<_>>();
+        // lets create zv = r_v - x * v
+        let xv_dash_vector = v_vector.iter().map(|v_dash| v_dash * x).collect::<Vec<_>>();
 
         let zv_vector = rv_vector
             .iter()
@@ -403,16 +392,16 @@ impl<'a> Prover<'a> {
             .map(|(rv, xv_dash)| rv - xv_dash)
             .collect::<Vec<_>>();
 
-        // lets create zsk
+        // lets create zsk = r_sk - x * sk
         let x_sk_vector = sk.iter().map(|s| s.0 * x).collect::<Vec<_>>();
 
         let zsk_vector = rsk_vector
             .iter()
             .zip(x_sk_vector.iter())
-            .map(|(rsk, x_sk)| rsk - x_sk)
+            .map(|(rsk, xsk)| rsk - xsk)
             .collect::<Vec<_>>();
 
-        // lets create zr
+        // lets create zr = r_dash - x * rscalar
         let x_rscalar_vector = rscalar.iter().map(|r| r * x).collect::<Vec<_>>();
 
         let zr_vector = r_dash_vector
@@ -421,341 +410,217 @@ impl<'a> Prover<'a> {
             .map(|(r_dash, x_rscalar)| r_dash - x_rscalar)
             .collect::<Vec<_>>();
 
-        //Create RICS constraint based range proof over Account value
-        for i in 0..epsilon_account.iter().count() {
-            let _ = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
+        //create RICS constraint based range proof over sneder account value : bl - v > 0
+        for i in 0..epsilon_account_sender.iter().count() {
+            //panics in case range proof is not constructed properly
+            println!("bl {:?}", bl[i]);
+            let res = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
+            println!("res {:?}", res.is_ok());
+
+            println!("res {:?}", res.unwrap());
         }
+
         return (zv_vector, zsk_vector, zr_vector, x);
     }
     //verify_non_negative_prover creates range proof on Receiver accounts with zero balance
     pub fn verify_non_negative_prover(
-        epsilon_account: &Vec<Account>,
-        bl: Vec<i64>,
-        rscalar: Vec<Scalar>,
+        /*epsilon_account: &Vec<Account>,*/
+        bl: &[i64],
+        rscalar: &[Scalar],
         rp_prover: &mut RangeProofProver,
     ) {
-        for i in 0..epsilon_account.iter().count() {
-            let _ = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
+        for i in 0..bl.iter().count() {
+            let res = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
+            println!("res {:?}", res.is_ok());
+            println!("res {:?}", res.unwrap());
         }
     }
-    // /!Prover view of the Shuffle Argument proof
-    // /
-    // pub fn complete_shuffle_argument_prover(
-    //     shuffle: &Shuffle,
-    //     pc_gens: &PedersenGens,
-    //     xpc_gens: &VectorPedersenGens,
-    // ) -> (ShuffleProof, ShuffleStatement) {
-    //     //Computes product and multiexponential argument to produce Shuffle proof.
-    //     // lets start a transcript and a prover script
-    //     let mut transcript = Transcript::new(b"ShuffleProof");
-    //     let mut prover = Prover::new(b"ShuffleProver", &mut transcript);
-    //     //get permuatation matrix as witness to shuffle
-    //     let witness = shuffle.pi.get_permutation_as_scalar_matrix();
-    //     prover.scalars = witness.elements_row_major_iter().cloned().collect();
-
-    //     let (mut prover, _transcript_rng) = prover.prove_impl(); //confirm
-
-    //     ShuffleProof::create_shuffle_proof(&mut prover, shuffle, &witness, pc_gens, xpc_gens)
-    // }
 }
-// Prover's scope
-fn hadamard_product_prove(
-    pc_gens: &PedersenGens,
-    bp_gens: &BulletproofGens,
-    a: &Vec<Scalar>,
-    b: &Vec<Scalar>,
-    c: &Vec<Scalar>,
-) -> Result<
-    (
-        R1CSProof,
-        Vec<CompressedRistretto>,
-        Vec<CompressedRistretto>,
-        Vec<CompressedRistretto>,
-    ),
-    R1CSError,
-> {
-    let mut transcript = Transcript::new(b"HadamardProductProof");
-
-    // 1. Create a prover
-    //let cs = r1cs::Prover::new(&pc_gens, Transcript::new(b"bulletproof.r1cs"));
-    let mut prover = bulletproofs::r1cs::Prover::new(pc_gens, &mut transcript);
-
-    // 2. Commit high-level variables
-    let (a_commitments, a_vars): (Vec<_>, Vec<_>) = a
-        .into_iter()
-        .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
-        .unzip();
-
-    let (b_commitments, b_vars): (Vec<_>, Vec<_>) = b
-        .into_iter()
-        .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
-        .unzip();
-
-    let (c_commitments, c_vars): (Vec<_>, Vec<_>) = c
-        .into_iter()
-        .map(|x| prover.commit(Scalar::from(*x), Scalar::random(&mut thread_rng())))
-        .unzip();
-    //convert variables to Linearcombinations
-
-    // 3. Build a CS
-    hadamard_gadget(&mut prover, &a_vars, &b_vars, &c_vars);
-
-    // 4. Make a proof
-    let proof = prover.prove(bp_gens)?;
-
-    Ok((proof, a_commitments, b_commitments, c_commitments))
-}
-
-/// Constrains (a1 + a2) * (b1 + b2) = (c1 + c2)
-fn hadamard_gadget<CS: ConstraintSystem>(
-    cs: &mut CS,
-    a: &Vec<Variable>,
-    b: &Vec<Variable>,
-    c: &Vec<Variable>,
-) {
-    for i in 0..a.len() {
-        // Create low-level variables and add them to constraints
-        let (_, _, o) = cs.multiply(a[i].into(), b[i].into());
-
-        // Enforce a * b = c, so one of (a,b) is zero
-        let lc: LinearCombination = o - c[i];
-        cs.constrain(lc);
-    }
-}
-// Verifier logic
-fn hadamard_gadget_verify(
-    pc_gens: &PedersenGens,
-    bp_gens: &BulletproofGens,
-    proof: R1CSProof,
-    a_commitments: &Vec<CompressedRistretto>,
-    b_commitments: &Vec<CompressedRistretto>,
-    c_commitments: &Vec<CompressedRistretto>,
-) -> Result<(), R1CSError> {
-    let mut transcript = Transcript::new(b"HadamardProductProof");
-
-    // 1. Create a verifier
-    let mut verifier = Verifier::new(&mut transcript);
-
-    // 2. Commit high-level variables
-    let a_vars: Vec<_> = a_commitments.iter().map(|v| verifier.commit(*v)).collect();
-    let b_vars: Vec<_> = b_commitments.iter().map(|v| verifier.commit(*v)).collect();
-    let c_vars: Vec<_> = c_commitments.iter().map(|v| verifier.commit(*v)).collect();
-
-    // 3. Build a CS
-    hadamard_gadget(&mut verifier, &a_vars, &b_vars, &c_vars);
-
-    // 4. Verify the proof
-    verifier
-        .verify(&proof, &pc_gens, &bp_gens)
-        .map_err(|_| R1CSError::VerificationError)
-}
-
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::{
-        accounts::Account,
-        keys::{PublicKey, SecretKey},
-        ristretto::{RistrettoPublicKey, RistrettoSecretKey},
-    };
-    use bulletproofs::r1cs;
-    use bulletproofs::{BulletproofGens, PedersenGens};
-    use rand::rngs::OsRng;
-    #[test]
-    fn verify_delta_compact_prover_test() {
-        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+//     use crate::{
+//         accounts::{Account, Prover, RangeProofVerifier, Verifier},
+//         keys::{PublicKey, SecretKey},
+//         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
+//     };
+//     use bulletproofs::r1cs;
+//     use bulletproofs::{BulletproofGens, PedersenGens};
+//     use rand::rngs::OsRng;
 
-        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
-        let mut account_vector: Vec<Account> = Vec::new();
+//     #[test]
+//     fn verify_delta_compact_prover_test() {
+//         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
-        for i in 0..9 {
-            let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
-            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let acc = Account::generate_account(pk);
+//         let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+//         let mut account_vector: Vec<Account> = Vec::new();
 
-            // lets get a random scalar to update the account
-            let updated_keys_scalar = Scalar::random(&mut OsRng);
+//         for i in 0..9 {
+//             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+//             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+//             let acc = Account::generate_account(pk);
 
-            // lets get a random scalar to update the commitments
-            let comm_scalar = Scalar::random(&mut OsRng);
+//             // lets get a random scalar to update the account
+//             let updated_keys_scalar = Scalar::random(&mut OsRng);
 
-            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+//             // lets get a random scalar to update the commitments
+//             let comm_scalar = Scalar::random(&mut OsRng);
 
-            account_vector.push(updated_account);
-        }
-        let (delta_accounts, epislon_accounts, rscalar) =
-            Account::create_delta_and_epsilon_accounts(
-                &account_vector,
-                &value_vector,
-                generate_base_pk,
-            );
+//             let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
 
-        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(
-            &delta_accounts,
-            &epislon_accounts,
-            &rscalar,
-            &rscalar,
-            &value_vector,
-        );
+//             account_vector.push(updated_account);
+//         }
+//         let (delta_accounts, epislon_accounts, rscalar) =
+//             Account::create_delta_and_epsilon_accounts(
+//                 &account_vector,
+//                 &value_vector,
+//                 generate_base_pk,
+//             );
 
-        println!("{:?}{:?}{:?}{:?}", zv_vector, zr1_vector, zr2_vector, x);
-    }
+//         let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(
+//             &delta_accounts,
+//             &epislon_accounts,
+//             &rscalar,
+//             &rscalar,
+//             &value_vector,
+//         );
 
-    #[test]
-    fn verify_update_account_prover_test() {
-        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+//         println!("{:?}{:?}{:?}{:?}", zv_vector, zr1_vector, zr2_vector, x);
+//     }
 
-        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
-        let mut updated_accounts: Vec<Account> = Vec::new();
+//     #[test]
+//     fn verify_update_account_prover_test() {
+//         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
-        for i in 0..9 {
-            let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
-            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let acc = Account::generate_account(pk);
+//         let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+//         let mut updated_accounts: Vec<Account> = Vec::new();
 
-            // lets get a random scalar to update the account
-            let updated_keys_scalar = Scalar::random(&mut OsRng);
+//         for i in 0..9 {
+//             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+//             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+//             let acc = Account::generate_account(pk);
 
-            // lets get a random scalar to update the commitments
-            let comm_scalar = Scalar::random(&mut OsRng);
+//             // lets get a random scalar to update the account
+//             let updated_keys_scalar = Scalar::random(&mut OsRng);
 
-            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+//             // lets get a random scalar to update the commitments
+//             let comm_scalar = Scalar::random(&mut OsRng);
 
-            updated_accounts.push(updated_account);
-        }
+//             let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
 
-        let (delta_accounts, _, rscalars) = Account::create_delta_and_epsilon_accounts(
-            &updated_accounts,
-            &value_vector,
-            generate_base_pk,
-        );
+//             updated_accounts.push(updated_account);
+//         }
 
-        let updated_delta_accounts =
-            Account::update_delta_accounts(&updated_accounts, &delta_accounts);
+//         let (delta_accounts, _, rscalars) = Account::create_delta_and_epsilon_accounts(
+//             &updated_accounts,
+//             &value_vector,
+//             generate_base_pk,
+//         );
 
-        // sending anonymity set as we know it at this point
-        let updated_accounts_slice = &updated_accounts[2..9];
+//         let updated_delta_accounts =
+//             Account::update_delta_accounts(&updated_accounts, &delta_accounts);
 
-        let updated_delta_accounts_slice = &updated_delta_accounts.as_ref().unwrap()[2..9];
+//         // sending anonymity set as we know it at this point
+//         let updated_accounts_slice = &updated_accounts[2..9];
 
-        let rscalars_slice = &rscalars[2..9];
+//         let updated_delta_accounts_slice = &updated_delta_accounts.as_ref().unwrap()[2..9];
 
-        let verify_update_proof = Prover::verify_update_account_prover(
-            &updated_accounts_slice.to_vec(),
-            &updated_delta_accounts_slice.to_vec(),
-            &rscalars_slice.to_vec(),
-        );
-        println!("{:?}", verify_update_proof);
-    }
+//         let rscalars_slice = &rscalars[2..9];
 
-    #[test]
-    fn verify_account_prover_test() {
-        let base_pk = RistrettoPublicKey::generate_base_pk();
+//         let verify_update_proof = Prover::verify_update_account_prover(
+//             &updated_accounts_slice.to_vec(),
+//             &updated_delta_accounts_slice.to_vec(),
+//             &rscalars_slice.to_vec(),
+//         );
+//         println!("{:?}", verify_update_proof);
+//     }
 
-        let value_vector: Vec<i64> = vec![-5, -3, 5, 3, 0, 0, 0, 0, 0];
-        let mut updated_accounts: Vec<Account> = Vec::new();
-        let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
+//     #[test]
+//     fn verify_account_prover_test() {
+//         let base_pk = RistrettoPublicKey::generate_base_pk();
 
-        for i in 0..9 {
-            let (updated_account, sk) = Account::generate_random_account_with_value(10);
+//         let value_vector: Vec<i64> = vec![-5, -3, 5, 3, 0, 0, 0, 0, 0];
+//         let mut updated_accounts: Vec<Account> = Vec::new();
+//         let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
 
-            updated_accounts.push(updated_account);
+//         for i in 0..9 {
+//             let (updated_account, sk) = Account::generate_random_account_with_value(10);
 
-            // lets save the first and second sk as sender's sk as we discard the rest
-            if i == 0 || i == 1 {
-                sender_sk.push(sk);
-            }
-        }
+//             updated_accounts.push(updated_account);
 
-        let (delta_accounts, _, rscalars) =
-            Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, base_pk);
+//             // lets save the first and second sk as sender's sk as we discard the rest
+//             if i == 0 || i == 1 {
+//                 sender_sk.push(sk);
+//             }
+//         }
 
-        let updated_delta_accounts =
-            Account::update_delta_accounts(&updated_accounts, &delta_accounts);
+//         let (delta_accounts, _, _) =
+//             Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, base_pk);
 
-        // balance that we want to prove should be sender balance - the balance user is trying to send
+//         let updated_delta_accounts =
+//             Account::update_delta_accounts(&updated_accounts, &delta_accounts);
 
-        let bl_first_sender = 10 - 5;
-        let bl_second_sender = 10 - 3;
+//         // balance that we want to prove should be sender balance - the balance user is trying to send
 
-        let delta_unwraped = updated_delta_accounts.unwrap();
-        let updated_delta_account_sender: Vec<Account> = vec![delta_unwraped[0], delta_unwraped[1]];
-        //let sender_sk_vector: Vec<Scalar> = vec!(sender_sk[0].0, sender_sk[1].0);
-        let value_vector_sender: Vec<i64> = vec![bl_first_sender, bl_second_sender];
+//         let bl_first_sender = 10 - 5;
+//         let bl_second_sender = 10 - 3;
 
-        let mut epsilon_account_vec: Vec<Account> = Vec::new();
-        let mut rscalar_sender: Vec<Scalar> = Vec::new();
+//         let delta_unwraped = updated_delta_accounts.unwrap();
+//         let updated_delta_account_sender: Vec<Account> = vec![delta_unwraped[0], delta_unwraped[1]];
+//         //let sender_sk_vector: Vec<Scalar> = vec!(sender_sk[0].0, sender_sk[1].0);
+//         let value_vector_sender: Vec<i64> = vec![bl_first_sender, bl_second_sender];
 
-        for i in 0..value_vector_sender.iter().count() {
-            // lets create an epsilon account with the new balance
-            let rscalar = Scalar::random(&mut OsRng);
-            rscalar_sender.push(rscalar);
-            // lets first create a new epsilon account using the passed balance
-            let epsilon_account: Account =
-                Account::create_epsilon_account(base_pk, rscalar, value_vector_sender[i]);
-            epsilon_account_vec.push(epsilon_account);
-        }
-        // Prepare the constraint system
-        let pc_gens = PedersenGens::default();
-        let cs = r1cs::Prover::new(&pc_gens, Transcript::new(b"bulletproof.r1cs"));
-        let mut prover = RangeProofProver { prover: cs };
-        let (zv, zsk, zr, x) = Prover::verify_account_prover(
-            &updated_delta_account_sender,
-            &epsilon_account_vec,
-            value_vector_sender,
-            &sender_sk,
-            rscalar_sender,
-            &mut prover,
-        );
-        let range_proof = prover.build_proof();
-        println!("{:?}", range_proof);
-        //let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &epsilon_account, &sender_sk, &rscalar_sender, &value_vector_sender);
+//         let mut epsilon_account_vec: Vec<Account> = Vec::new();
+//         let mut rscalar_sender: Vec<Scalar> = Vec::new();
 
-        // we need to verify that the sender has enough balance and posesses the sk
-        //let (zv, zsk, zr, x) = Prover::verify_account_prover(updated_delta_accounts.unwrap()[0], generate_base_pk, 5, &sender_sk[0]);
-        println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
-    }
-    #[test]
-    fn hadamard_product_rics_prover_test() {
-        let a_vector: Vec<Scalar> = vec![
-            Scalar::from(5u64),
-            Scalar::from(3u64),
-            Scalar::from(6u64),
-            Scalar::from(2u64),
-        ];
-        let b_vector: Vec<Scalar> = vec![
-            Scalar::from(3u64),
-            Scalar::from(2u64),
-            Scalar::from(4u64),
-            Scalar::from(7u64),
-        ];
-
-        let c_vector: Vec<Scalar> = vec![
-            Scalar::from(15u64),
-            Scalar::from(6u64),
-            Scalar::from(24u64),
-            Scalar::from(14u64),
-        ];
-        let pc_gens = PedersenGens::default();
-        let bp_gens = BulletproofGens::new(512, 1);
-
-        let res = hadamard_product_prove(&pc_gens, &bp_gens, &a_vector, &b_vector, &c_vector);
-        // let proof = res.
-        //println!("{:?}", res.as_ref().unwrap().0);
-
-        let verify = hadamard_gadget_verify(
-            &pc_gens,
-            &bp_gens,
-            res.as_ref().unwrap().0.clone(),
-            &res.as_ref().unwrap().1,
-            &res.as_ref().unwrap().2,
-            &res.as_ref().unwrap().3,
-        );
-
-        println!("{:?}", verify.is_ok());
-    }
-}
+//         for i in 0..value_vector_sender.iter().count() {
+//             // lets create an epsilon account with the new balance
+//             let rscalar = Scalar::random(&mut OsRng);
+//             rscalar_sender.push(rscalar);
+//             // lets first create a new epsilon account using the passed balance
+//             let epsilon_account: Account =
+//                 Account::create_epsilon_account(base_pk, rscalar, value_vector_sender[i]);
+//             epsilon_account_vec.push(epsilon_account);
+//         }
+//         // Prepare the constraint system
+//         let pc_gens = PedersenGens::default();
+//         let cs = r1cs::Prover::new(&pc_gens, Transcript::new(b"bulletproof.r1cs"));
+//         let mut prover = RangeProofProver { prover: cs };
+//         let (zv, zsk, zr, x) = Prover::verify_account_prover(
+//             &updated_delta_account_sender,
+//             &epsilon_account_vec,
+//             &value_vector_sender,
+//             &sender_sk,
+//             &rscalar_sender,
+//             &mut prover,
+//         );
+//         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+//         let cs_verifier = r1cs::Verifier::new(Transcript::new(b"Rangeproof.r1cs"));
+//         let mut range_verifier = RangeProofVerifier {
+//             verifier: cs_verifier,
+//         };
+//         println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
+//         //verify sender account signature and remaining balance. Rangeproof R1CS is updated
+//         let verify_sender_account_proof = Verifier::verify_account_verifier(
+//             &updated_delta_account_sender.to_vec(),
+//             &epsilon_account_vec,
+//             &generate_base_pk,
+//             &zv,
+//             &zsk,
+//             &zr,
+//             x,
+//             &mut range_verifier,
+//         );
+//         //let range_proof = prover.build_proof();
+//         //println!("{:?}", range_proof);
+//         //let (zv, zsk, zr, x) = Prover::verify_delta_compact_prover(&updated_delta_account_sender, &epsilon_account, &sender_sk, &rscalar_sender, &value_vector_sender);
+//         println!("Verify {:?}", verify_sender_account_proof);
+//         // we need to verify that the sender has enough balance and posesses the sk
+//         //let (zv, zsk, zr, x) = Prover::verify_account_prover(updated_delta_accounts.unwrap()[0], generate_base_pk, 5, &sender_sk[0]);
+//         //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
+//     }
+//}

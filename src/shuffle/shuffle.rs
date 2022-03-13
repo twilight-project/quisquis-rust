@@ -321,7 +321,7 @@ impl ShuffleProof {
         let e: Vec<_> = f.iter().map(|f| f - z).collect();
         let e_2d = Array2D::from_column_major(&e, ROWS, COLUMNS);
         let (product_proof, product_state) =
-            ProductProof::create_product_argument_prove(prover, &e_2d, &t, &pc_gens, &xpc_gens);
+            ProductProof::create_product_argument_proof(prover, &e_2d, &t, &pc_gens, &xpc_gens);
         //Create G,H for DDH and Multiexpo proof generation
         let pk: Vec<RistrettoPublicKey> = shuffle
             .inputs
@@ -511,8 +511,8 @@ impl ShuffleProof {
                 let verify_ddh = self.ddh_proof.verify_ddh_proof(
                     verifier,
                     &statement.ddh_statement,
-                    &pk_GH.gr,
-                    &pk_GH.grsk,
+                    pk_GH.gr,
+                    pk_GH.grsk,
                 );
                 if verify_ddh == true {
                     let _verify_pk_multi = self.multiexpo_pk.verify_multiexponential_pubkey_proof(

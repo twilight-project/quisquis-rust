@@ -146,7 +146,7 @@ impl SVPProof {
         verifier: &mut Verifier,
         svparg: &SVPStatement,
         xpc_gens: &VectorPedersenGens,
-    ) -> Result<bool, &'static str> {
+    ) -> Result<(), &'static str> {
         //Verification Code
         //checking the length of a_twildle and b_twildle vectors
         if self.a_twildle.len() == COLUMNS && self.b_twildle.len() == COLUMNS {
@@ -206,7 +206,7 @@ impl SVPProof {
                         let xpc_gens_trun = VectorPedersenGens::new(comvec.len() + 1);
                         let comit_verify = xpc_gens_trun.commit(&comvec, self.s_twildle);
                         if cdelta_cap_x_delta_small == comit_verify {
-                            Ok(true)
+                            Ok(())
                         } else {
                             Err("SingleValue Product Proof Verify: Failed")
                         }

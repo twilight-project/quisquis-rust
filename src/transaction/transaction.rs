@@ -82,7 +82,6 @@ impl Sender {
         if tx_vector.len() < 9 {
             let mut value_vector: Vec<i64> = tx_vector.iter().map(|s| s.total_amount).collect();
             let mut account_vector: Vec<Account> = tx_vector.iter().map(|s| s.account).collect();
-            println!("value vector: {:?}", value_vector);
             let senders_count: usize = tx_vector.iter().count();
             let mut receivers_count = 0;
             let mut receiver_amount_vector: Vec<i64> = Vec::new();
@@ -172,21 +171,19 @@ impl Sender {
         //generate Xcomit generator points of length m+1
         let xpc_gens = VectorPedersenGens::new(ROWS + 1);
         //create shuffle Prover merlin transcript
-        let mut transcript_input_shuffle_prover = Transcript::new(b"ShuffleProof");
+        let mut transcript_input_shuffle_prover = Transcript::new(b"InputShuffleProof");
         let mut input_shuffle_prover =
             Prover::new(b"Shuffle", &mut transcript_input_shuffle_prover);
-        let witness = input_shuffle.pi.get_permutation_as_scalar_matrix();
         let (input_shuffle_proof, input_shuffle_statement) = ShuffleProof::create_shuffle_proof(
             &mut input_shuffle_prover,
             &input_shuffle,
-            &witness,
             &pc_gens,
             &xpc_gens,
         );
 
         //Verify shuffle proof
         //create shuffle Verifier merlin transcript
-        let mut transcript_input_shuffle_verifier = Transcript::new(b"ShuffleProof");
+        let mut transcript_input_shuffle_verifier = Transcript::new(b"InputShuffleProof");
         let mut input_shuffle_verifier =
             Verifier::new(b"Shuffle", &mut transcript_input_shuffle_verifier);
         input_shuffle_proof.verify(
@@ -329,14 +326,20 @@ impl Sender {
                 let range_proof = range_prover.build_proof();
 
                 //add reciever nonnegative verification to RangeProofVerifier
-                Verifier::verify_non_negative_verifier(
+                let non_negative_verify = Verifier::verify_non_negative_verifier(
                     &reciever_epsilon_accounts_slice,
                     &mut range_verifier,
                 );
+                //? operator does not work because the function throws R1CS error
+                //Handling error explicitly
+                if non_negative_verify.is_err() {
+                    return Err("Range proof verify: Failed");
+                }
+
                 //Verify r1cs rangeproof
                 let bp_check = range_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
-                println!("Account proof {}", verify_sender_account_proof);
-                println!("Rangeverifier {:?}", bp_check.is_ok());
+                // println!("Account proof {}", verify_sender_account_proof);
+                // println!("Rangeverifier {:?}", bp_check.is_ok());
 
                 if verify_sender_account_proof == true && bp_check.is_ok() {
                     //Shuffle accounts
@@ -344,23 +347,23 @@ impl Sender {
                     let updated_again_account_vector = output_shuffle.get_outputs_vector();
                     //Create shuffle proof for output shuffle
                     //create new shuffle transcript
-                    let mut transcript_output_shuffle_prover = Transcript::new(b"ShuffleProof");
+                    let mut transcript_output_shuffle_prover =
+                        Transcript::new(b"OutputShuffleProof");
                     let mut output_shuffle_prover =
                         Prover::new(b"Shuffle", &mut transcript_output_shuffle_prover);
-                    let witness = output_shuffle.pi.get_permutation_as_scalar_matrix();
                     let (output_shuffle_proof, output_shuffle_statement) =
                         ShuffleProof::create_shuffle_proof(
                             &mut output_shuffle_prover,
                             &output_shuffle,
-                            &witness,
                             &pc_gens,
                             &xpc_gens,
                         );
                     //Verify shuffle proof
-                    let mut transcript_output_shuffle_verifier = Transcript::new(b"ShuffleProof");
+                    let mut transcript_output_shuffle_verifier =
+                        Transcript::new(b"OutputShuffleProof");
                     let mut output_shuffle_verifier =
                         Verifier::new(b"Shuffle", &mut transcript_output_shuffle_verifier);
-                    let verify_output_shuffle = output_shuffle_proof.verify(
+                    output_shuffle_proof.verify(
                         &mut output_shuffle_verifier,
                         &output_shuffle_statement,
                         &output_shuffle.get_inputs_vector(),

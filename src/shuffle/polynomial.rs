@@ -1,7 +1,6 @@
 //Polynomial Field STARTS here
 use crate::shuffle::shuffle::COLUMNS;
 use array2d::Array2D;
-use bulletproofs::PedersenGens;
 
 use crate::pedersen::vectorpedersen::VectorPedersenGens;
 use crate::shuffle::vectorutil;
@@ -30,7 +29,7 @@ fn create_1d_poly(a: Scalar, b: Scalar) -> Polynomial {
 }
 
 //Create a monomial of a given degree
-fn create_ND_poly(a: Scalar, n: usize) -> Polynomial {
+fn create_n_degree_poly(a: Scalar, n: usize) -> Polynomial {
     let mut coeff: Vec<Scalar> = vec![Scalar::zero(); n + 1];
     coeff[n] = a;
     Polynomial {
@@ -81,6 +80,7 @@ impl Polynomial {
         }
     }
     //Polynomial Scalar Multiply: a(X) * c
+    #[allow(dead_code)]
     fn multiply_scalar(&self, scalar: Scalar) -> Self {
         //create polynomial with zero coefficients with the highest term
         let mut coefficients = self.coefficients.clone();
@@ -149,7 +149,8 @@ impl Polynomial {
             //println!("Num degree {:?}", self.degree);
             //println!("Denom degree {:?}", denom.degree);
 
-            let poly_t = create_ND_poly(self.coefficients[self.degree], self.degree - denom.degree);
+            let poly_t =
+                create_n_degree_poly(self.coefficients[self.degree], self.degree - denom.degree);
             //println!("degree {:?}", degree);
             result_coeff[degree as usize] = poly_t.coefficients[degree as usize];
             degree = degree - 1;
@@ -184,7 +185,7 @@ pub fn polynomial_vectorial_add(a: &[Polynomial], b: &[Polynomial]) -> Vec<Polyn
     assert_eq!(a.len(), b.len());
     a.iter().zip(b.iter()).map(|(x, y)| x + y).collect()
 }
-
+#[allow(dead_code)]
 fn distinct(x: Scalar, a: &[Scalar]) -> bool {
     for i in 0..3 {
         if x == a[i] {
@@ -563,14 +564,14 @@ mod test {
     }
     #[test]
 
-    fn create_ND_polynomial_test() {
-        let poly = create_ND_poly(Scalar::from(4u64), 7);
+    fn create_n_degree_polynomial_test() {
+        let poly = create_n_degree_poly(Scalar::from(4u64), 7);
         poly.print_polynomial();
         //assert_eq!(reference, exp_2);
     }
     #[test]
     fn deg_adjust_polynomial_test() {
-        let mut poly = create_ND_poly(Scalar::from(3u64), 2);
+        let mut poly = create_n_degree_poly(Scalar::from(3u64), 2);
         //poly.print_polynomial();
         poly.poly_deg_adjust();
         poly.print_polynomial();

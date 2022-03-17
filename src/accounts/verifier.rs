@@ -308,7 +308,7 @@ mod test {
         let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
         let mut account_vector: Vec<Account> = Vec::new();
 
-        for i in 0..9 {
+        for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
             let acc = Account::generate_account(pk);
@@ -357,7 +357,7 @@ mod test {
         let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
         let mut updated_accounts: Vec<Account> = Vec::new();
 
-        for i in 0..9 {
+        for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
             let acc = Account::generate_account(pk);

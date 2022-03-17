@@ -422,9 +422,9 @@ mod test {
 
         // so we have 2 senders and 3 receivers, rest will be the anonymity set
 
-        let mut tx_vector: Vec<Sender> = Vec::new();
+        //let mut tx_vector: Vec<Sender> = Vec::new();
 
-        tx_vector = vec![
+        let tx_vector: Vec<Sender> = vec![
             Sender {
                 total_amount: -5,
                 account: bob_account_1,

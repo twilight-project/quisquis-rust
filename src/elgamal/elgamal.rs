@@ -1,6 +1,5 @@
 use crate::{
     elgamal::signed_integer::SignedInteger,
-    keys::{PublicKey, SecretKey},
     ristretto::{RistrettoPublicKey, RistrettoSecretKey},
 };
 use core::ops::{Mul, Sub};
@@ -32,7 +31,6 @@ impl ElGamalCommitment {
         let c = &rscalar * &p.gr.decompress().unwrap();
 
         let signed_int = SignedInteger::from(bl as u64);
-        println!("balance{:?}", signed_int);
         let bl_scalar: Scalar = SignedInteger::into(signed_int);
 
         // lets multiply balance scalar with the basepoint scalar

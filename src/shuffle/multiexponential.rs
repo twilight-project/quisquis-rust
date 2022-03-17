@@ -257,7 +257,7 @@ impl MultiexpoProof {
         x_exp: &[Scalar],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-    ) -> Result<bool, &'static str> {
+    ) -> Result<(), &'static str> {
         // Verify c_A_0 . c_A_vec^(x_vec) = com (a_vec,r)
         //compute C_A^x_vec
         let c_a_0_c_a_x_vec = RistrettoPoint::optional_multiscalar_mul(
@@ -282,7 +282,7 @@ impl MultiexpoProof {
             )
             .ok_or_else(|| "MultiexponentialProof Verify: Failed")?;
             if comit_b_s == c_b_k_x_k {
-                Ok(true)
+                Ok(())
             } else {
                 Err("Multi-exponentiation Argument: Scalar b Verification Failed")
             }
@@ -346,7 +346,7 @@ impl MultiexpoProof {
         xpc_gens: &VectorPedersenGens,
         base_pk: &RistrettoPublicKey,
         exp_x: &[Scalar], //used for creating C on the verifier
-    ) -> Result<bool, &'static str> {
+    ) -> Result<(), &'static str> {
         //Check cA0,cB0,...,cB2m−1 ∈ G and E0,...,E2m−1 ∈ H and ~a ∈ Z_q^n
         //accept if cBm = comck(0; 0) and Em = C
         let comit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
@@ -393,60 +393,54 @@ impl MultiexpoProof {
                 let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2 * ROWS).collect();
                 // Verify c_A_0 . c_A_vec^(x_vec) = com (a_vec,r)
                 //Verifying Cb_0 .. == comit(b;s)
-                let verify_scalars =
-                    self.verify_multiexpo_scalars(c_A, &x_exp, &pc_gens, &xpc_gens)?;
+                self.verify_multiexpo_scalars(c_A, &x_exp, &pc_gens, &xpc_gens)?;
 
-                if verify_scalars {
-                    //E_0 . prod of k =1 -> 2m-1 {E_k ^ {x^k}} = reencryption * prod of i =1 -> m {C_i ^ {x ^ m-i}a}
-                    //computing the rhs.
-                    //extract commitments from accounts
-                    let updated_comitments: Vec<ElGamalCommitment> =
-                        updated_accounts.iter().map(|acc| acc.comm).collect();
+                //E_0 . prod of k =1 -> 2m-1 {E_k ^ {x^k}} = reencryption * prod of i =1 -> m {C_i ^ {x ^ m-i}a}
+                //computing the rhs.
+                //extract commitments from accounts
+                let updated_comitments: Vec<ElGamalCommitment> =
+                    updated_accounts.iter().map(|acc| acc.comm).collect();
 
-                    //extract c,d from commitments
-                    let c = updated_comitments
-                        .iter()
-                        .map(|pt| {
-                            pt.c.decompress()
-                                .ok_or("MultiexponentialProof Verify: Decompression Failed")
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
-                    let d = updated_comitments
-                        .iter()
-                        .map(|pt| {
-                            pt.d.decompress()
-                                .ok_or("MultiexponentialProof Verify: Decompression Failed")
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
+                //extract c,d from commitments
+                let c = updated_comitments
+                    .iter()
+                    .map(|pt| {
+                        pt.c.decompress()
+                            .ok_or("MultiexponentialProof Verify: Decompression Failed")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let d = updated_comitments
+                    .iter()
+                    .map(|pt| {
+                        pt.d.decompress()
+                            .ok_or("MultiexponentialProof Verify: Decompression Failed")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
 
-                    //reencryption
-                    let c_bb = reencrypt_commitment(base_pk, self.t, self.b);
-                    //product of i ..m C_i^(x^m-i)a
-                    // for i = 1
-                    //computing the scalar x^(3-1)a = x^2.a
-                    //computing the left hand side. E0 + product of Ek^x^k
-                    //Ek^x^k for k = 1..2m-1
-                    let (E_k_c_x_k, E_k_d_x_k, c_c_x, c_d_x) =
-                        self.verify_multiexpo_ek(&x_exp, &c, &d);
-                    let rhs_c = c_c_x
-                        + c_bb
-                            .c
-                            .decompress()
-                            .ok_or("MultiexponentialProof Verify: Decompression Failed")?;
-                    let rhs_d = c_d_x
-                        + c_bb
-                            .d
-                            .decompress()
-                            .ok_or("MultiexponentialProof Verify: Decompression Failed")?;
-                    if E_k_c_x_k.ok_or("MultiexponentialProof Verify: Failed")? == rhs_c
-                        && E_k_d_x_k.ok_or("MultiexponentialProof Verify:Failed")? == rhs_d
-                    {
-                        Ok(true)
-                    } else {
-                        Err("Multi-exponentiation Commitment Argument: E_K Verification Failed")
-                    }
+                //reencryption
+                let c_bb = reencrypt_commitment(base_pk, self.t, self.b);
+                //product of i ..m C_i^(x^m-i)a
+                // for i = 1
+                //computing the scalar x^(3-1)a = x^2.a
+                //computing the left hand side. E0 + product of Ek^x^k
+                //Ek^x^k for k = 1..2m-1
+                let (E_k_c_x_k, E_k_d_x_k, c_c_x, c_d_x) = self.verify_multiexpo_ek(&x_exp, &c, &d);
+                let rhs_c = c_c_x
+                    + c_bb
+                        .c
+                        .decompress()
+                        .ok_or("MultiexponentialProof Verify: Decompression Failed")?;
+                let rhs_d = c_d_x
+                    + c_bb
+                        .d
+                        .decompress()
+                        .ok_or("MultiexponentialProof Verify: Decompression Failed")?;
+                if E_k_c_x_k.ok_or("MultiexponentialProof Verify: Failed")? == rhs_c
+                    && E_k_d_x_k.ok_or("MultiexponentialProof Verify:Failed")? == rhs_d
+                {
+                    Ok(())
                 } else {
-                    Err("Multi-exponentiation Commitment Argument: Scalar Verification Failed")
+                    Err("Multi-exponentiation Commitment Argument: E_K Verification Failed")
                 }
             } else {
                 Err("Multi-exponentiation Commitment Argument: Verify C == Em Failed")
@@ -464,7 +458,7 @@ impl MultiexpoProof {
         xpc_gens: &VectorPedersenGens,
         base_pk: &RistrettoPublicKey,
         pk_GH: &RistrettoPublicKey,
-    ) -> Result<bool, &'static str> {
+    ) -> Result<(), &'static str> {
         //accept if cBm = comck(0; 0) and Em = C
         let comit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
         if self.a_vec.len() == COLUMNS && comit_0_0.compress() == self.c_B_k[ROWS] {
@@ -496,55 +490,51 @@ impl MultiexpoProof {
                 let x_exp: Vec<_> = vectorutil::exp_iter(x).take(2 * ROWS).collect();
 
                 //compute C_A^x_vec, //Verifying Cb_0 .. == comit(b;s), //product of (c_B_k)^(x^k)
-                let verify_scalars =
-                    self.verify_multiexpo_scalars(c_A, &x_exp, &pc_gens, &xpc_gens)?;
-                if verify_scalars {
-                    let upks: Vec<RistrettoPublicKey> =
-                        updated_accounts.iter().map(|acc| acc.pk).collect();
 
-                    //extract g,h from RistrettoPublicKey
-                    let g = upks
-                        .iter()
-                        .map(|pt| {
-                            pt.gr
-                                .decompress()
-                                .ok_or("MultiexponentialProof Verify: Decompression Failed")
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
-                    let h = upks
-                        .iter()
-                        .map(|pt| {
-                            pt.grsk
-                                .decompress()
-                                .ok_or("MultiexponentialProof Verify: Decompression Failed")
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
-                    //reencryption (G,H)^b
-                    let g_bb = base_pk
-                        .gr
-                        .decompress()
-                        .ok_or("MultiexponentialProof Verify: Decompression Failed")?
-                        * self.b;
-                    let h_bb = base_pk
-                        .grsk
-                        .decompress()
-                        .ok_or("MultiexponentialProof Verify: Decompression Failed")?
-                        * self.b;
-                    //product of i ..m C_i^(x^m-i)a, Ek^x^k for k = 1..2m-1
-                    let (E_k_g_x_k, E_k_h_x_k, c_g_x, c_h_x) =
-                        self.verify_multiexpo_ek(&x_exp, &g, &h);
+                self.verify_multiexpo_scalars(c_A, &x_exp, &pc_gens, &xpc_gens)?;
 
-                    let rhs_g = c_g_x + g_bb;
-                    let rhs_h = c_h_x + h_bb;
-                    if E_k_g_x_k.ok_or("MultiexponentialProof Verify: Failed")? == rhs_g
-                        && E_k_h_x_k.ok_or("MultiexponentialProof Verify: Failed")? == rhs_h
-                    {
-                        Ok(true)
-                    } else {
-                        Err("Multi-exponentiation Pubkey Argument: E_K Verification Failed")
-                    }
+                let upks: Vec<RistrettoPublicKey> =
+                    updated_accounts.iter().map(|acc| acc.pk).collect();
+
+                //extract g,h from RistrettoPublicKey
+                let g = upks
+                    .iter()
+                    .map(|pt| {
+                        pt.gr
+                            .decompress()
+                            .ok_or("MultiexponentialProof Verify: Decompression Failed")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let h = upks
+                    .iter()
+                    .map(|pt| {
+                        pt.grsk
+                            .decompress()
+                            .ok_or("MultiexponentialProof Verify: Decompression Failed")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                //reencryption (G,H)^b
+                let g_bb = base_pk
+                    .gr
+                    .decompress()
+                    .ok_or("MultiexponentialProof Verify: Decompression Failed")?
+                    * self.b;
+                let h_bb = base_pk
+                    .grsk
+                    .decompress()
+                    .ok_or("MultiexponentialProof Verify: Decompression Failed")?
+                    * self.b;
+                //product of i ..m C_i^(x^m-i)a, Ek^x^k for k = 1..2m-1
+                let (E_k_g_x_k, E_k_h_x_k, c_g_x, c_h_x) = self.verify_multiexpo_ek(&x_exp, &g, &h);
+
+                let rhs_g = c_g_x + g_bb;
+                let rhs_h = c_h_x + h_bb;
+                if E_k_g_x_k.ok_or("MultiexponentialProof Verify: Failed")? == rhs_g
+                    && E_k_h_x_k.ok_or("MultiexponentialProof Verify: Failed")? == rhs_h
+                {
+                    Ok(())
                 } else {
-                    Err("Multi-exponentiation Pubkey Argument: Scalar verification Failed")
+                    Err("Multi-exponentiation Pubkey Argument: E_K Verification Failed")
                 }
             } else {
                 Err("Multi-exponentiation Pubkey Argument: Verify Em == C Failed")
@@ -627,6 +617,7 @@ fn create_ek_common(
     );
     vec![e0, e1, e2, e3, e4, e5]
 }
+#[allow(dead_code)]
 // General function for creating ek for Matrix size
 fn create_ek_common_loop(
     cipher_mat: &Array2D<RistrettoPoint>,
@@ -887,8 +878,8 @@ mod test {
             &base_pk,
             &pk_GH,
         );
-        println! {"Verify PubKey Multiexpo{:?} ", verify}
-        assert!(verify.unwrap());
+        // println! {"Verify PubKey Multiexpo{:?} ", verify}
+        assert!(verify.is_ok());
     }
     #[test]
     fn multiexpo_comm_prove_test() {
@@ -1014,8 +1005,8 @@ mod test {
             &base_pk,
             &exp_xx,
         );
-        println! {"Verify Commit Multiexpo{:?} ", verify}
-        assert!(verify.unwrap());
+        // println! {"Verify Commit Multiexpo{:?} ", verify}
+        assert!(verify.is_ok());
     }
     #[test]
     fn ek_creation_test() {
@@ -1063,8 +1054,8 @@ mod test {
         let a_0: Vec<Scalar> = vec![Scalar::from(3u64), Scalar::from(2u64), Scalar::from(1u64)];
 
         //Calling create ek_comm function directly
-        let mut b_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let mut tau_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let b_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let tau_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
         // create_ek_comm(
         //     &shuffle.outputs,
         //     &b_mat,

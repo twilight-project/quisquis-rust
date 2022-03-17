@@ -148,25 +148,21 @@ impl ProductProof {
         c_prod_A: &[RistrettoPoint],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-    ) -> Result<bool, &'static str> {
+    ) -> Result<(), &'static str> {
         //The verifier accepts if cb ∈ G and both SHVZK arguments (Mutihadamard and SingleValue Product) are convincing.
         // cb ∈ G is always valid if cb is a CompressedRistretto
 
         //check Mutihadamard Proof
-        let verify_multi_hadamard = self.multi_hadamard_proof.verify(
+        self.multi_hadamard_proof.verify(
             verifier,
             &prod_statement.multi_hadamard_statement,
             c_prod_A,
             pc_gens,
             xpc_gens,
         )?;
-        if verify_multi_hadamard == true {
-            self /*check Single Value Product Proof*/
-                .svp_proof
-                .verify(verifier, &prod_statement.svp_statement, xpc_gens)
-        } else {
-            Ok(verify_multi_hadamard)
-        }
+        /*check Single Value Product Proof*/
+        self.svp_proof
+            .verify(verifier, &prod_statement.svp_statement, xpc_gens)
     }
 }
 
@@ -308,7 +304,7 @@ impl MultiHadamardProof {
         c_A: &[RistrettoPoint],
         pc_gens: &PedersenGens,
         xpc_gens: &VectorPedersenGens,
-    ) -> Result<bool, &'static str> {
+    ) -> Result<(), &'static str> {
         //Check c_B2,...,c_Bm−1 ∈ G
         //Always true if received as CompressedRistretto
         //Check  cB1 = cA1 &&  cA2 = zerostatement.CA1
@@ -376,7 +372,6 @@ impl MultiHadamardProof {
         }
     }
 }
-
 impl ZeroProof {
     ///Create Zero Argument proof
     ///
@@ -523,7 +518,7 @@ impl ZeroProof {
         pc_gens: &PedersenGens,
         c_B: &[RistrettoPoint],
         chal_y: Scalar,
-    ) -> Result<bool, &'static str> {
+    ) -> Result<(), &'static str> {
         //check lengths of vectors
         if self.c_D.len() == 2 * ROWS + 1
             && self.a_vec.len() == COLUMNS
@@ -588,7 +583,7 @@ impl ZeroProof {
                         )
                         .ok_or_else(|| "ZeroProof Verify: Failed")?;
                         if commit_a_bar_b_bar == c_D_x_k {
-                            Ok(true)
+                            Ok(())
                         } else {
                             Err("Zero Argument Proof Verify: com(a_bar * b_bar, t) verification check Failed")
                         }
@@ -751,7 +746,7 @@ mod test {
         for i in 0..COLUMNS {
             comit_a_vec.push(xpc_gens.commit(&pi_2d_as_cols[i], r[i]));
         }
-
+        // let iden = RistrettoPoint::default();
         //create Prover and verifier
         let mut transcript_p = Transcript::new(b"ShuffleProof");
         let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
@@ -766,7 +761,7 @@ mod test {
         // prod_state.svp_statement.b = Scalar::zero();
         let mut transcript_v = Transcript::new(b"ShuffleProof");
         let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
-
+        //comit_a_vec[2] = iden;
         let verify = prod_proof.verify(
             &mut verifier,
             &prod_state,
@@ -774,7 +769,7 @@ mod test {
             &pc_gens,
             &xpc_gens,
         );
-
+        // println!("Error in commitment{:?}", verify.unwrap());
         assert!(verify.is_ok());
     }
 

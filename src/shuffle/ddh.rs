@@ -85,7 +85,7 @@ impl DDHProof {
         statement: &DDHStatement,
         G: CompressedRistretto,
         H: CompressedRistretto,
-    ) -> bool {
+    ) -> Result<(), &'static str> {
         // Initiate the verification transcript
         verifier.new_domain_sep(b"DDHTupleProof");
         //allocates statement points to Transcript
@@ -96,21 +96,22 @@ impl DDHProof {
         //lets recreate g_r & h_r from x and z
         let combined_scalars = vec![self.z, self.challenge];
         let g_point = vec![G, statement.G_dash];
-        if let Some(g_r) = Verifier::multiscalar_multiplication(&combined_scalars, &g_point) {
-            verifier.allocate_point(b"gr", g_r.compress());
-        } else {
-            return false;
-        }
+        let g_r = Verifier::multiscalar_multiplication(&combined_scalars, &g_point)
+            .ok_or("DDH Proof Verify: Failed")?;
         let h_point = vec![H, statement.H_dash];
-        if let Some(h_r) = Verifier::multiscalar_multiplication(&combined_scalars, &h_point) {
-            verifier.allocate_point(b"hr", h_r.compress());
-        } else {
-            return false;
-        }
+        let h_r = Verifier::multiscalar_multiplication(&combined_scalars, &h_point)
+            .ok_or("DDH Proof Verify: Failed")?;
+        //add g_r and h_r to transcript
+        verifier.allocate_point(b"gr", g_r.compress());
+        verifier.allocate_point(b"hr", h_r.compress());
         // obtain a scalar challenge
         let c = verifier.get_challenge(b"Challenge");
         //verify the ddh prove
-        self.challenge == c
+        if self.challenge == c {
+            Ok(())
+        } else {
+            Err("DDH Proof Verify: Failed")
+        }
     }
 }
 
@@ -162,6 +163,6 @@ mod test {
         let mut verifier = Verifier::new(b"DDHTuple", &mut transcript_v);
 
         let verify = proof.verify_ddh_proof(&mut verifier, &statement, G.compress(), H.compress());
-        assert!(verify);
+        assert!(verify.is_ok());
     }
 }

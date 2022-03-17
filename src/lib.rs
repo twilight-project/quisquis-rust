@@ -5,3 +5,5 @@ pub mod accounts;
 pub mod util;
 pub use util::address::Address;
 pub mod transaction;
+pub mod shuffle;
+pub mod pedersen;

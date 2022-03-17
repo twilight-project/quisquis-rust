@@ -1,10 +1,6 @@
 #![allow(non_snake_case)]
-use bulletproofs::r1cs::*;
-use bulletproofs::{BulletproofGens, PedersenGens};
-use curve25519_dalek::ristretto::RistrettoPoint;
-use rand::thread_rng;
 
-//use std::time::Instant;
+use rand::thread_rng;
 
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
 use crate::{

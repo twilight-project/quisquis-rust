@@ -80,8 +80,7 @@ impl Polynomial {
         }
     }
     //Polynomial Scalar Multiply: a(X) * c
-    #[allow(dead_code)]
-    fn multiply_scalar(&self, scalar: Scalar) -> Self {
+    pub fn multiply_scalar(&self, scalar: Scalar) -> Self {
         //create polynomial with zero coefficients with the highest term
         let mut coefficients = self.coefficients.clone();
         for i in 0..=self.degree {
@@ -94,7 +93,7 @@ impl Polynomial {
     }
 
     //Polynomial Scalar Divide: a(X) / c
-    fn divide_scalar(&self, scalar: Scalar) -> Self {
+    pub fn divide_scalar(&self, scalar: Scalar) -> Self {
         //create polynomial with zero coefficients with the highest term
         let mut coefficients = self.coefficients.clone();
         let inv_scalar = scalar.invert();
@@ -185,10 +184,9 @@ pub fn polynomial_vectorial_add(a: &[Polynomial], b: &[Polynomial]) -> Vec<Polyn
     assert_eq!(a.len(), b.len());
     a.iter().zip(b.iter()).map(|(x, y)| x + y).collect()
 }
-#[allow(dead_code)]
-fn distinct(x: Scalar, a: &[Scalar]) -> bool {
-    for i in 0..3 {
-        if x == a[i] {
+pub fn distinct(num: Scalar, vec: &[Scalar]) -> bool {
+    for s in vec.iter() {
+        if num == *s {
             return false;
         }
     }
@@ -222,7 +220,7 @@ fn multiply_mut(a: &mut Polynomial, b: &Polynomial) -> Polynomial {
 }
 
 //product of polynomials. (X-w_i)
-fn create_l_x_polynomial(w: &[Scalar]) -> Polynomial {
+pub fn create_l_x_polynomial(w: &[Scalar]) -> Polynomial {
     //Create l(X)
     let mut l = create_1d_poly(Scalar::from(1u64), -w[0]);
     for i in 1..w.len() {
@@ -257,50 +255,6 @@ pub fn create_l_i_x_polynomial(w: &[Scalar]) -> [Polynomial; 4] {
     [l_x, l_1_x, l_2_x, l_3_x]
 }
 
-// //Create "l(X)" and "li(X)" polynomials
-// pub fn create_l_poly(w: &[Scalar]) -> [Polynomial; 4] {
-//     // let mut result_poly: Vec<Polynomial> = Vec::<Polynomial>::with_capacity(4);
-//     println!("  ");
-//     println!("In New");
-//     //create l(X)
-//     let l_x = create_l_x_polynomial(&w[1..]);
-//     l_x.print_polynomial();
-//     //result_poly.push(l_x.clone());
-//     //Create li(X)
-//     let num_1 = l_x
-//         .clone()
-//         .divide(&mut create_1D_poly(Scalar::from(1u64), -w[1]), 2);
-//     let poly_denom_1 = (w[1] - w[2]) * (w[1] - w[3]);
-//     let l_1_x = num_1.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_1.invert()));
-//     l_1_x.print_polynomial();
-
-//     let num_2 = l_x
-//         .clone()
-//         .divide(&mut create_1D_poly(Scalar::from(1u64), -w[2]), 2);
-//     let poly_denom_2 = (w[2] - w[1]) * (w[2] - w[3]);
-//     let l_2_x = num_2.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_2.invert()));
-//     l_2_x.print_polynomial();
-
-//     let num_3 = l_x
-//         .clone()
-//         .divide(&mut create_1D_poly(Scalar::from(1u64), -w[3]), 2);
-//     let poly_denom_3 = (w[3] - w[1]) * (w[3] - w[2]);
-//     let l_3_x = num_3.multiply(&create_1D_poly(Scalar::from(0u64), poly_denom_3.invert()));
-//     l_3_x.print_polynomial();
-
-//     // for i in 1..4
-//     // {
-//     // 	let denom = Scalar::from(1u64); //Denominator
-//     // 	let num = l_x.divide(&mut create_1D_poly(Scalar::from(1u64), -w[i]), 2);
-//     // 	for (int j = 1; j <= dim; j++)
-//     // 		if (i != j)	denom = denom * (w[i] - w[j]);
-//     // 	denom = ((denom % m) + m) % m;
-//     // 	int inv = mul_inv(m, denom);
-//     // 	l[i] = poly_product(l[i], create_1D_poly(0, inv));
-//     // }
-
-//     [l_x, l_1_x, l_2_x, l_3_x]
-// }
 //Polynomial Addition modulo m: a(X) + b(X)
 impl<'a, 'b> Add<&'a Polynomial> for &'b Polynomial {
     type Output = Polynomial;

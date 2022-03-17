@@ -637,19 +637,15 @@ fn create_ek_common_loop(
     let m = ROWS as isize; //m = ROWS in paper
     let mut j;
     for k in 0..kiter {
-        //println!("K = , {:?}",k);
         let mut combined_scalars: Vec<&Scalar> = Vec::new();
         let mut point_c: Vec<&RistrettoPoint> = Vec::new();
         //let mut sum = Scalar::zero();
         for i in 1..=iiter {
             j = k - m + i;
-            //  println!("i = {:?}",i);
             if j >= 0 && j < jiiter {
                 //create a chain of iterators to run multiscalar_mul
                 combined_scalars.extend(&perm_scalar_cols[j as usize]);
                 point_c.extend(&cipher_mat_rows[i as usize - 1])
-
-                //    println!("j = {:?}",j);
             }
         }
         e_k.push(RistrettoPoint::multiscalar_mul(
@@ -963,7 +959,7 @@ mod test {
         );
         //testing Quisquis verification check
         //create DDH Proof
-        let (ddh_proof, ddh_statement) = DDHProof::create_verify_update_ddh_prove(
+        let (_ddh_proof, _ddh_statement) = DDHProof::create_verify_update_ddh_prove(
             &mut prover,
             &g_i,
             &h_i,
@@ -1021,9 +1017,6 @@ mod test {
         }
         let result = Shuffle::output_shuffle(&account_vector);
         let shuffle = result.unwrap();
-        let pc_gens = PedersenGens::default();
-        //generate Xcomit generator points of length m+1
-        let xpc_gens = VectorPedersenGens::new(ROWS + 1);
 
         //create challenge x for b and b' vectors
         let x = Scalar::random(&mut OsRng);
@@ -1044,29 +1037,11 @@ mod test {
         let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
         let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
         // (G, H) = sum of all i (pk_i * x^i)
-        let G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
-        let H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
-        let pk = RistrettoPublicKey {
-            gr: G.compress(),
-            grsk: H.compress(),
-        };
+        let _G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
+        let _H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
 
         let a_0: Vec<Scalar> = vec![Scalar::from(3u64), Scalar::from(2u64), Scalar::from(1u64)];
 
-        //Calling create ek_comm function directly
-        let b_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let tau_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
-        // create_ek_comm(
-        //     &shuffle.outputs,
-        //     &b_mat,
-        //     &a_0.clone(),
-        //     &pk,
-        //     &b_vec,
-        //     &tau_vec,
-        // );
-        //create_ek_pk(&shuffle.outputs, &b_dash, &a_0.clone(), G, H, &b_vec);
-        //     &tau_vec,)
-        //create 2DArrays
         let comm: Vec<ElGamalCommitment> = shuffle
             .outputs
             .as_row_major()
@@ -1085,7 +1060,7 @@ mod test {
             perm_scalar_as_cols[1].clone(),
             perm_scalar_as_cols[2].clone(),
         ];
-        let input = Array2D::from_columns(&perm_scalar_as);
+        let input_b = Array2D::from_columns(&perm_scalar_as);
 
         let pkk: Vec<RistrettoPublicKey> = shuffle
             .outputs
@@ -1105,19 +1080,17 @@ mod test {
             perm_scalar_as_cols[1].clone(),
             perm_scalar_as_cols[2].clone(),
         ];
-        let input = Array2D::from_columns(&perm_scalar_dash);
-        //Column vectors for A
-        //let a1 = &perm_scalar_as_cols[0];
-        //let a2 = &perm_scalar_as_cols[1];
-        //let a3 = &perm_scalar_as_cols[2];
-        //convert to column major representation
+        let input_b_dash = Array2D::from_columns(&perm_scalar_dash);
 
-        create_ek_common(&gr_matrix_as_rows, &input);
-        // create_ek_common(&comm_matrix_d_as_rows, &input);
+        create_ek_common(&gr_matrix_as_rows, &input_b_dash);
+        create_ek_common(&grsk_matrix_as_rows, &input_b_dash);
+        let ekc = create_ek_common(&comm_matrix_d_as_rows, &input_b);
+        create_ek_common(&comm_matrix_c_as_rows, &input_b);
 
-        //let e_k_c = create_ek_common_loop(&comm_matrix_c_as_rows, &input);
-        //let e_k_c_compress: Vec<_> = e_k_c.iter().map(|pt| pt.compress()).collect();
+        let e_k_c = create_ek_common_loop(&comm_matrix_c_as_rows, &input_b);
+        // let e_k_c_compress: Vec<_> = e_k_c.iter().map(|pt| pt.compress()).collect();
         //println!("{:?}", e_k_c_compress);
+        assert_eq!(e_k_c, ekc);
     }
     #[test]
     fn E_k_commit_creation_test() {
@@ -1132,9 +1105,9 @@ mod test {
         }
         let result = Shuffle::output_shuffle(&account_vector);
         let shuffle = result.unwrap();
-        let pc_gens = PedersenGens::default();
+        let _pc_gens = PedersenGens::default();
         //generate Xcomit generator points of length m+1
-        let xpc_gens = VectorPedersenGens::new(ROWS + 1);
+        let _xpc_gens = VectorPedersenGens::new(ROWS + 1);
 
         //create challenge x for b and b' vectors
         let x = Scalar::random(&mut OsRng);
@@ -1176,7 +1149,7 @@ mod test {
 
         let e_k_c = create_ek_common(&comm_matrix_c_as_rows, &input);
         let e_k_d = create_ek_common(&comm_matrix_d_as_rows, &input);
-        let (e_K_c, e_K_d) = reencrypt_commitment_ek(&e_k_c, &e_k_d, &base_pk, &b_vec, &tau_vec);
+        let (_e_K_c, _e_K_d) = reencrypt_commitment_ek(&e_k_c, &e_k_d, &base_pk, &b_vec, &tau_vec);
         // assert_eq!(E_K_C, e_K_c);
         // assert_eq!(E_K_D, e_K_d);
     }
@@ -1193,9 +1166,9 @@ mod test {
         }
         let result = Shuffle::output_shuffle(&account_vector);
         let shuffle = result.unwrap();
-        let pc_gens = PedersenGens::default();
+        let _pc_gens = PedersenGens::default();
         //generate Xcomit generator points of length m+1
-        let xpc_gens = VectorPedersenGens::new(ROWS + 1);
+        let _xpc_gens = VectorPedersenGens::new(ROWS + 1);
 
         //create challenge x for b and b' vectors
         let x = Scalar::random(&mut OsRng);
@@ -1218,8 +1191,8 @@ mod test {
         let g_i: Vec<_> = pk.iter().map(|pt| pt.gr.decompress().unwrap()).collect();
         let h_i: Vec<_> = pk.iter().map(|pt| pt.grsk.decompress().unwrap()).collect();
         // (G, H) = sum of all i (pk_i * x^i)
-        let G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
-        let H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
+        let _G = RistrettoPoint::multiscalar_mul(exp_xx.iter().clone(), g_i.iter().clone());
+        let _H = RistrettoPoint::multiscalar_mul(&exp_xx, h_i.iter().clone());
 
         let a_0: Vec<Scalar> = vec![Scalar::from(3u64), Scalar::from(2u64), Scalar::from(1u64)];
 
@@ -1251,7 +1224,7 @@ mod test {
         let base_pk = RistrettoPublicKey::generate_base_pk();
         let e_k_g = create_ek_common(&gr_matrix_as_rows, &input);
         let e_k_h = create_ek_common(&grsk_matrix_as_rows, &input);
-        let (e_K_g, e_K_h) = reencrypt_publickey_ek(&e_k_g, &e_k_h, &base_pk, &b_vec);
+        let (_e_K_g, _e_K_h) = reencrypt_publickey_ek(&e_k_g, &e_k_h, &base_pk, &b_vec);
         // assert_eq!(E_K_G, e_K_g);
         // assert_eq!(E_K_H, e_K_h);
     }

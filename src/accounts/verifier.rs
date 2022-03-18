@@ -305,7 +305,17 @@ mod test {
     fn verify_delta_compact_verifier_test() {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
-        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let value_vector: Vec<Scalar> = vec![
+            -Scalar::from(5u64),
+            5u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+        ];
         let mut account_vector: Vec<Account> = Vec::new();
 
         for _i in 0..9 {

@@ -1,57 +1,57 @@
 use bulletproofs::r1cs::*;
 use bulletproofs::{BulletproofGens, PedersenGens};
-use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::ristretto::CompressedRistretto;
+use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 
 /// Range Proof gadget
-/// RangeProof struct to hold the R1CS range proof 
+/// RangeProof struct to hold the R1CS range proof
 
 pub struct RangeProofProver<'g> {
     /// Common R1CS Prover for multiple rangeproofs
-    pub (crate) prover: bulletproofs::r1cs::Prover<'g, Transcript>,
+    pub(crate) prover: bulletproofs::r1cs::Prover<'g, Transcript>,
 }
 
 impl<'g> RangeProofProver<'g> {
     // R1CS constraint system building
-    pub fn range_proof_prover(&mut self, val: u64, epsilon_blinding: Scalar) -> Result<CompressedRistretto, R1CSError> {
-        
-        // Commit to the val as variable 
+    pub fn range_proof_prover(
+        &mut self,
+        val: u64,
+        epsilon_blinding: Scalar,
+    ) -> Result<CompressedRistretto, R1CSError> {
+        // Commit to the val as variable
         let (com, var) = self.prover.commit(val.into(), epsilon_blinding);
-        //Update range proof R1CS constraint system       
-        range_proof(& mut self.prover, var.into(), Some(val), 64 as usize)?;
+        //Update range proof R1CS constraint system
+        range_proof(&mut self.prover, var.into(), Some(val), 64 as usize)?;
         Ok(com)
     }
-    pub fn build_proof(self)-> Result<R1CSProof, R1CSError>{
+    pub fn build_proof(self) -> Result<R1CSProof, R1CSError> {
         let bp_gens = BulletproofGens::new(512, 1);
         self.prover.prove(&bp_gens)
     }
 
-   // pub fn hadamard_product_prover(&mut self, val: u64, epsilon_blinding: Scalar) -> Result<CompressedRistretto, R1CSError>{
+    // pub fn hadamard_product_prover(&mut self, val: u64, epsilon_blinding: Scalar) -> Result<CompressedRistretto, R1CSError>{
 
-   // }
-
+    // }
 }
 
-pub struct RangeProofVerifier{
+pub struct RangeProofVerifier {
     /// Common R1CS Verifier for multiple rangeproofs
-    pub (crate) verifier: bulletproofs::r1cs::Verifier<Transcript>,
+    pub(crate) verifier: bulletproofs::r1cs::Verifier<Transcript>,
 }
 
 impl RangeProofVerifier {
     // R1CS constraint system building
     pub fn range_proof_verifier(&mut self, com: CompressedRistretto) -> Result<(), R1CSError> {
-        
-        // Commit to the val as variable 
+        // Commit to the val as variable
         let var = self.verifier.commit(com);
-        //Update range proof R1CS constraint system       
-        range_proof(& mut self.verifier, var.into(), None, 64 as usize)
+        //Update range proof R1CS constraint system
+        range_proof(&mut self.verifier, var.into(), None, 64 as usize)
     }
-    pub fn verify_proof(self, proof: &R1CSProof, pc_gens: &PedersenGens)-> Result<(), R1CSError>{
+    pub fn verify_proof(self, proof: &R1CSProof, pc_gens: &PedersenGens) -> Result<(), R1CSError> {
         let bp_gens = BulletproofGens::new(512, 1);
         self.verifier.verify(proof, pc_gens, &bp_gens)
     }
-
 }
 /// Enforces that the quantity of v is in the range [0, 2^n).
 pub fn range_proof<CS: ConstraintSystem>(
@@ -87,4 +87,3 @@ pub fn range_proof<CS: ConstraintSystem>(
 
     Ok(())
 }
-

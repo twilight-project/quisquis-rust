@@ -3,9 +3,7 @@
 use rand::thread_rng;
 
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
-use crate::{
-    accounts::Account, elgamal::signed_integer::SignedInteger, ristretto::RistrettoSecretKey,
-};
+use crate::{accounts::Account, ristretto::RistrettoSecretKey};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
@@ -66,11 +64,11 @@ impl<'a> Prover<'a> {
     // verify_delta_compact_prover generates proves values committed in delta_accounts and epsilon_accounts are the same
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.1
     pub fn verify_delta_compact_prover(
-        delta_accounts: &Vec<Account>,
-        epsilon_accounts: &Vec<Account>,
-        rscalar1: &Vec<Scalar>,
-        rscalar2: &Vec<Scalar>,
-        value_vector: &Vec<i64>,
+        delta_accounts: &[Account],
+        epsilon_accounts: &[Account],
+        rscalar1: &[Scalar],
+        rscalar2: &[Scalar],
+        value_vector: &[Scalar],
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
         let mut v_dash_vector: Vec<Scalar> = Vec::new();
         let mut r1_dash_vector: Vec<Scalar> = Vec::new();
@@ -80,7 +78,7 @@ impl<'a> Prover<'a> {
         let mut prover = Prover::new(b"DLEQProof", &mut transcript);
 
         for value in value_vector.iter() {
-            v_dash_vector.push(SignedInteger::into(SignedInteger::from(*value as u64)));
+            v_dash_vector.push(*value);
         }
         println!("Value vector : {:?}", value_vector);
 
@@ -421,7 +419,7 @@ impl<'a> Prover<'a> {
     //verify_non_negative_prover creates range proof on Receiver accounts with zero balance
     pub fn verify_non_negative_prover(
         /*epsilon_account: &Vec<Account>,*/
-        bl: &[i64],
+        bl: &[Scalar],
         rscalar: &[Scalar],
         rp_prover: &mut RangeProofProver,
     ) {

@@ -216,7 +216,7 @@ impl MultiHadamardProof {
         //
         //Commit C_B vector to Transcript for y challenge generation
         for cr in c_B_inital.iter() {
-            prover.allocate_point(b"BVectorCommitment", cr.compress());
+            prover.allocate_point(b"BVectorCommitment", &cr.compress());
         }
         //CREATE CHALLENGE X AND Y
         let x = prover.get_challenge(b"XChallenge");
@@ -319,7 +319,7 @@ impl MultiHadamardProof {
                 verifier.new_domain_sep(b"MultiHadamardProductProof");
                 //Recreate x, y challenge by adding Commit C_B vector to Transcript
                 for cr in self.c_B.iter() {
-                    verifier.allocate_point(b"BVectorCommitment", *cr);
+                    verifier.allocate_point(b"BVectorCommitment", cr);
                 }
 
                 //redefine
@@ -434,10 +434,10 @@ impl ZeroProof {
             .collect();
 
         //Add C_A_0 and C_B_m and C_D to Transcript to generate challenge Z
-        prover.allocate_point(b"A0Commitment", c_a_0);
-        prover.allocate_point(b"BmCommitment", c_b_m);
+        prover.allocate_point(b"A0Commitment", &c_a_0);
+        prover.allocate_point(b"BmCommitment", &c_b_m);
         for cd in c_D.iter() {
-            prover.allocate_point(b"DCommitment", *cd);
+            prover.allocate_point(b"DCommitment", cd);
         }
         //The verifier picks a challenge x
         let x = prover.get_challenge(b"challenge");
@@ -533,10 +533,10 @@ impl ZeroProof {
                 //Create new transcript
                 verifier.new_domain_sep(b"ZeroArgumentProof");
                 //recreate Transcript for Z challenge generation by adding C_A_0 and C_B_m and C_D
-                verifier.allocate_point(b"A0Commitment", self.c_A_0);
-                verifier.allocate_point(b"BmCommitment", self.c_B_m);
+                verifier.allocate_point(b"A0Commitment", &self.c_A_0);
+                verifier.allocate_point(b"BmCommitment", &self.c_B_m);
                 for cd in self.c_D.iter() {
-                    verifier.allocate_point(b"DCommitment", *cd);
+                    verifier.allocate_point(b"DCommitment", cd);
                 }
 
                 // prod i=0..m (c_Ai^x^i ) = com(a_bar,r)

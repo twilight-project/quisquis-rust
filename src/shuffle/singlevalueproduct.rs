@@ -60,7 +60,7 @@ impl SVPProof {
         let d_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
         let rd = Scalar::random(&mut OsRng);
         //Compute vector commitment on d_vec. send it to verifier
-        let commit_d = xpc_gens.commit(&d_vec, rd);
+        let commit_d = xpc_gens.commit(&d_vec, rd).compress();
 
         //compute random delta of COLUMN size and set delta_1 as d_1 and delta_n as 0
         let mut delta_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
@@ -93,15 +93,15 @@ impl SVPProof {
         let xpc_gens_trun = VectorPedersenGens::new(delta_lowercase.len() + 1);
 
         //Create commitment
-        let comit_delta_lowercase = xpc_gens_trun.commit(&delta_lowercase, s_1);
+        let comit_delta_lowercase = xpc_gens_trun.commit(&delta_lowercase, s_1).compress();
 
-        let comit_delta_uppercase = xpc_gens_trun.commit(&delta_uppercase, s_x);
+        let comit_delta_uppercase = xpc_gens_trun.commit(&delta_uppercase, s_x).compress();
         //SEND comit_d, comit_delta, comit_d_delta to the verifier
 
         //Add variables to Merlin transcript for challenge generation
-        prover.allocate_point(b"DeltaSmall", comit_delta_lowercase.compress());
-        prover.allocate_point(b"DeltaCapital", comit_delta_uppercase.compress());
-        prover.allocate_point(b"d", commit_d.compress());
+        prover.allocate_point(b"DeltaSmall", &comit_delta_lowercase);
+        prover.allocate_point(b"DeltaCapital", &comit_delta_uppercase);
+        prover.allocate_point(b"d", &commit_d);
 
         // Compute Challenge x
         let x = prover.get_challenge(b"challenge");
@@ -130,9 +130,9 @@ impl SVPProof {
 
         //send all this to verifier
         SVPProof {
-            commitment_d: commit_d.compress(),
-            commitment_delta_small: comit_delta_lowercase.compress(),
-            commitment_delta_capital: comit_delta_uppercase.compress(),
+            commitment_d: commit_d,
+            commitment_delta_small: comit_delta_lowercase,
+            commitment_delta_capital: comit_delta_uppercase,
             a_twildle: a_bar,
             b_twildle: b_bar,
             r_twildle: r_bar,
@@ -155,9 +155,9 @@ impl SVPProof {
                 verifier.new_domain_sep(b"SingleValueProductProof");
                 //RECREATE X FROM MERLIN HERE
                 //Add variables to Merlin transcript for challenge generation
-                verifier.allocate_point(b"DeltaSmall", self.commitment_delta_small);
-                verifier.allocate_point(b"DeltaCapital", self.commitment_delta_capital);
-                verifier.allocate_point(b"d", self.commitment_d);
+                verifier.allocate_point(b"DeltaSmall", &self.commitment_delta_small);
+                verifier.allocate_point(b"DeltaCapital", &self.commitment_delta_capital);
+                verifier.allocate_point(b"d", &self.commitment_d);
 
                 let x = verifier.get_challenge(b"challenge");
                 // b_bar_n == b * x

@@ -54,12 +54,12 @@ impl DDHProof {
         let h_r = (H * r_scalar).compress();
 
         //allocates points to Transcript
-        prover.allocate_point(b"g", G.compress());
-        prover.allocate_point(b"g_dash", G_dash);
-        prover.allocate_point(b"h", H.compress());
-        prover.allocate_point(b"h_dash", H_dash);
-        prover.allocate_point(b"gr", g_r);
-        prover.allocate_point(b"hr", h_r);
+        prover.allocate_point(b"g", &G.compress());
+        prover.allocate_point(b"g_dash", &G_dash);
+        prover.allocate_point(b"h", &H.compress());
+        prover.allocate_point(b"h_dash", &H_dash);
+        prover.allocate_point(b"gr", &g_r);
+        prover.allocate_point(b"hr", &h_r);
 
         // obtain a scalar challenge
         let challenge = prover.get_challenge(b"Challenge");
@@ -89,10 +89,10 @@ impl DDHProof {
         // Initiate the verification transcript
         verifier.new_domain_sep(b"DDHTupleProof");
         //allocates statement points to Transcript
-        verifier.allocate_point(b"g", G);
-        verifier.allocate_point(b"g_dash", statement.G_dash);
-        verifier.allocate_point(b"h", H);
-        verifier.allocate_point(b"h_dash", statement.H_dash);
+        verifier.allocate_point(b"g", &G);
+        verifier.allocate_point(b"g_dash", &statement.G_dash);
+        verifier.allocate_point(b"h", &H);
+        verifier.allocate_point(b"h_dash", &statement.H_dash);
         //lets recreate g_r & h_r from x and z
         let combined_scalars = vec![self.z, self.challenge];
         let g_point = vec![G, statement.G_dash];
@@ -102,8 +102,8 @@ impl DDHProof {
         let h_r = Verifier::multiscalar_multiplication(&combined_scalars, &h_point)
             .ok_or("DDH Proof Verify: Failed")?;
         //add g_r and h_r to transcript
-        verifier.allocate_point(b"gr", g_r.compress());
-        verifier.allocate_point(b"hr", h_r.compress());
+        verifier.allocate_point(b"gr", &g_r.compress());
+        verifier.allocate_point(b"hr", &h_r.compress());
         // obtain a scalar challenge
         let c = verifier.get_challenge(b"Challenge");
         //verify the ddh prove

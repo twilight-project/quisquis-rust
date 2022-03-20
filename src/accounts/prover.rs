@@ -3,9 +3,7 @@
 use rand::thread_rng;
 
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
-use crate::{
-    accounts::Account, elgamal::signed_integer::SignedInteger, ristretto::RistrettoSecretKey,
-};
+use crate::{accounts::Account, ristretto::RistrettoSecretKey};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
@@ -66,11 +64,11 @@ impl<'a> Prover<'a> {
     // verify_delta_compact_prover generates proves values committed in delta_accounts and epsilon_accounts are the same
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.1
     pub fn verify_delta_compact_prover(
-        delta_accounts: &Vec<Account>,
-        epsilon_accounts: &Vec<Account>,
-        rscalar1: &Vec<Scalar>,
-        rscalar2: &Vec<Scalar>,
-        value_vector: &Vec<i64>,
+        delta_accounts: &[Account],
+        epsilon_accounts: &[Account],
+        rscalar1: &[Scalar],
+        rscalar2: &[Scalar],
+        value_vector: &[Scalar],
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
         let mut v_dash_vector: Vec<Scalar> = Vec::new();
         let mut r1_dash_vector: Vec<Scalar> = Vec::new();
@@ -80,10 +78,8 @@ impl<'a> Prover<'a> {
         let mut prover = Prover::new(b"DLEQProof", &mut transcript);
 
         for value in value_vector.iter() {
-            v_dash_vector.push(SignedInteger::into(SignedInteger::from(*value as u64)));
+            v_dash_vector.push(*value);
         }
-        println!("Value vector : {:?}", value_vector);
-
         prover.scalars = rscalar1
             .iter()
             .cloned()
@@ -199,9 +195,9 @@ impl<'a> Prover<'a> {
 
     // verify_update_account_prover confirms if anonymity set in delta accounts was updated correctly
     pub fn verify_update_account_prover(
-        updated_input_accounts: &Vec<Account>,
-        updated_delta_accounts: &Vec<Account>,
-        delta_rscalar: &Vec<Scalar>,
+        updated_input_accounts: &[Account],
+        updated_delta_accounts: &[Account],
+        delta_rscalar: &[Scalar],
     ) -> (Scalar, Vec<Scalar>) {
         // check if (c,d)/c,d) = pkdelta_r
         // lets do c-c and d-d for the commitments in both updated_input and updated_delta account vectors
@@ -407,13 +403,20 @@ impl<'a> Prover<'a> {
             .collect::<Vec<_>>();
 
         //create RICS constraint based range proof over sneder account value : bl - v > 0
-        for i in 0..epsilon_account_sender.iter().count() {
+        for (b, r) in bl.iter().zip(rscalar.iter()) {
             //panics in case range proof is not constructed properly
-            println!("bl {:?}", bl[i]);
-            let res = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
-            println!("res {:?}", res.is_ok());
+            //println!("bl {:?}", bl[i]);
+            if *b >= 0i64 {
+                match rp_prover.range_proof_prover(*b as u64, *r) {
+                    Ok(_commit) => continue,
+                    Err(err) => eprintln!("RangeProof Error! {}", err),
+                };
+            } else {
+                panic!("Receiver balance is negative");
+            }
+            //println!("res {:?}", res.is_ok());
 
-            println!("res {:?}", res.unwrap());
+            //println!("res {:?}", res.unwrap());
         }
 
         return (zv_vector, zsk_vector, zr_vector, x);
@@ -425,10 +428,19 @@ impl<'a> Prover<'a> {
         rscalar: &[Scalar],
         rp_prover: &mut RangeProofProver,
     ) {
-        for i in 0..bl.iter().count() {
-            let res = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
-            println!("res {:?}", res.is_ok());
-            println!("res {:?}", res.unwrap());
+        for (b, r) in bl.iter().zip(rscalar.iter()) {
+            //panics in case range proof is not constructed properly
+            //println!("bl {:?}", bl[i]);
+            if *b >= 0i64 {
+                match rp_prover.range_proof_prover(*b as u64, *r) {
+                    Ok(_commit) => continue,
+                    Err(err) => eprintln!("RangeProof Error! {}", err),
+                };
+            } else {
+                panic!("Receiver balance is negative");
+            }
+            //println!("res {:?}", res.is_ok());
+            //println!("res {:?}", res.unwrap());
         }
     }
 }

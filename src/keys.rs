@@ -1,5 +1,5 @@
-use rand::{CryptoRng, Rng};
 use curve25519_dalek::scalar::Scalar;
+use rand::{CryptoRng, Rng};
 
 pub trait SecretKey {
     fn key_length() -> usize;
@@ -21,5 +21,5 @@ pub trait PublicKey {
 
     fn generate_base_pk() -> Self;
 
-    fn verify_keypair(self: &Self, privkey: &Self::K) -> bool; 
+    fn verify_keypair(self: &Self, privkey: &Self::K) -> Result<(), &'static str>;
 }

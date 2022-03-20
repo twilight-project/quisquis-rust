@@ -30,7 +30,7 @@ impl Account {
         let comm_scalar = Scalar::random(&mut OsRng);
 
         // lets generate a new commitment using pubkey
-        let comm = ElGamalCommitment::generate_commitment(&pk, comm_scalar, 0);
+        let comm = ElGamalCommitment::generate_commitment(&pk, comm_scalar, Scalar::zero());
 
         let account = Account::set_account(pk, comm);
 
@@ -38,8 +38,13 @@ impl Account {
     }
     /// Verifies the account balance stored in commitment
     /// Verifies the Private key and balance passed as input
-    pub fn verify_account(self: &Self, sk: &RistrettoSecretKey, bl: i64) -> bool {
-        self.pk.verify_keypair(sk) && self.comm.verify_commitment(sk, bl)
+    pub fn verify_account(
+        self: &Self,
+        sk: &RistrettoSecretKey,
+        bl: Scalar,
+    ) -> Result<(), &'static str> {
+        self.pk.verify_keypair(sk)?;
+        self.comm.verify_commitment(sk, bl)
     }
 
     /// Decrypts the account balance and returns G*bl. Discrete log should be solved to extract bl
@@ -47,20 +52,17 @@ impl Account {
     pub fn decrypt_account_balance(
         self: &Self,
         sk: &RistrettoSecretKey,
-        bl: i64,
+        bl: Scalar,
     ) -> Result<CompressedRistretto, &'static str> {
-        if self.verify_account(sk, bl) {
-            Ok(self.comm.decommit(sk))
-        } else {
-            Err("Invalid Account")
-        }
+        self.verify_account(sk, bl)?;
+        Ok(self.comm.decommit(sk))
     }
 
     // update_account updates an account by creating pk' and comm' with 0 balance
     // returns acc'(pk', comm')
     pub fn update_account(
         a: Account,
-        bl: i64,
+        bl: Scalar,
         update_key_scalar: Scalar,
         generate_commitment_scalar: Scalar,
     ) -> Account {
@@ -88,7 +90,7 @@ impl Account {
         for i in 0..9 {
             updated_accounts.push(Account::update_account(
                 accounts[i],
-                0,
+                Scalar::zero(),
                 updated_keys_scalar[i],
                 generate_commitment_scalar[i],
             ));
@@ -109,12 +111,11 @@ impl Account {
     // takes Accounts vector, bl (updated balance), base_pair generated with fixed-g
     // returns Account Epsilon and Delta
     pub fn create_delta_and_epsilon_accounts(
-        a: &Vec<Account>,
-        bl: &Vec<i64>,
+        a: &[Account],
+        bl: &[Scalar],
         base_pk: RistrettoPublicKey,
     ) -> (Vec<Account>, Vec<Account>, Vec<Scalar>) {
         let rscalar = Account::generate_sum_and_negate_rscalar();
-        //let mut rscalar : Scalar;
         let mut delta_account_vector: Vec<Account> = Vec::new();
         let mut epsilon_account_vector: Vec<Account> = Vec::new();
 
@@ -136,8 +137,8 @@ impl Account {
     // update_delta_accounts takes vectors of updated_accounts and delta_accounts, multiplies their commitments
     // returns updated delta accounts
     pub fn update_delta_accounts(
-        updated_accounts: &Vec<Account>,
-        delta_accounts: &Vec<Account>,
+        updated_accounts: &[Account],
+        delta_accounts: &[Account],
     ) -> Result<Vec<Account>, &'static str> {
         if updated_accounts
             .iter()
@@ -201,7 +202,7 @@ impl Account {
 
     // verify_delta_identity_check sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
     // else returns false
-    pub fn verify_delta_identity_check(epsilon_accounts: Vec<Account>) -> bool {
+    pub fn verify_delta_identity_check(epsilon_accounts: &[Account]) -> bool {
         let sum_c: RistrettoPoint = epsilon_accounts
             .iter()
             .map(|s| s.comm.c.decompress().unwrap())
@@ -218,13 +219,19 @@ impl Account {
         }
     }
 
-    // create_epsilon_account generates a single epsilon account
+    // create_epsilon_account generates a single epsilon account for sender
     pub fn create_epsilon_account(
         base_pk: RistrettoPublicKey,
         rscalar: Scalar,
         bl: i64,
     ) -> Account {
-        let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl);
+        let bl_scalar: Scalar;
+        if bl >= 0i64 {
+            bl_scalar = Scalar::from(bl as u64);
+        } else {
+            panic!("Not enough balance in the sender account");
+        }
+        let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl_scalar);
         Account::set_account(base_pk, comm_epsilon)
     }
 
@@ -245,7 +252,7 @@ impl Account {
 
     // generate_random_account_with_value generates a random account with a given value
     // this function is being used to produce tests and for anonymity account generation
-    pub fn generate_random_account_with_value(amount: i64) -> (Account, RistrettoSecretKey) {
+    pub fn generate_random_account_with_value(amount: Scalar) -> (Account, RistrettoSecretKey) {
         let mut rng = rand::thread_rng();
         let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
@@ -292,12 +299,10 @@ mod test {
         // lets get a random scalar
         let comm_scalar = Scalar::random(&mut OsRng);
 
-        let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
+        let updated_account =
+            Account::update_account(acc, Scalar::from(16u64), updated_keys_scalar, comm_scalar);
 
-        assert!(
-            updated_account.verify_account(&sk, 16),
-            "Invalid Account or Invalid Secret Key"
-        );
+        assert!(updated_account.verify_account(&sk, 16u64.into()).is_ok());
     }
 
     #[test]
@@ -312,11 +317,14 @@ mod test {
         // lets get a random scalar
         let comm_scalar = Scalar::random(&mut OsRng);
 
-        let updated_account = Account::update_account(acc, 16, updated_keys_scalar, comm_scalar);
+        let updated_account =
+            Account::update_account(acc, 16u64.into(), updated_keys_scalar, comm_scalar);
 
         let bl_scalar = Scalar::from(16 as u64);
         assert_eq!(
-            updated_account.decrypt_account_balance(&sk, 16).unwrap(),
+            updated_account
+                .decrypt_account_balance(&sk, 16u64.into())
+                .unwrap(),
             (&bl_scalar * &RISTRETTO_BASEPOINT_TABLE).compress()
         );
     }
@@ -330,7 +338,17 @@ mod test {
     fn verify_delta_identity_check_test() {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
-        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let value_vector: Vec<Scalar> = vec![
+            -Scalar::from(5u64),
+            5u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+        ];
         let mut account_vector: Vec<Account> = Vec::new();
 
         for _ in 0..9 {
@@ -344,7 +362,8 @@ mod test {
             // lets get a random scalar to update the commitments
             let comm_scalar = Scalar::random(&mut OsRng);
 
-            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+            let updated_account =
+                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
 
             account_vector.push(updated_account);
         }
@@ -355,7 +374,7 @@ mod test {
             generate_base_pk,
         );
 
-        let check = Account::verify_delta_identity_check(delta_and_epsilon_accounts.1);
+        let check = Account::verify_delta_identity_check(&delta_and_epsilon_accounts.1);
         assert!(check);
     }
 
@@ -363,7 +382,17 @@ mod test {
     fn update_delta_account_test() {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
-        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let value_vector: Vec<Scalar> = vec![
+            -Scalar::from(5u64),
+            5u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+        ];
         let mut account_vector: Vec<Account> = Vec::new();
 
         for _i in 0..9 {
@@ -377,7 +406,8 @@ mod test {
             // lets get a random scalar to update the commitments
             let comm_scalar = Scalar::random(&mut OsRng);
 
-            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+            let updated_account =
+                Account::update_account(acc, 0u64.into(), updated_keys_scalar, comm_scalar);
 
             account_vector.push(updated_account);
         }
@@ -420,7 +450,8 @@ mod test {
             let comm_scalar = Scalar::random(&mut OsRng);
             generate_commitment_scalar_vector.push(comm_scalar);
 
-            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+            let updated_account =
+                Account::update_account(acc, 0u64.into(), updated_keys_scalar, comm_scalar);
 
             updated_account_vector.push(updated_account);
         }

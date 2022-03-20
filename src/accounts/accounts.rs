@@ -116,7 +116,6 @@ impl Account {
         base_pk: RistrettoPublicKey,
     ) -> (Vec<Account>, Vec<Account>, Vec<Scalar>) {
         let rscalar = Account::generate_sum_and_negate_rscalar();
-        //let mut rscalar : Scalar;
         let mut delta_account_vector: Vec<Account> = Vec::new();
         let mut epsilon_account_vector: Vec<Account> = Vec::new();
 
@@ -220,13 +219,19 @@ impl Account {
         }
     }
 
-    // create_epsilon_account generates a single epsilon account
+    // create_epsilon_account generates a single epsilon account for sender
     pub fn create_epsilon_account(
         base_pk: RistrettoPublicKey,
         rscalar: Scalar,
-        bl: Scalar,
+        bl: i64,
     ) -> Account {
-        let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl);
+        let bl_scalar: Scalar;
+        if bl >= 0i64 {
+            bl_scalar = Scalar::from(bl as u64);
+        } else {
+            panic!("Not enough balance in the sender account");
+        }
+        let comm_epsilon = ElGamalCommitment::generate_commitment(&base_pk, rscalar, bl_scalar);
         Account::set_account(base_pk, comm_epsilon)
     }
 

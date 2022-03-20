@@ -342,9 +342,9 @@ impl Sender {
 
         //Verify r1cs rangeproof
         let bp_check = range_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
-        if bp_check.is_err() {
-            return Err("Range Proof verification failed");
-        }
+        // if bp_check.is_err() {
+        //     return Err("Range Proof verification failed");
+        // }
         // println!("Rangeverifier {:?}", bp_check.is_ok());
 
         //if bp_check.is_ok() {

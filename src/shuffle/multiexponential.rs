@@ -147,12 +147,12 @@ impl MultiexpoProof {
         let (E_K_c, E_K_d) = reencrypt_commitment_ek(&e_k_c, &e_k_d, &base_pk, &b_vec, &tau_vec);
 
         //add to Transcript for challenge x
-        prover.allocate_point(b"A0Commitment", c_A_0);
+        prover.allocate_point(b"A0Commitment", &c_A_0);
         //add comit_A and comit_tau in Transcript
-        for i in 0..cb_k.iter().count() {
-            prover.allocate_point(b"BKCommitment", cb_k[i]);
-            prover.allocate_point(b"EK0Commitment", E_K_c[i]);
-            prover.allocate_point(b"EK1Commitment", E_K_d[i]);
+        for ((cbk, ekc), ekd) in cb_k.iter().zip(E_K_c.iter()).zip(E_K_d.iter()) {
+            prover.allocate_point(b"BKCommitment", cbk);
+            prover.allocate_point(b"EK0Commitment", ekc);
+            prover.allocate_point(b"EK1Commitment", ekd);
         }
         //create challenge x for hiding a and b
         let x = prover.get_challenge(b"xchallenege");
@@ -220,12 +220,12 @@ impl MultiexpoProof {
 
         //send C_A_0, cb_k and E_k to the Verifier. 1st Message
         //add to Transcript for challenge x
-        prover.allocate_point(b"A0Commitment", c_A_0);
+        prover.allocate_point(b"A0Commitment", &c_A_0);
         //add comit_A and comit_tau in Transcript
-        for i in 0..cb_k.iter().count() {
-            prover.allocate_point(b"BKCommitment", cb_k[i]);
-            prover.allocate_point(b"EK0Commitment", ek_g[i]);
-            prover.allocate_point(b"EK1Commitment", ek_h[i]);
+        for ((cbk, ekg), ekh) in cb_k.iter().zip(ek_g.iter()).zip(ek_h.iter()) {
+            prover.allocate_point(b"BKCommitment", cbk);
+            prover.allocate_point(b"EK0Commitment", ekg);
+            prover.allocate_point(b"EK1Commitment", ekh);
         }
         //create challenge x for hiding a and b
 
@@ -378,12 +378,16 @@ impl MultiexpoProof {
                 //Create new transcript
                 verifier.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
                 //recreate Challenge from Transcript
-                verifier.allocate_point(b"A0Commitment", self.c_A_0);
-                //add comit_A and comit_tau in Transcript
-                for i in 0..self.c_B_k.iter().count() {
-                    verifier.allocate_point(b"BKCommitment", self.c_B_k[i]);
-                    verifier.allocate_point(b"EK0Commitment", self.E_k_0[i]);
-                    verifier.allocate_point(b"EK1Commitment", self.E_k_1[i]);
+                verifier.allocate_point(b"A0Commitment", &self.c_A_0);
+                for ((cbk, ek0), ek1) in self
+                    .c_B_k
+                    .iter()
+                    .zip(self.E_k_0.iter())
+                    .zip(self.E_k_1.iter())
+                {
+                    verifier.allocate_point(b"BKCommitment", cbk);
+                    verifier.allocate_point(b"EK0Commitment", ek0);
+                    verifier.allocate_point(b"EK1Commitment", ek1);
                 }
                 //create challenge x
 
@@ -475,12 +479,16 @@ impl MultiexpoProof {
                 //Create new transcript
                 verifier.new_domain_sep(b"MultiExponentialPubKeyProof");
                 //recreate Challenge from Transcript
-                verifier.allocate_point(b"A0Commitment", self.c_A_0);
-                //add comit_A and comit_tau in Transcript
-                for i in 0..self.c_B_k.iter().count() {
-                    verifier.allocate_point(b"BKCommitment", self.c_B_k[i]);
-                    verifier.allocate_point(b"EK0Commitment", self.E_k_0[i]);
-                    verifier.allocate_point(b"EK1Commitment", self.E_k_1[i]);
+                verifier.allocate_point(b"A0Commitment", &self.c_A_0);
+                for ((cbk, ek0), ek1) in self
+                    .c_B_k
+                    .iter()
+                    .zip(self.E_k_0.iter())
+                    .zip(self.E_k_1.iter())
+                {
+                    verifier.allocate_point(b"BKCommitment", cbk);
+                    verifier.allocate_point(b"EK0Commitment", ek0);
+                    verifier.allocate_point(b"EK1Commitment", ek1);
                 }
                 //create challenge x
 

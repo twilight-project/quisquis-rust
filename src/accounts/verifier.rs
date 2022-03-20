@@ -68,7 +68,7 @@ impl<'a> Verifier<'a> {
         zr1_vector: &Vec<Scalar>,
         zr2_vector: &Vec<Scalar>,
         x: &Scalar,
-    ) -> bool {
+    ) -> Result<(), &'static str> {
         let mut transcript = Transcript::new(b"VerifyDeltaCompact");
         let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
 
@@ -87,8 +87,7 @@ impl<'a> Verifier<'a> {
             let combined_scalars = vec![zr1_vector[i], *x];
             let point = vec![delta_accounts[i].pk.gr, delta_accounts[i].comm.c];
             let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                .unwrap()
-                .compress();
+                .ok_or("Delta Compact Proof Verify: Failed")?;
 
             // lets create f_delta
             let combined_scalars = vec![zr1_vector[i], *x, zv_vector[i]];
@@ -98,15 +97,13 @@ impl<'a> Verifier<'a> {
                 RISTRETTO_BASEPOINT_COMPRESSED,
             ];
             let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                .unwrap()
-                .compress();
+                .ok_or("Delta Compact Proof Verify: Failed")?;
 
             // lets create e_epsilon
             let combined_scalars = vec![zr2_vector[i], *x];
             let point = vec![epsilon_accounts[i].pk.gr, epsilon_accounts[i].comm.c];
             let e_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                .unwrap()
-                .compress();
+                .ok_or("Delta Compact Proof Verify: Failed")?;
 
             // lets create f_epsilon
             let combined_scalars = vec![zr2_vector[i], *x, zv_vector[i]];
@@ -116,33 +113,32 @@ impl<'a> Verifier<'a> {
                 RISTRETTO_BASEPOINT_COMPRESSED,
             ];
             let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                .unwrap()
-                .compress();
+                .ok_or("Delta Compact Proof Verify: Failed")?;
 
             // lets append e_delta, f_delta, e_epsilon and f_epsilon to the transcript
-            verifier.allocate_point(b"e_delta", e_delta);
-            verifier.allocate_point(b"f_delta", f_delta);
-            verifier.allocate_point(b"e_epsilon", e_epsilon);
-            verifier.allocate_point(b"f_epsilon", f_epsilon);
+            verifier.allocate_point(b"e_delta", e_delta.compress());
+            verifier.allocate_point(b"f_delta", f_delta.compress());
+            verifier.allocate_point(b"e_epsilon", e_epsilon.compress());
+            verifier.allocate_point(b"f_epsilon", f_epsilon.compress());
         }
 
         // Obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"chal");
 
         if x == &verify_x {
-            return true;
+            Ok(())
         } else {
-            return false;
+            Err("Dleq Proof Verify: Failed")
         }
     }
 
     // verify_update_account_verifier verifies delta accounts were updated correctly
     pub fn verify_update_account_verifier(
-        updated_input_accounts: &Vec<Account>,
-        updated_delta_accounts: &Vec<Account>,
-        z_vector: &Vec<Scalar>,
+        updated_input_accounts: &[Account],
+        updated_delta_accounts: &[Account],
+        z_vector: &[Scalar],
         x: &Scalar,
-    ) -> bool {
+    ) -> Result<(), &'static str> {
         let a = updated_input_accounts
             .iter()
             .zip(updated_delta_accounts.iter())
@@ -157,7 +153,7 @@ impl<'a> Verifier<'a> {
             let point = vec![updated_input_accounts[i].pk.gr, a[i].c];
             e11.push(
                 Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                    .unwrap()
+                    .ok_or("DLOG Proof Verify: Failed")?
                     .compress(),
             );
 
@@ -165,7 +161,7 @@ impl<'a> Verifier<'a> {
             let point = vec![updated_input_accounts[i].pk.grsk, a[i].d];
             e12.push(
                 Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                    .unwrap()
+                    .ok_or("DLOG Proof Verify: Failed")?
                     .compress(),
             );
         }
@@ -195,9 +191,9 @@ impl<'a> Verifier<'a> {
         let verify_x = transcript.get_challenge(b"chal");
 
         if x == &verify_x {
-            return true;
+            Ok(())
         } else {
-            return false;
+            Err("DLOG Proof Verify: Failed")
         }
     }
 
@@ -211,7 +207,7 @@ impl<'a> Verifier<'a> {
         zr: &[Scalar],
         x: Scalar,
         rp_verifier: &mut RangeProofVerifier,
-    ) -> Result<bool, &'static str> {
+    ) -> Result<(), &'static str> {
         //lets start a transcript and a verifier script
 
         let mut transcript = Transcript::new(b"VerifyAccountProver");
@@ -260,6 +256,7 @@ impl<'a> Verifier<'a> {
         }
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"challenge");
+        println!("Verifier {:?}", verify_x);
         for i in 0..account_epsilon_sender.iter().count() {
             let res = rp_verifier.range_proof_verifier(account_epsilon_sender[i].comm.d);
             if res.is_err() {
@@ -267,7 +264,7 @@ impl<'a> Verifier<'a> {
             }
         }
         if x == verify_x {
-            Ok(true)
+            Ok(())
         } else {
             Err("sender account verification failed")
         }
@@ -329,7 +326,8 @@ mod test {
             // lets get a random scalar to update the commitments
             let comm_scalar = Scalar::random(&mut OsRng);
 
-            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+            let updated_account =
+                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
 
             account_vector.push(updated_account);
         }
@@ -357,14 +355,23 @@ mod test {
             &x,
         );
 
-        assert!(check);
+        assert!(check.is_ok());
     }
 
     #[test]
     fn verify_update_account_verifier_test() {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
-
-        let value_vector: Vec<i64> = vec![-5, 5, 0, 0, 0, 0, 0, 0, 0];
+        let value_vector: Vec<Scalar> = vec![
+            -Scalar::from(5u64),
+            5u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+        ];
         let mut updated_accounts: Vec<Account> = Vec::new();
 
         for _i in 0..9 {
@@ -378,7 +385,8 @@ mod test {
             // lets get a random scalar to update the commitments
             let comm_scalar = Scalar::random(&mut OsRng);
 
-            let updated_account = Account::update_account(acc, 0, updated_keys_scalar, comm_scalar);
+            let updated_account =
+                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
 
             updated_accounts.push(updated_account);
         }
@@ -411,18 +419,27 @@ mod test {
             &z_vector,
             &x,
         );
-        assert!(check);
+        assert!(check.is_ok());
     }
     #[test]
     fn verify_account_verifier_test() {
         let base_pk = RistrettoPublicKey::generate_base_pk();
-
-        let value_vector: Vec<i64> = vec![-5, -3, 5, 3, 0, 0, 0, 0, 0];
+        let value_vector: Vec<Scalar> = vec![
+            -Scalar::from(5u64),
+            -Scalar::from(3u64),
+            5u64.into(),
+            3u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+        ];
         let mut updated_accounts: Vec<Account> = Vec::new();
         let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
 
         for i in 0..9 {
-            let (updated_account, sk) = Account::generate_random_account_with_value(10);
+            let (updated_account, sk) = Account::generate_random_account_with_value(10u64.into());
 
             updated_accounts.push(updated_account);
 

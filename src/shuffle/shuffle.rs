@@ -141,7 +141,7 @@ impl Shuffle {
         let updated_inputs: Vec<_> = inputs
             .iter()
             .zip(tau.iter())
-            .map(|(acc, t)| Account::update_account(*acc, 0, *t, rho))
+            .map(|(acc, t)| Account::update_account(*acc, 0u64.into(), *t, rho))
             .collect();
         //Convert to a 2D array representation
         let outputs = Array2D::from_row_major(&updated_inputs, ROWS, COLUMNS);
@@ -177,7 +177,7 @@ impl Shuffle {
         let shuffled_outputs: Vec<_> = shuffled_accounts
             .iter()
             .zip(tau.iter())
-            .map(|(acc, t)| Account::update_account(*acc, 0, *t, rho))
+            .map(|(acc, t)| Account::update_account(*acc, 0u64.into(), *t, rho))
             .collect();
 
         //Convert to a 2D array representation
@@ -699,7 +699,7 @@ mod test {
         let shuffled_updated: Vec<_> = shuffled_inputs
             .iter()
             .zip(tau.iter())
-            .map(|(acc, t)| Account::update_account(*acc, 0, *t, rho))
+            .map(|(acc, t)| Account::update_account(*acc, 0u64.into(), *t, rho))
             .collect();
         assert_eq!(out, shuffled_updated)
     }
@@ -726,7 +726,7 @@ mod test {
         let input_updated: Vec<_> = account_vector
             .iter()
             .zip(tau.iter())
-            .map(|(acc, t)| Account::update_account(*acc, 0, *t, rho))
+            .map(|(acc, t)| Account::update_account(*acc, 0u64.into(), *t, rho))
             .collect();
         assert_eq!(out, input_updated)
     }

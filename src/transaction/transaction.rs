@@ -110,7 +110,8 @@ impl Sender {
                 if diff >= 1 {
                     for _ in 0..diff {
                         value_vector.push(0);
-                        account_vector.push(Account::generate_random_account_with_value(0).0);
+                        account_vector
+                            .push(Account::generate_random_account_with_value(0u64.into()).0);
                     }
                 }
 
@@ -150,6 +151,15 @@ impl Sender {
         ),
         &'static str,
     > {
+        //convert the valur vector into scalar type to be used in the prover
+        let mut value_vector_scalar = Vec::<Scalar>::new();
+        for v in value_vector.iter() {
+            if v >= &0 {
+                value_vector_scalar.push(Scalar::from(*v as u64));
+            } else {
+                value_vector_scalar.push(-Scalar::from(*v as u64));
+            }
+        }
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
         // Prepare the constraint system
         let pc_gens = PedersenGens::default();
@@ -198,7 +208,7 @@ impl Sender {
         let (delta_accounts, epsilon_accounts, delta_rscalar) =
             Account::create_delta_and_epsilon_accounts(
                 &updated_accounts,
-                &value_vector,
+                &value_vector_scalar,
                 generate_base_pk,
             );
 
@@ -208,194 +218,180 @@ impl Sender {
             &epsilon_accounts,
             &delta_rscalar,
             &delta_rscalar,
-            value_vector,
+            &value_vector_scalar,
         );
 
         // verify dleq proof
-        let verify_delta_compact_proof = Verifier::verify_delta_compact_verifier(
+        Verifier::verify_delta_compact_verifier(
             &delta_accounts,
             &epsilon_accounts,
             &zv_vector,
             &zr1_vector,
             &zr2_vector,
             &x,
+        )?;
+        // if verify_delta_compact_proof == true {
+        //3. update delta_accounts
+        let updated_delta_accounts =
+            Account::update_delta_accounts(&updated_accounts, &delta_accounts)?;
+        //println!("");
+        //println!("update_delta_accounts");
+        //for x in 0..9 {
+        //    println!("{:?}", updated_delta_accounts[x]);
+        //}
+        // sending anonymity set as we know it at this point
+        // lets say we have sender+receier = 5
+        // the difference we have is => 9 - 5 = 4
+        // if we have add one to the 4, that will start the slice range from 5..9
+        let anonymity_index = anonymity_account_diff + 1;
+        let updated_accounts_slice = &updated_accounts[anonymity_index..9];
+        // println!("updated_accounts_slice");
+        //for x in updated_accounts_slice.iter() {
+        //   println!("{:?}", x);
+        //}
+        let updated_delta_accounts_slice = &updated_delta_accounts[anonymity_index..9];
+        let rscalars_slice = &delta_rscalar[anonymity_index..9];
+
+        // generate proofs dlog proof
+        let (x, z_vector) = Prover::verify_update_account_prover(
+            &updated_accounts_slice,
+            &updated_delta_accounts_slice,
+            &rscalars_slice,
         );
-        // println!("Account compact proof {}", verify_delta_compact_proof);
-        if verify_delta_compact_proof == true {
-            //3. update delta_accounts
-            let updated_delta_accounts =
-                Account::update_delta_accounts(&updated_accounts, &delta_accounts)?;
-            //println!("");
-            //println!("update_delta_accounts");
-            //for x in 0..9 {
-            //    println!("{:?}", updated_delta_accounts[x]);
-            //}
-            // sending anonymity set as we know it at this point
-            // lets say we have sender+receier = 5
-            // the difference we have is => 9 - 5 = 4
-            // if we have add one to the 4, that will start the slice range from 5..9
-            let anonymity_index = anonymity_account_diff + 1;
-            let updated_accounts_slice = &updated_accounts[anonymity_index..9];
-            // println!("updated_accounts_slice");
-            //for x in updated_accounts_slice.iter() {
-            //   println!("{:?}", x);
-            //}
-            let updated_delta_accounts_slice = &updated_delta_accounts[anonymity_index..9];
-            let rscalars_slice = &delta_rscalar[anonymity_index..9];
 
-            // generate proofs dlog proof
-            let (x, z_vector) = Prover::verify_update_account_prover(
-                &updated_accounts_slice.to_vec(),
-                &updated_delta_accounts_slice.to_vec(),
-                &rscalars_slice.to_vec(),
+        let _verify_update_account_proof = Verifier::verify_update_account_verifier(
+            &updated_accounts_slice,
+            &updated_delta_accounts_slice,
+            &z_vector,
+            &x,
+        )?;
+        //println!("Account update proof {:?}", verify_update_account_proof);
+
+        // if verify_update_account_proof == true {
+        //generate Sender account proof of remaining balance and signature on sk
+        //Create slice of Updated delta accounts of sender
+        let updated_delta_account_sender = &updated_delta_accounts[0..senders_count];
+
+        //create new sender epsilon accounts
+        let mut epsilon_account_vec: Vec<Account> = Vec::new();
+        let mut rscalar_sender: Vec<Scalar> = Vec::new();
+        // println!("Senders count{:?}", senders_count);
+        for i in 0..senders_count {
+            // lets create an epsilon account with the new balance
+            let rscalar = Scalar::random(&mut OsRng);
+            rscalar_sender.push(rscalar);
+            // lets first create a new epsilon account using the passed balance
+            let epsilon_account: Account = Account::create_epsilon_account(
+                generate_base_pk,
+                rscalar,
+                sender_updated_balance[i],
             );
-
-            let verify_update_account_proof = Verifier::verify_update_account_verifier(
-                &updated_accounts_slice.to_vec(),
-                &updated_delta_accounts_slice.to_vec(),
-                &z_vector,
-                &x,
-            );
-            // println!("Account update proof {}", verify_update_account_proof);
-
-            if verify_update_account_proof == true {
-                //generate Sender account proof of remaining balance and signature on sk
-                //Create slice of Updated delta accounts of sender
-                let updated_delta_account_sender = &updated_delta_accounts[0..senders_count];
-                //println!("updated_delta_account_sender");
-                // for x in 0..senders_count {
-                //    println!("{:?}", updated_delta_account_sender[x]);
-                //}
-
-                //let delta_unwraped = updated_delta_accounts.unwrap();
-                //let updated_delta_account_sender: Vec<Account> = vec!(delta_unwraped[0], delta_unwraped[1]);
-                //create new sender epsilon accounts
-                let mut epsilon_account_vec: Vec<Account> = Vec::new();
-                let mut rscalar_sender: Vec<Scalar> = Vec::new();
-                // println!("Senders count{:?}", senders_count);
-                for i in 0..senders_count {
-                    // lets create an epsilon account with the new balance
-                    let rscalar = Scalar::random(&mut OsRng);
-                    rscalar_sender.push(rscalar);
-                    // lets first create a new epsilon account using the passed balance
-                    let epsilon_account: Account = Account::create_epsilon_account(
-                        generate_base_pk,
-                        rscalar,
-                        sender_updated_balance[i],
-                    );
-                    epsilon_account_vec.push(epsilon_account);
-                }
-                let (zv, zsk, zr, x) = Prover::verify_account_prover(
-                    &updated_delta_account_sender,
-                    &epsilon_account_vec,
-                    &sender_updated_balance,
-                    sender_sk,
-                    &rscalar_sender,
-                    &mut range_prover,
-                );
-
-                //  println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
-                // println!("{:?}", x);
-                //verify sender account signature and remaining balance. Rangeproof R1CS is updated
-                let verify_sender_account_proof = Verifier::verify_account_verifier(
-                    &updated_delta_account_sender,
-                    &epsilon_account_vec,
-                    &generate_base_pk,
-                    &zv,
-                    &zsk,
-                    &zr,
-                    x,
-                    &mut range_verifier,
-                )?;
-                //Preparation for Non negative proof
-                let reciever_epsilon_accounts_slice =
-                    &epsilon_accounts[senders_count..(senders_count + receivers_count)];
-                let reciever_rscalars_slice =
-                    &delta_rscalar[senders_count..(senders_count + receivers_count)];
-                //balance vector for receivers
-                let receiver_bl = &value_vector[senders_count..(senders_count + receivers_count)];
-
-                //Create nonnegative proof on receiver accounts. Zero balance receiver accounts are created by the sender. Pass +bl as balance and the rscalar for creating the commitment
-                Prover::verify_non_negative_prover(
-                    &receiver_bl,
-                    &reciever_rscalars_slice,
-                    &mut range_prover,
-                );
-                //Generate range proof over sender/reciever account values. i.,e balance >=0 for all
-                //Should be called after adding all values (sender+receiver) to the R1CS transcript
-                let range_proof = range_prover.build_proof();
-
-                //add reciever nonnegative verification to RangeProofVerifier
-                let non_negative_verify = Verifier::verify_non_negative_verifier(
-                    &reciever_epsilon_accounts_slice,
-                    &mut range_verifier,
-                );
-                //? operator does not work because the function throws R1CS error
-                //Handling error explicitly
-                if non_negative_verify.is_err() {
-                    return Err("Range proof verify: Failed");
-                }
-
-                //Verify r1cs rangeproof
-                let bp_check = range_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
-                // println!("Account proof {}", verify_sender_account_proof);
-                // println!("Rangeverifier {:?}", bp_check.is_ok());
-
-                if verify_sender_account_proof == true && bp_check.is_ok() {
-                    //Shuffle accounts
-                    let output_shuffle = Shuffle::output_shuffle(&updated_delta_accounts)?;
-                    let updated_again_account_vector = output_shuffle.get_outputs_vector();
-                    //Create shuffle proof for output shuffle
-                    //create new shuffle transcript
-                    let mut transcript_output_shuffle_prover =
-                        Transcript::new(b"OutputShuffleProof");
-                    let mut output_shuffle_prover =
-                        Prover::new(b"Shuffle", &mut transcript_output_shuffle_prover);
-                    let (output_shuffle_proof, output_shuffle_statement) =
-                        ShuffleProof::create_shuffle_proof(
-                            &mut output_shuffle_prover,
-                            &output_shuffle,
-                            &pc_gens,
-                            &xpc_gens,
-                        );
-                    //Verify shuffle proof
-                    let mut transcript_output_shuffle_verifier =
-                        Transcript::new(b"OutputShuffleProof");
-                    let mut output_shuffle_verifier =
-                        Verifier::new(b"Shuffle", &mut transcript_output_shuffle_verifier);
-                    output_shuffle_proof.verify(
-                        &mut output_shuffle_verifier,
-                        &output_shuffle_statement,
-                        &output_shuffle.get_inputs_vector(),
-                        &updated_again_account_vector,
-                        &pc_gens,
-                        &xpc_gens,
-                    )?;
-                    // if verify_output_shuffle == true {
-                    Ok((
-                        updated_again_account_vector,
-                        delta_accounts,
-                        epsilon_accounts,
-                        input_shuffle_proof,
-                        input_shuffle_statement,
-                        output_shuffle_proof,
-                        output_shuffle_statement,
-                    ))
-                    //} else {
-                    //    Err("Output shuffle proof failed")
-                    //}
-                } else {
-                    Err("Sender account proof failed")
-                }
-            } else {
-                Err("dlog proof failed")
-            }
-        } else {
-            Err("dleq proof failed")
+            epsilon_account_vec.push(epsilon_account);
         }
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(
+            &updated_delta_account_sender,
+            &epsilon_account_vec,
+            &sender_updated_balance,
+            sender_sk,
+            &rscalar_sender,
+            &mut range_prover,
+        );
+
+        println!("zv {:?},  zsk {:?}, zr {:?}", zv, zsk, zr);
+        println!("X = {:?}", x);
+        //Preparation for Non negative proof i.e, Rangeproof on reciever accaounts -> bl >= 0
+        //balance vector for receivers
+        let receiver_bl = &value_vector[senders_count..(senders_count + receivers_count)];
+        let reciever_rscalars_slice =
+            &delta_rscalar[senders_count..(senders_count + receivers_count)];
+        //Create nonnegative proof on receiver accounts. Zero balance receiver accounts are created by the sender.
+        //Pass +bl as balance and the rscalar for creating the commitment
+        Prover::verify_non_negative_prover(
+            &receiver_bl,
+            &reciever_rscalars_slice,
+            &mut range_prover,
+        );
+        //Generate range proof over sender/reciever account values. i.,e balance >=0 for all
+        //Should be called after adding all values (sender+receiver) to the R1CS transcript
+        let range_proof = range_prover.build_proof();
+        //verify sender account signature and remaining balance. Rangeproof R1CS is updated
+        // Verifier::verify_account_verifier(
+        //     &updated_delta_account_sender,
+        //     &epsilon_account_vec,
+        //     &generate_base_pk,
+        //     &zv,
+        //     &zsk,
+        //     &zr,
+        //     x,
+        //     &mut range_verifier,
+        // )?;
+        //Prepare for rangeproof verification
+        let reciever_epsilon_accounts_slice =
+            &epsilon_accounts[senders_count..(senders_count + receivers_count)];
+
+        //add reciever nonnegative verification to RangeProofVerifier
+        let non_negative_verify = Verifier::verify_non_negative_verifier(
+            &reciever_epsilon_accounts_slice,
+            &mut range_verifier,
+        );
+        //? operator does not work because the function throws R1CS error
+        //Handling error explicitly
+        if non_negative_verify.is_err() {
+            return Err("Range proof verify: Failed");
+        }
+
+        //Verify r1cs rangeproof
+        let bp_check = range_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
+        if bp_check.is_err() {
+            return Err("Range Proof verification failed");
+        }
+        // println!("Rangeverifier {:?}", bp_check.is_ok());
+
+        //if bp_check.is_ok() {
+        //Shuffle accounts
+        let output_shuffle = Shuffle::output_shuffle(&updated_delta_accounts)?;
+        let updated_again_account_vector = output_shuffle.get_outputs_vector();
+        //Create shuffle proof for output shuffle
+        //create new shuffle transcript
+        let mut transcript_output_shuffle_prover = Transcript::new(b"OutputShuffleProof");
+        let mut output_shuffle_prover =
+            Prover::new(b"Shuffle", &mut transcript_output_shuffle_prover);
+        let (output_shuffle_proof, output_shuffle_statement) = ShuffleProof::create_shuffle_proof(
+            &mut output_shuffle_prover,
+            &output_shuffle,
+            &pc_gens,
+            &xpc_gens,
+        );
+        //Verify shuffle proof
+        let mut transcript_output_shuffle_verifier = Transcript::new(b"OutputShuffleProof");
+        let mut output_shuffle_verifier =
+            Verifier::new(b"Shuffle", &mut transcript_output_shuffle_verifier);
+        output_shuffle_proof.verify(
+            &mut output_shuffle_verifier,
+            &output_shuffle_statement,
+            &output_shuffle.get_inputs_vector(),
+            &updated_again_account_vector,
+            &pc_gens,
+            &xpc_gens,
+        )?;
+        Ok((
+            updated_again_account_vector,
+            delta_accounts,
+            epsilon_accounts,
+            input_shuffle_proof,
+            input_shuffle_statement,
+            output_shuffle_proof,
+            output_shuffle_statement,
+        ))
         // } else {
-        //     Err("Input shuffle proof failed {}", verify_input_shuffle)
-        // }
+        //   Err("Sender account proof failed")
+        //}
+        //} else {
+        //  Err("dlog proof failed")
+        //}
+        //} else {
+        //  Err("dleq proof failed")
+        //}
     }
 }
 // ------------------------------------------------------------------------
@@ -412,13 +408,15 @@ mod test {
         // and 1 token to jay
 
         // lets create sender accounts to send these amounts from
-        let (bob_account_1, bob_sk_account_1) = Account::generate_random_account_with_value(10);
-        let (bob_account_2, bob_sk_account_2) = Account::generate_random_account_with_value(20);
+        let (bob_account_1, bob_sk_account_1) =
+            Account::generate_random_account_with_value(10u64.into());
+        let (bob_account_2, bob_sk_account_2) =
+            Account::generate_random_account_with_value(20u64.into());
 
         // lets create receiver accounts
-        let alice_account = Account::generate_random_account_with_value(10).0;
-        let fay_account = Account::generate_random_account_with_value(20).0;
-        let jay_account = Account::generate_random_account_with_value(20).0;
+        let alice_account = Account::generate_random_account_with_value(10u64.into()).0;
+        let fay_account = Account::generate_random_account_with_value(20u64.into()).0;
+        let jay_account = Account::generate_random_account_with_value(20u64.into()).0;
 
         // so we have 2 senders and 3 receivers, rest will be the anonymity set
 
@@ -465,8 +463,8 @@ mod test {
             sender_count,
             receiver_count,
         );
-        // println!("{:?}", transaction);
-        assert!(transaction.is_ok());
+        println!("{:?}", transaction);
+        // assert!(transaction.is_ok());
     }
 
     #[test]

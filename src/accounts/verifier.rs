@@ -32,13 +32,13 @@ impl<'a> Verifier<'a> {
     }
 
     /// Allocate and assign a public variable with the given `label`.
-    pub fn allocate_point(&mut self, label: &'static [u8], assignment: CompressedRistretto) {
-        self.transcript.append_point_var(label, &assignment);
+    pub fn allocate_point(&mut self, label: &'static [u8], assignment: &CompressedRistretto) {
+        self.transcript.append_point_var(label, assignment);
     }
 
     /// Allocate and assign an account with the given `label`.
-    pub fn allocate_account(&mut self, label: &'static [u8], account: Account) {
-        self.transcript.append_account_var(label, &account);
+    pub fn allocate_account(&mut self, label: &'static [u8], account: &Account) {
+        self.transcript.append_account_var(label, account);
     }
 
     pub fn multiscalar_multiplication(
@@ -72,9 +72,9 @@ impl<'a> Verifier<'a> {
         let mut transcript = Transcript::new(b"VerifyDeltaCompact");
         let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
 
-        for i in 0..delta_accounts.iter().count() {
-            verifier.allocate_account(b"delta_account", delta_accounts[i]);
-            verifier.allocate_account(b"epsilon_account", epsilon_accounts[i]);
+        for (d, e) in delta_accounts.iter().zip(epsilon_accounts.iter()) {
+            verifier.allocate_account(b"delta_account", d);
+            verifier.allocate_account(b"epsilon_account", e);
         }
 
         for i in 0..delta_accounts.iter().count() {
@@ -116,10 +116,10 @@ impl<'a> Verifier<'a> {
                 .ok_or("Delta Compact Proof Verify: Failed")?;
 
             // lets append e_delta, f_delta, e_epsilon and f_epsilon to the transcript
-            verifier.allocate_point(b"e_delta", e_delta.compress());
-            verifier.allocate_point(b"f_delta", f_delta.compress());
-            verifier.allocate_point(b"e_epsilon", e_epsilon.compress());
-            verifier.allocate_point(b"f_epsilon", f_epsilon.compress());
+            verifier.allocate_point(b"e_delta", &e_delta.compress());
+            verifier.allocate_point(b"f_delta", &f_delta.compress());
+            verifier.allocate_point(b"e_epsilon", &e_epsilon.compress());
+            verifier.allocate_point(b"f_epsilon", &f_epsilon.compress());
         }
 
         // Obtain a scalar challenge
@@ -176,15 +176,15 @@ impl<'a> Verifier<'a> {
             .iter()
             .zip(updated_delta_accounts.iter())
         {
-            verifier.allocate_point(b"inputgr", input.pk.gr);
-            verifier.allocate_point(b"inputgrsk", input.pk.grsk);
-            verifier.allocate_point(b"outputgr", output.pk.gr);
-            verifier.allocate_point(b"outputgrsk", output.pk.grsk);
+            verifier.allocate_point(b"inputgr", &input.pk.gr);
+            verifier.allocate_point(b"inputgrsk", &input.pk.grsk);
+            verifier.allocate_point(b"outputgr", &output.pk.gr);
+            verifier.allocate_point(b"outputgrsk", &output.pk.grsk);
         }
 
-        for i in 0..z_vector.iter().count() {
-            verifier.allocate_point(b"commitmentgr", e11[i]);
-            verifier.allocate_point(b"commitmentgrsk", e12[i]);
+        for (e11, e12) in e11.iter().zip(e12.iter()) {
+            verifier.allocate_point(b"commitmentgr", e11);
+            verifier.allocate_point(b"commitmentgrsk", e12);
         }
 
         // obtain a scalar challenge
@@ -213,9 +213,12 @@ impl<'a> Verifier<'a> {
         let mut transcript = Transcript::new(b"VerifyAccountProver");
         let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
         //add statement accounts to transcript
-        for (i, delta_account) in updated_delta_account_sender.iter().enumerate() {
-            verifier.allocate_account(b"delta_account", *delta_account);
-            verifier.allocate_account(b"epsilon_account", account_epsilon_sender[i]);
+        for (delta, epsilon) in updated_delta_account_sender
+            .iter()
+            .zip(account_epsilon_sender.iter())
+        {
+            verifier.allocate_account(b"delta_account", delta);
+            verifier.allocate_account(b"epsilon_account", epsilon);
         }
 
         //recreate e,f delta and epsilon
@@ -224,13 +227,13 @@ impl<'a> Verifier<'a> {
             let point = vec![delta_account.pk.gr, delta_account.pk.grsk];
             //let create e_delta = (h_delta * x)  + (g_delta * z_sk)
             let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                .unwrap()
+                .ok_or("Account Verify: Failed")?
                 .compress();
             let combined_scalars = vec![zv[i], zsk[i], x];
             let point = vec![base_pk.gr, delta_account.comm.c, delta_account.comm.d];
             // lets create f_delta = d_delta * x + g * z_v + c_delta * z_sk
             let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                .unwrap()
+                .ok_or("Account Verify: Failed")?
                 .compress();
 
             let combined_scalars = vec![x, zr[i]];
@@ -239,20 +242,20 @@ impl<'a> Verifier<'a> {
             //let create e_epsilon = c_epsilon * x + g * z_dash
 
             let e_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                .unwrap()
+                .ok_or("Account Verify: Failed")?
                 .compress();
             let combined_scalars = vec![zv[i], zr[i], x];
             let point = vec![base_pk.gr, base_pk.grsk, account_epsilon_sender[i].comm.d];
 
             // lets create f_epsilon = d_epsilon * x + g * z_v + h * z_r
             let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                .unwrap()
+                .ok_or("Account Verify: Failed")?
                 .compress();
             // add e and f points to transcript
-            verifier.allocate_point(b"e_delta", e_delta);
-            verifier.allocate_point(b"f_delta", f_delta);
-            verifier.allocate_point(b"e_epsilon", e_epsilon);
-            verifier.allocate_point(b"f_epsilon", f_epsilon);
+            verifier.allocate_point(b"e_delta", &e_delta);
+            verifier.allocate_point(b"f_delta", &f_delta);
+            verifier.allocate_point(b"e_epsilon", &e_epsilon);
+            verifier.allocate_point(b"f_epsilon", &f_epsilon);
         }
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"challenge");

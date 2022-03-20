@@ -37,19 +37,19 @@ impl<'a> Prover<'a> {
     }
 
     /// Allocate and assign a secret variable with the given `label`.
-    pub fn allocate_scalar(&mut self, label: &'static [u8], assignment: Scalar) {
-        self.transcript.append_scalar_var(label, &assignment);
-        self.scalars.push(assignment);
+    pub fn allocate_scalar(&mut self, label: &'static [u8], assignment: &Scalar) {
+        self.transcript.append_scalar_var(label, assignment);
+        self.scalars.push(*assignment);
     }
 
     /// Allocate and assign a public variable with the given `label`.
-    pub fn allocate_point(&mut self, label: &'static [u8], assignment: CompressedRistretto) {
-        self.transcript.append_point_var(label, &assignment);
+    pub fn allocate_point(&mut self, label: &'static [u8], assignment: &CompressedRistretto) {
+        self.transcript.append_point_var(label, assignment);
     }
 
     /// Allocate and assign an account with the given `label`.
-    pub fn allocate_account(&mut self, label: &'static [u8], account: Account) {
-        self.transcript.append_account_var(label, &account);
+    pub fn allocate_account(&mut self, label: &'static [u8], account: &Account) {
+        self.transcript.append_account_var(label, account);
     }
 
     /// Allocate a new domain to create another transcript for embedded proof with new `label`.
@@ -70,6 +70,9 @@ impl<'a> Prover<'a> {
         rscalar2: &[Scalar],
         value_vector: &[Scalar],
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
+        //lenghts of both delta and epsilon account slices should be same.
+        assert_eq!(delta_accounts.len(), epsilon_accounts.len());
+
         let mut v_dash_vector: Vec<Scalar> = Vec::new();
         let mut r1_dash_vector: Vec<Scalar> = Vec::new();
         let mut r2_dash_vector: Vec<Scalar> = Vec::new();
@@ -87,9 +90,9 @@ impl<'a> Prover<'a> {
             .chain(v_dash_vector.iter().cloned())
             .collect();
 
-        for i in 0..delta_accounts.iter().count() {
-            prover.allocate_account(b"delta_account", delta_accounts[i]);
-            prover.allocate_account(b"epsilon_account", epsilon_accounts[i]);
+        for (delta, epsilon) in delta_accounts.iter().zip(epsilon_accounts.iter()) {
+            prover.allocate_account(b"delta_account", delta);
+            prover.allocate_account(b"epsilon_account", epsilon);
         }
 
         let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
@@ -149,10 +152,10 @@ impl<'a> Prover<'a> {
 
         for i in 0..delta_accounts.iter().count() {
             // lets append e_delta, f_delta, e_epsilon and f_epsilon to the transcript
-            prover.allocate_point(b"e_delta", e_delta[i].compress());
-            prover.allocate_point(b"f_delta", f_delta[i].compress());
-            prover.allocate_point(b"e_epsilon", e_epsilon[i].compress());
-            prover.allocate_point(b"f_epsilon", f_epsilon[i].compress());
+            prover.allocate_point(b"e_delta", &e_delta[i].compress());
+            prover.allocate_point(b"f_delta", &f_delta[i].compress());
+            prover.allocate_point(b"e_epsilon", &e_epsilon[i].compress());
+            prover.allocate_point(b"f_epsilon", &f_epsilon[i].compress());
         }
 
         // obtain a scalar challenge
@@ -249,15 +252,15 @@ impl<'a> Prover<'a> {
         // pk_output is in updated_delta_accounts
         // a is updated_input_pk_with_s_scalar )
         for i in anonymity_set_index {
-            prover.allocate_point(b"inputgr", updated_input_accounts[i].pk.gr);
-            prover.allocate_point(b"inputgrsk", updated_input_accounts[i].pk.grsk);
-            prover.allocate_point(b"outputgr", updated_delta_accounts[i].pk.gr);
-            prover.allocate_point(b"outputgrsk", updated_delta_accounts[i].pk.grsk);
+            prover.allocate_point(b"inputgr", &updated_input_accounts[i].pk.gr);
+            prover.allocate_point(b"inputgrsk", &updated_input_accounts[i].pk.grsk);
+            prover.allocate_point(b"outputgr", &updated_delta_accounts[i].pk.gr);
+            prover.allocate_point(b"outputgrsk", &updated_delta_accounts[i].pk.grsk);
         }
 
         for pk in updated_input_pk_with_s_scalar.iter() {
-            prover.allocate_point(b"commitmentgr", pk.gr);
-            prover.allocate_point(b"commitmentgrsk", pk.grsk);
+            prover.allocate_point(b"commitmentgr", &pk.gr);
+            prover.allocate_point(b"commitmentgrsk", &pk.grsk);
         }
 
         // obtain a scalar challenge
@@ -283,6 +286,11 @@ impl<'a> Prover<'a> {
         rscalar: &[Scalar],
         rp_prover: &mut RangeProofProver,
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
+        //check length is same
+        assert_eq!(
+            updated_delta_account_sender.len(),
+            epsilon_account_sender.len()
+        );
         // lets start a transcript and a prover script
         let mut transcript = Transcript::new(b"VerifyAccountProver");
         let mut prover = Prover::new(b"DLEQProof", &mut transcript);
@@ -302,9 +310,12 @@ impl<'a> Prover<'a> {
             .chain(v_vector.iter().cloned())
             .collect();
         //add statement accounts to transcript
-        for i in 0..updated_delta_account_sender.iter().count() {
-            prover.allocate_account(b"delta_account", updated_delta_account_sender[i]);
-            prover.allocate_account(b"epsilon_account", epsilon_account_sender[i]);
+        for (delta, epsilon) in updated_delta_account_sender
+            .iter()
+            .zip(epsilon_account_sender.iter())
+        {
+            prover.allocate_account(b"delta_account", delta);
+            prover.allocate_account(b"epsilon_account", epsilon);
         }
 
         let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
@@ -367,10 +378,10 @@ impl<'a> Prover<'a> {
 
         //adding e,f to transcript
         for (i, e_delta) in e_delta.iter().enumerate() {
-            prover.allocate_point(b"e_delta", e_delta.compress());
-            prover.allocate_point(b"f_delta", f_delta[i].compress());
-            prover.allocate_point(b"e_epsilon", e_epsilon[i].compress());
-            prover.allocate_point(b"f_epsilon", f_epsilon[i].compress());
+            prover.allocate_point(b"e_delta", &e_delta.compress());
+            prover.allocate_point(b"f_delta", &f_delta[i].compress());
+            prover.allocate_point(b"e_epsilon", &e_epsilon[i].compress());
+            prover.allocate_point(b"f_epsilon", &f_epsilon[i].compress());
         }
         // obtain a scalar challenge
         let x = transcript.get_challenge(b"challenge");

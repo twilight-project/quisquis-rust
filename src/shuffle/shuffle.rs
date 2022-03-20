@@ -253,8 +253,8 @@ impl ShuffleProof {
         //Tau commitment from HadamardProduct should be used here.
         //add commitment_witness and commitment_tau in Transcript
         for (a, tau) in commitment_witness.iter().zip(commitment_tau.iter()) {
-            prover.allocate_point(b"ACommitment", *a);
-            prover.allocate_point(b"tauCommitment", *tau);
+            prover.allocate_point(b"ACommitment", a);
+            prover.allocate_point(b"tauCommitment", tau);
         }
         //create challenge x
         let x = prover.get_challenge(b"xChallenge");
@@ -281,9 +281,9 @@ impl ShuffleProof {
             commitment_b_dash.push(xpc_gens.commit(&b_dash_as_rows[i], s_dash[i]).compress());
         }
         //add comit_b and comit_b_dash in Transcript
-        for i in 0..commitment_b.iter().count() {
-            prover.allocate_point(b"BCommitment", commitment_b[i]);
-            prover.allocate_point(b"BDashCommitment", commitment_b_dash[i]);
+        for (cb, cbdash) in commitment_b.iter().zip(commitment_b_dash.iter()) {
+            prover.allocate_point(b"BCommitment", cb);
+            prover.allocate_point(b"BDashCommitment", cbdash);
         }
         // Hadamard proof: b' o tau = b
         let (hadamard_proof, hadamard_statement) = HadamardProof::create_hadamard_argument_proof(
@@ -414,9 +414,9 @@ impl ShuffleProof {
             //recreate challenge x
 
             //add c_A and c_tau in Transcript
-            for i in 0..self.c_A.iter().count() {
-                verifier.allocate_point(b"ACommitment", self.c_A[i]);
-                verifier.allocate_point(b"tauCommitment", self.c_tau[i]);
+            for (ca, ctau) in self.c_A.iter().zip(self.c_tau.iter()) {
+                verifier.allocate_point(b"ACommitment", ca);
+                verifier.allocate_point(b"tauCommitment", ctau);
             }
             //create challenge x
             let x = verifier.get_challenge(b"xChallenge");
@@ -425,9 +425,9 @@ impl ShuffleProof {
             let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(N).collect();
             let base_pk = RistrettoPublicKey::generate_base_pk();
             //add comit_b and comit_b_dash in Transcript
-            for i in 0..self.c_B.iter().count() {
-                verifier.allocate_point(b"BCommitment", self.c_B[i]);
-                verifier.allocate_point(b"BDashCommitment", self.c_B_dash[i]);
+            for (b, bdash) in self.c_B.iter().zip(self.c_B_dash.iter()) {
+                verifier.allocate_point(b"BCommitment", b);
+                verifier.allocate_point(b"BDashCommitment", bdash);
             }
 
             //Verify Hadamard Proof : b' o tau = b

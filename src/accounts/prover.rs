@@ -80,8 +80,6 @@ impl<'a> Prover<'a> {
         for value in value_vector.iter() {
             v_dash_vector.push(*value);
         }
-        println!("Value vector : {:?}", value_vector);
-
         prover.scalars = rscalar1
             .iter()
             .cloned()
@@ -197,9 +195,9 @@ impl<'a> Prover<'a> {
 
     // verify_update_account_prover confirms if anonymity set in delta accounts was updated correctly
     pub fn verify_update_account_prover(
-        updated_input_accounts: &Vec<Account>,
-        updated_delta_accounts: &Vec<Account>,
-        delta_rscalar: &Vec<Scalar>,
+        updated_input_accounts: &[Account],
+        updated_delta_accounts: &[Account],
+        delta_rscalar: &[Scalar],
     ) -> (Scalar, Vec<Scalar>) {
         // check if (c,d)/c,d) = pkdelta_r
         // lets do c-c and d-d for the commitments in both updated_input and updated_delta account vectors
@@ -405,13 +403,20 @@ impl<'a> Prover<'a> {
             .collect::<Vec<_>>();
 
         //create RICS constraint based range proof over sneder account value : bl - v > 0
-        for i in 0..epsilon_account_sender.iter().count() {
+        for (b, r) in bl.iter().zip(rscalar.iter()) {
             //panics in case range proof is not constructed properly
-            println!("bl {:?}", bl[i]);
-            let res = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
-            println!("res {:?}", res.is_ok());
+            //println!("bl {:?}", bl[i]);
+            if *b >= 0i64 {
+                match rp_prover.range_proof_prover(*b as u64, *r) {
+                    Ok(_commit) => continue,
+                    Err(err) => eprintln!("RangeProof Error! {}", err),
+                };
+            } else {
+                panic!("Receiver balance is negative");
+            }
+            //println!("res {:?}", res.is_ok());
 
-            println!("res {:?}", res.unwrap());
+            //println!("res {:?}", res.unwrap());
         }
 
         return (zv_vector, zsk_vector, zr_vector, x);
@@ -419,14 +424,23 @@ impl<'a> Prover<'a> {
     //verify_non_negative_prover creates range proof on Receiver accounts with zero balance
     pub fn verify_non_negative_prover(
         /*epsilon_account: &Vec<Account>,*/
-        bl: &[Scalar],
+        bl: &[i64],
         rscalar: &[Scalar],
         rp_prover: &mut RangeProofProver,
     ) {
-        for i in 0..bl.iter().count() {
-            let res = rp_prover.range_proof_prover(bl[i] as u64, rscalar[i]);
-            println!("res {:?}", res.is_ok());
-            println!("res {:?}", res.unwrap());
+        for (b, r) in bl.iter().zip(rscalar.iter()) {
+            //panics in case range proof is not constructed properly
+            //println!("bl {:?}", bl[i]);
+            if *b >= 0i64 {
+                match rp_prover.range_proof_prover(*b as u64, *r) {
+                    Ok(_commit) => continue,
+                    Err(err) => eprintln!("RangeProof Error! {}", err),
+                };
+            } else {
+                panic!("Receiver balance is negative");
+            }
+            //println!("res {:?}", res.is_ok());
+            //println!("res {:?}", res.unwrap());
         }
     }
 }

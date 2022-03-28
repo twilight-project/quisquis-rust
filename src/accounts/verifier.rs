@@ -3,6 +3,7 @@ use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_COMPRESSED,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
+    traits::IsIdentity,
     traits::VartimeMultiscalarMul,
 };
 
@@ -282,6 +283,24 @@ impl<'a> Verifier<'a> {
         }
         Ok(())
     }
+    // verify_delta_identity_check sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
+    // else returns error
+    pub fn verify_delta_identity_check(epsilon_accounts: &[Account]) -> Result<(), &'static str> {
+        let sum_c: RistrettoPoint = epsilon_accounts
+            .iter()
+            .map(|s| s.comm.c.decompress().unwrap())
+            .sum();
+        let sum_d: RistrettoPoint = epsilon_accounts
+            .iter()
+            .map(|s| s.comm.d.decompress().unwrap())
+            .sum();
+
+        if !sum_c.is_identity() || !sum_d.is_identity() {
+            Ok(())
+        } else {
+            Err("Identity sum verify: Failed")
+        }
+    }
 }
 
 // ------------------------------------------------------------------------
@@ -516,6 +535,49 @@ mod test {
         let bp_check = rp_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
         assert!(bp_check.is_ok());
         // println!("{:?}", bp_check.is_ok());
+        assert!(check.is_ok());
+    }
+    #[test]
+    fn verify_delta_identity_check_test() {
+        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+
+        let value_vector: Vec<Scalar> = vec![
+            -Scalar::from(5u64),
+            5u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+        ];
+        let mut account_vector: Vec<Account> = Vec::new();
+
+        for _ in 0..9 {
+            let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+            let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+            let acc = Account::generate_account(pk);
+
+            // lets get a random scalar to update the account
+            let updated_keys_scalar = Scalar::random(&mut OsRng);
+
+            // lets get a random scalar to update the commitments
+            let comm_scalar = Scalar::random(&mut OsRng);
+
+            let updated_account =
+                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
+
+            account_vector.push(updated_account);
+        }
+
+        let delta_and_epsilon_accounts = Account::create_delta_and_epsilon_accounts(
+            &account_vector,
+            &value_vector,
+            generate_base_pk,
+        );
+
+        let check = Verifier::verify_delta_identity_check(&delta_and_epsilon_accounts.1);
         assert!(check.is_ok());
     }
 }

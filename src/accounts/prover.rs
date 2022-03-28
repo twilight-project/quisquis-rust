@@ -73,21 +73,21 @@ impl<'a> Prover<'a> {
         //lenghts of both delta and epsilon account slices should be same.
         assert_eq!(delta_accounts.len(), epsilon_accounts.len());
 
-        let mut v_dash_vector: Vec<Scalar> = Vec::new();
+        //let mut v_dash_vector: Vec<Scalar> = Vec::new();
         let mut r1_dash_vector: Vec<Scalar> = Vec::new();
         let mut r2_dash_vector: Vec<Scalar> = Vec::new();
         let mut v_doubledash_vector: Vec<Scalar> = Vec::new();
         let mut transcript = Transcript::new(b"VerifyDeltaCompact");
         let mut prover = Prover::new(b"DLEQProof", &mut transcript);
 
-        for value in value_vector.iter() {
-            v_dash_vector.push(*value);
-        }
+        //for value in value_vector.iter() {
+        //  v_dash_vector.push(*value);
+        //}
         prover.scalars = rscalar1
             .iter()
             .cloned()
             .chain(rscalar2.iter().cloned())
-            .chain(v_dash_vector.iter().cloned())
+            .chain(value_vector.iter().cloned())
             .collect();
 
         for (delta, epsilon) in delta_accounts.iter().zip(epsilon_accounts.iter()) {
@@ -164,7 +164,7 @@ impl<'a> Prover<'a> {
         // lets create the outputs
 
         // lets create zv
-        let xv_dash_vector = v_dash_vector
+        let xv_dash_vector = value_vector
             .iter()
             .map(|v_dash| v_dash * x)
             .collect::<Vec<_>>();

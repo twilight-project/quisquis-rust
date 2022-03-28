@@ -220,6 +220,8 @@ impl Sender {
             &delta_rscalar,
             &value_vector_scalar,
         );
+        //identity check function to verify the construction of epsilon accounts using correct rscalars
+        Verifier::verify_delta_identity_check(&epsilon_accounts)?;
 
         // verify dleq proof
         Verifier::verify_delta_compact_verifier(

@@ -1,14 +1,14 @@
-use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
-};
-use rand::{CryptoRng, Rng};
-
 use crate::{
     keys::{PublicKey, SecretKey},
     ristretto::constants::BASE_PK_BTC_COMPRESSED,
 };
 use core::ops::{Add, Mul};
-
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
+};
+use rand::{CryptoRng, Rng};
+use serde::{Deserialize, Serialize};
+use sha2::Sha512;
 const SCALAR_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -25,6 +25,10 @@ impl SecretKey for RistrettoSecretKey {
     fn random<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         RistrettoSecretKey(Scalar::random(rng))
     }
+
+    fn from_bytes(slice: &[u8]) -> Self {
+        RistrettoSecretKey(Scalar::hash_from_bytes::<Sha512>(slice))
+    }
 }
 // ------- PrivateKey Partial Eq, Eq ------- //
 
@@ -37,7 +41,7 @@ impl PartialEq for RistrettoSecretKey {
 }
 
 // ------- PublicKey ------- //
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Dese)]
 pub struct RistrettoPublicKey {
     pub(crate) gr: CompressedRistretto,
     pub(crate) grsk: CompressedRistretto,

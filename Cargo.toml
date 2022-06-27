@@ -10,9 +10,9 @@ edition = "2018"
 name = "quisquislib"
 path = "src/lib.rs"
 
-[[bin]]
-name = "quisquisbin"
-path = "src/bin.rs"
+#[[bin]]
+#name = "quisquisbin"
+#path = "src/bin.rs"
 
 [dependencies]
 hex = "*"
@@ -24,6 +24,8 @@ sha3 = "0.9.1"
 bs58 = "0.4.0"
 array2d = "0.2.1"
 itertools = "0.10.1"
+serde = "*"
+sha2 = { version = "0.9", default-features = false }
 
 #curve25519-dalek = { version = "2", default-features = false, features = ["u64_backend", "serde"] }
 curve25519-dalek = { version = "3", default-features = false }

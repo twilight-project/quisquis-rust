@@ -11,8 +11,9 @@ use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub(crate) input_account_vector: Vec<Account>,
     pub(crate) updated_account_vector: Vec<Account>,
@@ -62,13 +63,13 @@ impl Transaction {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Receiver {
     amount: i64,
     public_key: RistrettoPublicKey,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sender {
     total_amount: i64,
     account: Account,

@@ -41,7 +41,7 @@ impl PartialEq for RistrettoSecretKey {
 }
 
 // ------- PublicKey ------- //
-#[derive(Debug, Copy, Clone, Serialize, Dese)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct RistrettoPublicKey {
     pub(crate) gr: CompressedRistretto,
     pub(crate) grsk: CompressedRistretto,

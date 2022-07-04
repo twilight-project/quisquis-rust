@@ -9,8 +9,9 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
-
-#[derive(Debug, Copy, Clone)]
+use serde::{Deserialize, Serialize};
+//use crate::ristretto::keys::_::_serde::ser::SerializeStruct;
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct Account {
     pub(crate) pk: RistrettoPublicKey,
     pub(crate) comm: ElGamalCommitment,
@@ -21,7 +22,6 @@ impl Account {
     fn set_account(pk: RistrettoPublicKey, comm: ElGamalCommitment) -> Account {
         Account { pk: pk, comm: comm }
     }
-
     /// generate_account creates a new account
     /// returns PublicKey, SecretKey and a Commitment with 0 balance
     pub fn generate_account(pk: RistrettoPublicKey) -> Account {
@@ -44,6 +44,14 @@ impl Account {
     ) -> Result<(), &'static str> {
         self.pk.verify_keypair(sk)?;
         self.comm.verify_commitment(sk, bl)
+    }
+    /// Verifies the account public key belongs to a secret key
+    ///
+    pub fn verify_account_keypair(
+        self: &Self,
+        sk: &RistrettoSecretKey,
+    ) -> Result<(), &'static str> {
+        self.pk.verify_keypair(sk)
     }
 
     /// Decrypts the account balance and returns G*bl. Discrete log should be solved to extract bl
@@ -258,6 +266,19 @@ impl PartialEq for Account {
         self.pk == other.pk && self.comm == other.comm
     }
 }
+
+// impl Serialize for Account {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: Serializer,
+//     {
+//         // 3 is the number of fields in the struct.
+//         let mut state = serializer.serialize_struct("Account", 2)?;
+//         state.serialize_field("pk", &self.pk)?;
+//         state.serialize_field("comm", &self.comm)?;
+//         state.end()
+//     }
+// }
 
 // ------------------------------------------------------------------------
 // Tests

@@ -3,6 +3,7 @@
 
 #![allow(non_snake_case)]
 
+use crate::keys::PublicKey;
 use crate::{
     accounts::{Account, Prover, Verifier},
     elgamal::ElGamalCommitment,
@@ -17,16 +18,15 @@ use crate::{
 use array2d::Array2D;
 use bulletproofs::PedersenGens;
 use curve25519_dalek::traits::MultiscalarMul;
-
-use crate::keys::PublicKey;
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
 use rand::{CryptoRng, Rng};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Permutation {
     perm_matrix: Array2D<usize>,
 }
@@ -77,7 +77,7 @@ impl Permutation {
     // fn commit(&self ) -> Result<()>
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Shuffle {
     pub inputs: Array2D<Account>,      //Before shuffle     mxn
     pub outputs: Array2D<Account>,     //After shuffle and update    mxn
@@ -87,13 +87,13 @@ pub struct Shuffle {
 }
 ///Shuffle argument proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShuffleStatement {
     pub hadamard_statement: HadamardStatement,
     pub product_statement: ProductStatement,
     pub ddh_statement: DDHStatement,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShuffleProof {
     pub c_A: Vec<CompressedRistretto>,
     pub c_tau: Vec<CompressedRistretto>,

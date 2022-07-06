@@ -13,17 +13,17 @@ use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use rand::rngs::OsRng;
 
 use crate::shuffle::shuffle::COLUMNS;
-
+use serde::{Deserialize, Serialize};
 ///Single value Product argument
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SVPStatement {
     pub commitment_a: CompressedRistretto,
     pub b: Scalar,
 }
 ///Single value Product Proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SVPProof {
     pub commitment_d: CompressedRistretto,
     pub commitment_delta_small: CompressedRistretto,

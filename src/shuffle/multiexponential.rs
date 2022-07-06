@@ -22,11 +22,11 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 use std::iter;
-
 ///Multiexponential Proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiexpoProof {
     pub c_A_0: CompressedRistretto,
     pub c_B_k: Vec<CompressedRistretto>,

@@ -10,9 +10,10 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 ///DDH Statement
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DDHStatement {
     // G' = G ^ rho, H' = H ^ rho
     pub G_dash: CompressedRistretto,
@@ -20,7 +21,7 @@ pub struct DDHStatement {
 }
 ///DDH Proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DDHProof {
     challenge: Scalar,
     z: Scalar,

@@ -22,7 +22,7 @@ rand = "0.7"
 anyhow = "1.0"
 sha3 = "0.9.1"
 bs58 = "0.4.0"
-array2d = "0.2.1"
+array2d = {version = "0.2.1", features = ["serde"]}
 itertools = "0.10.1"
 serde = "*"
 sha2 = { version = "0.9", default-features = false }

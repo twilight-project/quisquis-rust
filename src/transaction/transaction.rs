@@ -15,43 +15,47 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
-    pub(crate) input_account_vector: Vec<Account>,
+    // pub(crate) input_account_vector: Vec<Account>,
     pub(crate) updated_account_vector: Vec<Account>,
     pub(crate) account_delta_vector: Vec<Account>,
     pub(crate) account_epsilon_vector: Vec<Account>,
-    pub(crate) account_updated_delta_vector: Vec<Account>,
-    pub(crate) output_account_vector: Vec<Account>,
-    pub(crate) non_negative_range_proof: Vec<String>,
-    pub(crate) non_negative_range_proof_commitments: Vec<String>,
-    pub(crate) settle_program_bytes: Vec<String>,
-    pub(crate) settle_program_proof: Vec<String>,
+    //  pub(crate) account_updated_delta_vector: Vec<Account>,
+    //  pub(crate) output_account_vector: Vec<Account>,
+    pub(crate) input_shuffle_statement: ShuffleStatement,
+    pub(crate) input_shuffle_proof: ShuffleProof,
+    pub(crate) output_shuffle_statement: ShuffleStatement,
+    pub(crate) output_shuffle_proof: ShuffleProof,
 }
 
 impl Transaction {
     // Private constructor
     fn set_transaction(
-        input_account_vector: Vec<Account>,
+        // input_account_vector: Vec<Account>,
         updated_account_vector: Vec<Account>,
         account_delta_vector: Vec<Account>,
         account_epsilon_vector: Vec<Account>,
-        account_updated_delta_vector: Vec<Account>,
-        output_account_vector: Vec<Account>,
-        non_negative_range_proof: Vec<String>,
-        non_negative_range_proof_commitments: Vec<String>,
-        settle_program_bytes: Vec<String>,
-        settle_program_proof: Vec<String>,
+        // account_updated_delta_vector: Vec<Account>,
+        // output_account_vector: Vec<Account>,
+        input_shuffle_statement: ShuffleStatement,
+        input_shuffle_proof: ShuffleProof,
+        output_shuffle_statement: ShuffleStatement,
+        output_shuffle_proof: ShuffleProof,
     ) -> Transaction {
         Transaction {
-            input_account_vector: input_account_vector,
+            // input_account_vector: input_account_vector,
             updated_account_vector: updated_account_vector,
             account_delta_vector: account_delta_vector,
             account_epsilon_vector: account_epsilon_vector,
-            account_updated_delta_vector: account_updated_delta_vector,
-            output_account_vector: output_account_vector,
-            non_negative_range_proof: non_negative_range_proof,
-            non_negative_range_proof_commitments: non_negative_range_proof_commitments,
-            settle_program_bytes: settle_program_bytes,
-            settle_program_proof: settle_program_proof,
+            // account_updated_delta_vector: account_updated_delta_vector,
+            // output_account_vector: output_account_vector,
+            // non_negative_range_proof: non_negative_range_proof,
+            // non_negative_range_proof_commitments: non_negative_range_proof_commitments,
+            // settle_program_bytes: settle_program_bytes,
+            // settle_program_proof: settle_program_proof,
+            input_shuffle_statement: input_shuffle_statement,
+            input_shuffle_proof: input_shuffle_proof,
+            output_shuffle_statement: output_shuffle_statement,
+            output_shuffle_proof: output_shuffle_proof,
         }
     }
 
@@ -68,6 +72,14 @@ pub struct Receiver {
     amount: i64,
     public_key: RistrettoPublicKey,
 }
+impl Receiver {
+    pub fn set_receiver(amount: i64, public_key: RistrettoPublicKey) -> Receiver {
+        Receiver {
+            amount: amount,
+            public_key: public_key,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sender {
@@ -77,6 +89,13 @@ pub struct Sender {
 }
 
 impl Sender {
+    pub fn set_sender(total_amount: i64, account: Account, receivers: Vec<Receiver>) -> Sender {
+        Sender {
+            total_amount: total_amount,
+            account: account,
+            receivers: receivers,
+        }
+    }
     pub fn generate_value_and_account_vector(
         tx_vector: Vec<Sender>,
     ) -> Result<(Vec<i64>, Vec<Account>, usize, usize, usize), &'static str> {
@@ -141,7 +160,7 @@ impl Sender {
         senders_count: usize,
         receivers_count: usize,
     ) -> Result<
-        (
+        /*(
             Vec<Account>,
             Vec<Account>,
             Vec<Account>,
@@ -149,7 +168,8 @@ impl Sender {
             ShuffleStatement,
             ShuffleProof,
             ShuffleStatement,
-        ),
+        )*/
+        Transaction,
         &'static str,
     > {
         //convert the valur vector into scalar type to be used in the prover
@@ -377,14 +397,14 @@ impl Sender {
             &pc_gens,
             &xpc_gens,
         )?;
-        Ok((
+        Ok(Transaction::set_transaction(
             updated_again_account_vector,
             delta_accounts,
             epsilon_accounts,
-            input_shuffle_proof,
             input_shuffle_statement,
-            output_shuffle_proof,
+            input_shuffle_proof,
             output_shuffle_statement,
+            output_shuffle_proof,
         ))
         // } else {
         //   Err("Sender account proof failed")
@@ -397,6 +417,7 @@ impl Sender {
         //}
     }
 }
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------

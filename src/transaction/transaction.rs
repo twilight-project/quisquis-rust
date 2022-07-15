@@ -588,7 +588,7 @@ mod test {
         let updated_balance_sender: Vec<i64> = vec![bl_first_sender, bl_second_sender];
         //Create vector of sender secret keys
         let sk_sender: Vec<RistrettoSecretKey> = vec![bob_sk_account_1, bob_sk_account_2];
-        let transaction = Sender::create_transaction(
+        let transaction = Sender::create_quisquis_transaction(
             &value_vector,
             &account_vector,
             updated_balance_sender,

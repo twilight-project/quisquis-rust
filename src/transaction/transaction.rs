@@ -417,7 +417,7 @@ impl Sender {
         );
         //Generate range proof over sender/reciever account values. i.,e balance >=0 for all
         //Should be called after adding all values (sender+receiver) to the R1CS transcript
-        let range_proof = range_prover.build_proof();
+        let range_proof = range_prover.build_proof().unwrap();
         //verify sender account signature and remaining balance. Rangeproof R1CS is updated
         // Verifier::verify_account_verifier(
         //     &updated_delta_account_sender,
@@ -445,7 +445,7 @@ impl Sender {
         }
 
         //Verify r1cs rangeproof
-        let bp_check = range_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
+        let bp_check = range_verifier.verify_proof(&range_proof, &pc_gens);
         // if bp_check.is_err() {
         //     return Err("Range Proof verification failed");
         // }
@@ -501,7 +501,7 @@ impl Sender {
             sender_sk: zsk,
             sender_r: zr,
             sender_x: x_sender,
-            balance: range_proof.unwrap(),
+            balance: range_proof,
         };
         Ok(TransactionTransfer {
             version: 1,

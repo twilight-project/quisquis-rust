@@ -7,39 +7,120 @@ use crate::{
     shuffle::{Shuffle, ShuffleProof, ShuffleStatement},
 };
 use bulletproofs::r1cs;
+use bulletproofs::r1cs::R1CSProof;
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
+/// Transaction type: Transfer. Transition, Create, Vault
+///
+/// TransactionType implements [`Default`] and returns [`TransactionType::Transfer`].
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum TransactionType {
+    Transfer,
+    Transition,
+    Create,
+    Vault,
+}
+
+impl TransactionType {
+    pub fn from_u8(byte: u8) -> Result<TransactionType, &'static str> {
+        use TransactionType::*;
+        match byte {
+            0 => Ok(Transfer),
+            1 => Ok(Transition),
+            2 => Ok(Create),
+            3 => Ok(Vault),
+            _ => Err("Error::InvalidTransactionType"),
+        }
+    }
+}
+impl Default for TransactionType {
+    fn default() -> TransactionType {
+        TransactionType::Transfer
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum Transaction {
+    TransactionTransfer,
+    TransactionTransition,
+    TransactionCreate,
+    TransactionVault,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Transaction {
-    // pub(crate) input_account_vector: Vec<Account>,
+pub struct TransferProof {
     pub(crate) updated_account_vector: Vec<Account>,
     pub(crate) account_delta_vector: Vec<Account>,
     pub(crate) account_epsilon_vector: Vec<Account>,
-    //  pub(crate) account_updated_delta_vector: Vec<Account>,
-    //  pub(crate) output_account_vector: Vec<Account>,
+    pub(crate) account_updated_delta_vector: Vec<Account>,
+    pub(crate) dleq_z: Vec<Scalar>,
+    pub(crate) dleq_r: Vec<Scalar>,
+    pub(crate) dleq_rr: Vec<Scalar>,
+    pub(crate) dleq_x: Scalar,
+    pub(crate) dlog_z: Vec<Scalar>,
+    pub(crate) dlog_x: Scalar,
+    pub(crate) sender_z: Vec<Scalar>,
+    pub(crate) sender_sk: Vec<Scalar>,
+    pub(crate) sender_r: Vec<Scalar>,
+    pub(crate) sender_x: Scalar,
+    pub(crate) balance: R1CSProof,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnifiedShuffleProof {
     pub(crate) input_shuffle_statement: ShuffleStatement,
     pub(crate) input_shuffle_proof: ShuffleProof,
     pub(crate) output_shuffle_statement: ShuffleStatement,
     pub(crate) output_shuffle_proof: ShuffleProof,
 }
 
-impl Transaction {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WitnessProof {
+    //fill this struct later
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionTransfer {
+    pub(crate) version: u64,
+    pub(crate) byte_price: u64,
+    pub(crate) price_limit: u64,
+    pub(crate) maturity: u64,
+    pub(crate) input_count: u8,
+    pub(crate) output_count: u8,
+    pub(crate) input_account_vector: Vec<Account>,
+    pub(crate) output_account_vector: Vec<Account>,
+    //non shuffle proof
+    pub(crate) proof: TransferProof,
+    //input and output shuffle proof
+    pub(crate) shuffle_proof: UnifiedShuffleProof,
+    //required for lit to dark case. contains same value proof
+    pub(crate) witness: Option<WitnessProof>,
+    // pub(crate) updated_account_vector: Vec<Account>,
+    // pub(crate) account_delta_vector: Vec<Account>,
+    // pub(crate) account_epsilon_vector: Vec<Account>,
+    //  pub(crate) account_updated_delta_vector: Vec<Account>,
+    //  pub(crate) output_account_vector: Vec<Account>,
+}
+
+/*impl Transaction {
     // Private constructor
     fn set_transaction(
+        transaction_type: TransactionType,
+
         // input_account_vector: Vec<Account>,
-        updated_account_vector: Vec<Account>,
-        account_delta_vector: Vec<Account>,
-        account_epsilon_vector: Vec<Account>,
-        // account_updated_delta_vector: Vec<Account>,
-        // output_account_vector: Vec<Account>,
-        input_shuffle_statement: ShuffleStatement,
-        input_shuffle_proof: ShuffleProof,
-        output_shuffle_statement: ShuffleStatement,
-        output_shuffle_proof: ShuffleProof,
+        // updated_account_vector: Vec<Account>,
+        // account_delta_vector: Vec<Account>,
+        // account_epsilon_vector: Vec<Account>,
+        // // account_updated_delta_vector: Vec<Account>,
+        // // output_account_vector: Vec<Account>,
+        // input_shuffle_statement: ShuffleStatement,
+        // input_shuffle_proof: ShuffleProof,
+        // output_shuffle_statement: ShuffleStatement,
+        // output_shuffle_proof: ShuffleProof,
     ) -> Transaction {
         Transaction {
             // input_account_vector: input_account_vector,
@@ -65,7 +146,7 @@ impl Transaction {
         let value_vector: Vec<i64> = vec![-balance, balance, 0, 0, 0, 0, 0, 0, 0];
         return value_vector;
     }
-}
+}*/
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Receiver {
@@ -151,7 +232,7 @@ impl Sender {
     }
 
     // create_transaction creates a quisquis transaction
-    pub fn create_transaction(
+    pub fn create_quisquis_transaction(
         value_vector: &Vec<i64>,
         account_vector: &Vec<Account>,
         sender_updated_balance: Vec<i64>,
@@ -169,7 +250,7 @@ impl Sender {
             ShuffleProof,
             ShuffleStatement,
         )*/
-        Transaction,
+        TransactionTransfer,
         &'static str,
     > {
         //convert the valur vector into scalar type to be used in the prover
@@ -234,7 +315,7 @@ impl Sender {
             );
 
         //4. generate proofs dleq proof
-        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(
+        let (zv_vector, zr1_vector, zr2_vector, x_dleq) = Prover::verify_delta_compact_prover(
             &delta_accounts,
             &epsilon_accounts,
             &delta_rscalar,
@@ -251,7 +332,7 @@ impl Sender {
             &zv_vector,
             &zr1_vector,
             &zr2_vector,
-            &x,
+            &x_dleq,
         )?;
         // if verify_delta_compact_proof == true {
         //3. update delta_accounts
@@ -276,7 +357,7 @@ impl Sender {
         let rscalars_slice = &delta_rscalar[anonymity_index..9];
 
         // generate proofs dlog proof
-        let (x, z_vector) = Prover::verify_update_account_prover(
+        let (x_dlog, z_vector) = Prover::verify_update_account_prover(
             &updated_accounts_slice,
             &updated_delta_accounts_slice,
             &rscalars_slice,
@@ -286,7 +367,7 @@ impl Sender {
             &updated_accounts_slice,
             &updated_delta_accounts_slice,
             &z_vector,
-            &x,
+            &x_dlog,
         )?;
         //println!("Account update proof {:?}", verify_update_account_proof);
 
@@ -311,7 +392,7 @@ impl Sender {
             );
             epsilon_account_vec.push(epsilon_account);
         }
-        let (zv, zsk, zr, x) = Prover::verify_account_prover(
+        let (zv, zsk, zr, x_sender) = Prover::verify_account_prover(
             &updated_delta_account_sender,
             &epsilon_account_vec,
             &sender_updated_balance,
@@ -321,7 +402,7 @@ impl Sender {
         );
 
         println!("zv {:?},  zsk {:?}, zr {:?}", zv, zsk, zr);
-        println!("X = {:?}", x);
+        println!("X = {:?}", x_sender);
         //Preparation for Non negative proof i.e, Rangeproof on reciever accaounts -> bl >= 0
         //balance vector for receivers
         let receiver_bl = &value_vector[senders_count..(senders_count + receivers_count)];
@@ -397,15 +478,44 @@ impl Sender {
             &pc_gens,
             &xpc_gens,
         )?;
-        Ok(Transaction::set_transaction(
-            updated_again_account_vector,
-            delta_accounts,
-            epsilon_accounts,
-            input_shuffle_statement,
-            input_shuffle_proof,
-            output_shuffle_statement,
-            output_shuffle_proof,
-        ))
+
+        //create proof structs to construct Transaction
+        let shuffle_proof = UnifiedShuffleProof {
+            input_shuffle_statement: input_shuffle_statement,
+            input_shuffle_proof: input_shuffle_proof,
+            output_shuffle_statement: output_shuffle_statement,
+            output_shuffle_proof: output_shuffle_proof,
+        };
+        let transfer_proof = TransferProof {
+            updated_account_vector: updated_accounts,
+            account_delta_vector: delta_accounts,
+            account_epsilon_vector: epsilon_accounts,
+            account_updated_delta_vector: updated_delta_accounts,
+            dleq_z: zv_vector,
+            dleq_r: zr1_vector,
+            dleq_rr: zr2_vector,
+            dleq_x: x_dleq,
+            dlog_z: z_vector,
+            dlog_x: x_dlog,
+            sender_z: zv,
+            sender_sk: zsk,
+            sender_r: zr,
+            sender_x: x_sender,
+            balance: range_proof.unwrap(),
+        };
+        Ok(TransactionTransfer {
+            version: 1,
+            byte_price: 5,
+            price_limit: 5000,
+            maturity: 0,
+            input_count: 9,
+            output_count: 9,
+            input_account_vector: input_shuffle.get_inputs_vector(),
+            output_account_vector: output_shuffle.get_outputs_vector(),
+            proof: transfer_proof,
+            shuffle_proof: shuffle_proof,
+            witness: None,
+        })
         // } else {
         //   Err("Sender account proof failed")
         //}

@@ -23,8 +23,8 @@ impl Account {
         Account { pk: pk, comm: comm }
     }
     /// generate_account creates a new account
-    /// returns PublicKey, SecretKey and a Commitment with 0 balance
-    pub fn generate_account(pk: RistrettoPublicKey) -> Account {
+    /// returns an account with (pk and Commitment with 0 balance) and commitment scalar for Annoynimity account proof
+    pub fn generate_account(pk: RistrettoPublicKey) -> (Account, Scalar) {
         // lets get a random scalar
         let comm_scalar = Scalar::random(&mut OsRng);
 
@@ -33,7 +33,7 @@ impl Account {
 
         let account = Account::set_account(pk, comm);
 
-        return account;
+        return (account, comm_scalar);
     }
     /// Verifies the account balance stored in commitment
     /// Verifies the Private key and balance passed as input
@@ -245,7 +245,7 @@ impl Account {
         let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
 
-        let acc = Account::generate_account(pk);
+        let (acc, _) = Account::generate_account(pk);
 
         let updated_keys_scalar = Scalar::random(&mut OsRng);
 
@@ -293,7 +293,7 @@ mod test {
         let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
         //generate a Zero balance account
-        let acc = Account::generate_account(pk);
+        let (acc, _) = Account::generate_account(pk);
 
         let updated_keys_scalar = Scalar::random(&mut OsRng);
 
@@ -311,7 +311,7 @@ mod test {
         let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
         //generate a Zero balance account
-        let acc = Account::generate_account(pk);
+        let (acc, _) = Account::generate_account(pk);
 
         let updated_keys_scalar = Scalar::random(&mut OsRng);
 
@@ -356,7 +356,7 @@ mod test {
         for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
 
             // lets get a random scalar to update the account
             let updated_keys_scalar = Scalar::random(&mut OsRng);
@@ -397,7 +397,7 @@ mod test {
         for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
             account_vector.push(acc);
 
             // lets get a random scalar to update the account

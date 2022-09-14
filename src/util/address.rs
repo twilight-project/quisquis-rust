@@ -1,16 +1,8 @@
-
-use std::fmt;
 use sha3::{Digest, Keccak256};
+use std::fmt;
 
-use curve25519_dalek::{
-    ristretto::CompressedRistretto,
-};
-use crate::{
-    keys::{PublicKey},
-    ristretto::{
-        RistrettoPublicKey
-    }
-};
+use crate::{keys::PublicKey, ristretto::RistrettoPublicKey};
+use curve25519_dalek::ristretto::CompressedRistretto;
 
 /// The list of the existing Twilight networks.
 /// Network type: Mainnet, Testnet.
@@ -24,7 +16,7 @@ pub enum Network {
     /// mainnet.
     Testnet,
 }
-impl Network { 
+impl Network {
     /// Get the associated magic byte given an address type.
     /// The byte values should be taken from the blockchain config file. The same values should be used here. Sample values are used here
     pub fn as_u8(self, addr_type: &AddressType) -> u8 {
@@ -48,9 +40,8 @@ impl Network {
         match byte {
             12 | 24 => Ok(Mainnet),
             44 | 66 => Ok(Testnet),
-            _ => Err("Error::InvalidNteworkByte")
+            _ => Err("Error::InvalidNteworkByte"),
         }
-        
     }
 }
 
@@ -72,23 +63,22 @@ pub enum AddressType {
 
 impl AddressType {
     /// Recover the address type given an address bytes and the network.
-    pub fn from_slice(bytes: &[u8], net: Network) -> Result<AddressType, &'static str> {
-        let byte = bytes[0];
+    pub fn from_slice(bytes: u8, net: Network) -> Result<AddressType, &'static str> {
+        //let byte = bytes[0];
         use AddressType::*;
         use Network::*;
         match net {
-            Mainnet => match byte {
+            Mainnet => match bytes {
                 12 => Ok(Standard),
                 24 => Ok(Contract),
                 _ => Err("Error::InvalidAddressTypeMagicByte"),
             },
-            Testnet => match byte {
+            Testnet => match bytes {
                 44 => Ok(Standard),
                 66 => Ok(Contract),
                 _ => Err("Error::InvalidAddressTypeMagicByte"),
-            }    
+            },
         }
-        
     }
 }
 
@@ -141,11 +131,10 @@ impl Address {
     /// keys are not valid points, and if checksums missmatch.
     pub fn from_bytes(bytes: &[u8]) -> Result<Address, &'static str> {
         let network = Network::from_u8(bytes[0])?;
-        let addr_type = AddressType::from_slice(&bytes, network)?;
-       
+        let addr_type = AddressType::from_slice(bytes[0], network)?;
         let gr = slice_to_pkpoint(&bytes[1..33])?;
         let grsk = slice_to_pkpoint(&bytes[33..65])?;
-        let public_key = RistrettoPublicKey{gr,grsk};
+        let public_key = RistrettoPublicKey { gr, grsk };
         let (checksum_bytes, checksum) = (&bytes[0..65], &bytes[65..69]);
         let mut hasher = Keccak256::new();
         hasher.update(checksum_bytes);
@@ -184,42 +173,38 @@ impl Address {
     }
 
     /// Convert Hex address string to Address
-    pub fn from_hex(s: &str)-> Self {
+    pub fn from_hex(s: &str) -> Self {
         Self::from_bytes(&hex::decode(s).unwrap().as_slice()).unwrap()
-   } 
-    
-   /// Convert Base58 address string to Address
-   pub fn from_base58(s: &str)-> Self {
-       let decoded = bs58::decode(s).into_vec().unwrap();
+    }
+
+    /// Convert Base58 address string to Address
+    pub fn from_base58(s: &str) -> Self {
+        let decoded = bs58::decode(s).into_vec().unwrap();
         Self::from_bytes(&decoded).unwrap()
-    } 
+    }
 }
 
-/// Deserialize a public key from a slice. The input slice is 64 bytes 
-/// Utility Function 
+/// Deserialize a public key from a slice. The input slice is 64 bytes
+/// Utility Function
 fn slice_to_pkpoint(data: &[u8]) -> Result<CompressedRistretto, &'static str> {
-   if data.len() != 32 {
-       return Err("Invalid Key Length");
-   }
-   let gr = CompressedRistretto::from_slice(&data);
-   match gr.decompress() {
-       Some(_) => (),
-       None => {
-           return Err("InvalidPoint");
-      }
-   };
-   Ok(gr)
-
-   
+    if data.len() != 32 {
+        return Err("Invalid Key Length");
+    }
+    let gr = CompressedRistretto::from_slice(&data);
+    match gr.decompress() {
+        Some(_) => (),
+        None => {
+            return Err("InvalidPoint");
+        }
+    };
+    Ok(gr)
 }
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
 #[cfg(test)]
 mod test {
-   // use super::*;
+    // use super::*;
     #[test]
-    fn hex_encoding_decoding_test() {
-        
-    }
+    fn hex_encoding_decoding_test() {}
 }

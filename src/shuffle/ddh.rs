@@ -10,9 +10,10 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 ///DDH Statement
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DDHStatement {
     // G' = G ^ rho, H' = H ^ rho
     pub G_dash: CompressedRistretto,
@@ -20,7 +21,7 @@ pub struct DDHStatement {
 }
 ///DDH Proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DDHProof {
     challenge: Scalar,
     z: Scalar,
@@ -139,7 +140,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
             account_vector.push(acc);
         }
         let pk: Vec<RistrettoPublicKey> = account_vector.iter().map(|acc| acc.pk).collect();

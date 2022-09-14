@@ -10,6 +10,7 @@ use curve25519_dalek::{
 use crate::accounts::{RangeProofVerifier, TranscriptProtocol};
 use merlin::Transcript;
 
+use crate::elgamal::elgamal::ElGamalCommitment;
 use crate::{accounts::Account, ristretto::RistrettoPublicKey};
 pub struct Verifier<'a> {
     transcript: &'a mut Transcript,
@@ -301,6 +302,42 @@ impl<'a> Verifier<'a> {
             Err("Identity sum verify: Failed")
         }
     }
+    // zero_balance_account_verifier verifies the knowledge of commitment scalar for anonymity set accounts created randomly
+    pub fn zero_balance_account_verifier(
+        anonymity_accounts: &[Account],
+        z: &[Scalar],
+        x: Scalar,
+    ) -> Result<(), &'static str> {
+        //check length is same
+        assert_eq!(anonymity_accounts.len(), z.len());
+
+        // lets start a transcript and a verifier script
+        let mut transcript = Transcript::new(b"ZeroBalanceAccountProver");
+        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        //add statement accounts to transcript
+        for acc in anonymity_accounts {
+            verifier.allocate_account(b"anonymity_account", acc);
+        }
+
+        //recreate e
+        //e_i = (com_i ^ z) * (com_i ^ x)
+        for (i, acc_i) in anonymity_accounts.iter().enumerate() {
+            let com_z = &acc_i.comm * &z[i];
+            let com_x = &acc_i.comm * &x;
+            let e_i = ElGamalCommitment::add_commitments(&com_z, &com_x);
+            // add e points to transcript
+            verifier.allocate_point(b"e_c", &e_i.c);
+            verifier.allocate_point(b"e_d", &e_i.d);
+        }
+        // obtain a scalar challenge
+        let verify_x = transcript.get_challenge(b"challenge");
+        println!("Verifier {:?}", verify_x);
+        if x == verify_x {
+            Ok(())
+        } else {
+            Err("Zero balance account verification failed")
+        }
+    }
 }
 
 // ------------------------------------------------------------------------
@@ -535,6 +572,45 @@ mod test {
         let bp_check = rp_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
         assert!(bp_check.is_ok());
         // println!("{:?}", bp_check.is_ok());
+        assert!(check.is_ok());
+    }
+    #[test]
+    fn zero_balance_account_verifier_test() {
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+        let value_vector: Vec<Scalar> = vec![
+            -Scalar::from(5u64),
+            -Scalar::from(3u64),
+            5u64.into(),
+            3u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+            0u64.into(),
+        ];
+        let updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng))
+        let mut anonymity_accounts: Vec<Account> = Vec::new();
+         let mut rscalar_comm: Vec<Scalar> = Vec::new();
+
+        for i in 0..5 {
+            let (acc, r) = Account::generate_account(PublicKey::update_public_key(&updated_key, Scalar::random(&mut OsRng)));
+
+            anonymity_accounts.push(acc);
+            rscalar_comm.push(r);
+        }
+
+        
+        let (z, x) = Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm);
+        
+        let check = Verifier::zero_balance_account_verifier(
+            &anonymity_accounts,
+            &z,
+            
+            x,
+            
+        );
+    
+        
         assert!(check.is_ok());
     }
     #[test]

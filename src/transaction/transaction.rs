@@ -250,6 +250,7 @@ impl Sender {
         account_vector: &Vec<Account>,
         sender_updated_balance: Vec<i64>,
         sender_sk: &Vec<RistrettoSecretKey>,
+        anonymity_comm_scalar: &[Scalar],
         anonymity_account_diff: usize,
         senders_count: usize,
         receivers_count: usize,

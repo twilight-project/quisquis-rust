@@ -179,7 +179,7 @@ impl Sender {
     }
     pub fn generate_value_and_account_vector(
         tx_vector: Vec<Sender>,
-    ) -> Result<(Vec<i64>, Vec<Account>, usize, usize, usize), &'static str> {
+    ) -> Result<(Vec<i64>, Vec<Account>, Vec<Scalar>, usize, usize, usize), &'static str> {
         if tx_vector.len() < 9 {
             let mut value_vector: Vec<i64> = tx_vector.iter().map(|s| s.total_amount).collect();
             let mut account_vector: Vec<Account> = tx_vector.iter().map(|s| s.account).collect();
@@ -187,13 +187,15 @@ impl Sender {
             let mut receivers_count = 0;
             let mut receiver_amount_vector: Vec<i64> = Vec::new();
             let mut receiver_account_vector = Vec::new();
+            //keep track of all the r used for commitment of value zero
+            let mut annonymity_account_commmitment_scalars_vector: Vec<Scalar> = Vec::new();
 
             for sender in tx_vector.iter() {
                 receivers_count += &sender.receivers.iter().count();
 
                 for rec in sender.receivers.iter() {
                     receiver_amount_vector.push(rec.amount);
-                    let receiver_account = Account::generate_account(rec.public_key);
+                    let (receiver_account, _) = Account::generate_account(rec.public_key);
                     receiver_account_vector.push(receiver_account);
                 }
             }
@@ -207,18 +209,29 @@ impl Sender {
                 // this anonymity set may need to come from the blockchain state itself in the future
 
                 let diff = 9 - (senders_count + receivers_count);
+                //use receiver key as base pk for annonymity accounts
+                let pk_annonymity = PublicKey::update_public_key(
+                    &receiver_account_vector[0].pk,
+                    Scalar::random(&mut OsRng),
+                );
 
                 if diff >= 1 {
                     for _ in 0..diff {
                         value_vector.push(0);
-                        account_vector
-                            .push(Account::generate_random_account_with_value(0u64.into()).0);
+                        let (acc, comm_scalar) =
+                            Account::generate_account(PublicKey::update_public_key(
+                                &pk_annonymity,
+                                Scalar::random(&mut OsRng),
+                            ));
+                        account_vector.push(acc);
+                        annonymity_account_commmitment_scalars_vector.push(comm_scalar);
                     }
                 }
 
                 Ok((
                     value_vector,
                     account_vector,
+                    annonymity_account_commmitment_scalars_vector,
                     diff,
                     senders_count,
                     receivers_count,
@@ -580,8 +593,14 @@ mod test {
                 ],
             },
         ];
-        let (value_vector, account_vector, diff, sender_count, receiver_count) =
-            Sender::generate_value_and_account_vector(tx_vector).unwrap();
+        let (
+            value_vector,
+            account_vector,
+            annonymity_com_scalar_vector,
+            diff,
+            sender_count,
+            receiver_count,
+        ) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
         //Create sender updated account vector for the verification of sk and bl-v
         let bl_first_sender = 10 - 5; //bl-v
         let bl_second_sender = 20 - 3; //bl-v
@@ -619,7 +638,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
             account_vector.push(acc);
         }
         println!("{:?}", account_vector);

@@ -307,32 +307,44 @@ impl<'a> Verifier<'a> {
         anonymity_accounts: &[Account],
         z: &[Scalar],
         x: Scalar,
+        comm_r: ElGamalCommitment,
     ) -> Result<(), &'static str> {
         //check length is same
         assert_eq!(anonymity_accounts.len(), z.len());
 
         // lets start a transcript and a verifier script
-        let mut transcript = Transcript::new(b"ZeroBalanceAccountProver");
+        let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
         //add statement accounts to transcript
         for acc in anonymity_accounts {
             verifier.allocate_account(b"anonymity_account", acc);
+            println!("Account {:?}", acc);
         }
-
+        verifier.allocate_point(b"e_c", &comm_r.c);
+        verifier.allocate_point(b"e_d", &comm_r.d);
         //recreate e
         //e_i = (com_i ^ z) * (com_i ^ x)
-        for (i, acc_i) in anonymity_accounts.iter().enumerate() {
+        /*  for (i, acc_i) in anonymity_accounts.iter().enumerate() {
             let com_z = &acc_i.comm * &z[i];
             let com_x = &acc_i.comm * &x;
             let e_i = ElGamalCommitment::add_commitments(&com_z, &com_x);
             // add e points to transcript
             verifier.allocate_point(b"e_c", &e_i.c);
             verifier.allocate_point(b"e_d", &e_i.d);
-        }
+            println!("e_c {:?}", e_i.c);
+            println!("e_d {:?}", e_i.d);
+        }*/
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"challenge");
+
+        //recreate commitment on z
+        let lhs =
+            ElGamalCommitment::generate_commitment(&anonymity_accounts[0].pk, z[0], Scalar::zero());
+        let com_x = &anonymity_accounts[0].comm * &x;
+        let rhs = ElGamalCommitment::add_commitments(&com_x, &comm_r);
+
         println!("Verifier {:?}", verify_x);
-        if x == verify_x {
+        if rhs == lhs {
             Ok(())
         } else {
             Err("Zero balance account verification failed")
@@ -577,41 +589,26 @@ mod test {
     #[test]
     fn zero_balance_account_verifier_test() {
         let base_pk = RistrettoPublicKey::generate_base_pk();
-        let value_vector: Vec<Scalar> = vec![
-            -Scalar::from(5u64),
-            -Scalar::from(3u64),
-            5u64.into(),
-            3u64.into(),
-            0u64.into(),
-            0u64.into(),
-            0u64.into(),
-            0u64.into(),
-            0u64.into(),
-        ];
-        let updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng))
+        let updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
         let mut anonymity_accounts: Vec<Account> = Vec::new();
-         let mut rscalar_comm: Vec<Scalar> = Vec::new();
+        let mut rscalar_comm: Vec<Scalar> = Vec::new();
 
-        for i in 0..5 {
-            let (acc, r) = Account::generate_account(PublicKey::update_public_key(&updated_key, Scalar::random(&mut OsRng)));
+        for _i in 0..1 {
+            let (acc, r) = Account::generate_account(PublicKey::update_public_key(
+                &updated_key,
+                Scalar::random(&mut OsRng),
+            ));
 
             anonymity_accounts.push(acc);
             rscalar_comm.push(r);
         }
+        println!("Prover");
+        let (z, x, com) = Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm);
+        println!("Verifier");
 
-        
-        let (z, x) = Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm);
-        
-        let check = Verifier::zero_balance_account_verifier(
-            &anonymity_accounts,
-            &z,
-            
-            x,
-            
-        );
-    
-        
-        assert!(check.is_ok());
+        let check = Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x, com);
+        println!("{:?}", check.unwrap());
+        //assert!(check.is_ok());
     }
     #[test]
     fn verify_delta_identity_check_test() {

@@ -613,6 +613,7 @@ mod test {
             &account_vector,
             updated_balance_sender,
             &sk_sender,
+            &annonymity_com_scalar_vector,
             diff,
             sender_count,
             receiver_count,

@@ -307,7 +307,7 @@ impl<'a> Verifier<'a> {
         anonymity_accounts: &[Account],
         z: &[Scalar],
         x: Scalar,
-        comm_r: ElGamalCommitment,
+        /* comm_r: ElGamalCommitment*/
     ) -> Result<(), &'static str> {
         //check length is same
         assert_eq!(anonymity_accounts.len(), z.len());
@@ -320,8 +320,25 @@ impl<'a> Verifier<'a> {
             verifier.allocate_account(b"anonymity_account", acc);
             println!("Account {:?}", acc);
         }
-        verifier.allocate_point(b"e_c", &comm_r.c);
-        verifier.allocate_point(b"e_d", &comm_r.d);
+
+        //recreate e,f
+        for (i, acc) in anonymity_accounts.iter().enumerate() {
+            let combined_scalars = vec![z[i], x];
+            let point = vec![acc.pk.gr, acc.comm.c];
+            //let create e = (pk.g * z)  + (c * x)
+            let e = Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                .ok_or("Zero balance Account Verify: Failed")?
+                .compress();
+            let point = vec![acc.pk.grsk, acc.comm.d];
+            // lets create f = d * x + pk.h * z
+            let f = Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                .ok_or("Zero balance Account Verify: Failed")?
+                .compress();
+            verifier.allocate_point(b"e", &e);
+            verifier.allocate_point(b"f", &f);
+        }
+        // verifier.allocate_point(b"e_c", &comm_r.c);
+        // verifier.allocate_point(b"e_d", &comm_r.d);
         //recreate e
         //e_i = (com_i ^ z) * (com_i ^ x)
         /*  for (i, acc_i) in anonymity_accounts.iter().enumerate() {
@@ -338,13 +355,13 @@ impl<'a> Verifier<'a> {
         let verify_x = transcript.get_challenge(b"challenge");
 
         //recreate commitment on z
-        let lhs =
-            ElGamalCommitment::generate_commitment(&anonymity_accounts[0].pk, z[0], Scalar::zero());
-        let com_x = &anonymity_accounts[0].comm * &x;
-        let rhs = ElGamalCommitment::add_commitments(&com_x, &comm_r);
+        // let lhs =
+        //   ElGamalCommitment::generate_commitment(&anonymity_accounts[0].pk, z[0], Scalar::zero());
+        //let com_x = &anonymity_accounts[0].comm * &x;
+        // let rhs = ElGamalCommitment::add_commitments(&com_x, &comm_r);
 
         println!("Verifier {:?}", verify_x);
-        if rhs == lhs {
+        if x == verify_x {
             Ok(())
         } else {
             Err("Zero balance account verification failed")
@@ -603,10 +620,10 @@ mod test {
             rscalar_comm.push(r);
         }
         println!("Prover");
-        let (z, x, com) = Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm);
+        let (z, x) = Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm);
         println!("Verifier");
 
-        let check = Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x, com);
+        let check = Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x);
         println!("{:?}", check.unwrap());
         //assert!(check.is_ok());
     }

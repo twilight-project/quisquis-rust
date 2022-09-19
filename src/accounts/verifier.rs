@@ -307,7 +307,6 @@ impl<'a> Verifier<'a> {
         anonymity_accounts: &[Account],
         z: &[Scalar],
         x: Scalar,
-        /* comm_r: ElGamalCommitment*/
     ) -> Result<(), &'static str> {
         //check length is same
         assert_eq!(anonymity_accounts.len(), z.len());
@@ -318,7 +317,6 @@ impl<'a> Verifier<'a> {
         //add statement accounts to transcript
         for acc in anonymity_accounts {
             verifier.allocate_account(b"anonymity_account", acc);
-            println!("Account {:?}", acc);
         }
 
         //recreate e,f
@@ -337,30 +335,8 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"e", &e);
             verifier.allocate_point(b"f", &f);
         }
-        // verifier.allocate_point(b"e_c", &comm_r.c);
-        // verifier.allocate_point(b"e_d", &comm_r.d);
-        //recreate e
-        //e_i = (com_i ^ z) * (com_i ^ x)
-        /*  for (i, acc_i) in anonymity_accounts.iter().enumerate() {
-            let com_z = &acc_i.comm * &z[i];
-            let com_x = &acc_i.comm * &x;
-            let e_i = ElGamalCommitment::add_commitments(&com_z, &com_x);
-            // add e points to transcript
-            verifier.allocate_point(b"e_c", &e_i.c);
-            verifier.allocate_point(b"e_d", &e_i.d);
-            println!("e_c {:?}", e_i.c);
-            println!("e_d {:?}", e_i.d);
-        }*/
         // obtain a scalar challenge
         let verify_x = transcript.get_challenge(b"challenge");
-
-        //recreate commitment on z
-        // let lhs =
-        //   ElGamalCommitment::generate_commitment(&anonymity_accounts[0].pk, z[0], Scalar::zero());
-        //let com_x = &anonymity_accounts[0].comm * &x;
-        // let rhs = ElGamalCommitment::add_commitments(&com_x, &comm_r);
-
-        println!("Verifier {:?}", verify_x);
         if x == verify_x {
             Ok(())
         } else {
@@ -606,16 +582,16 @@ mod test {
     #[test]
     fn zero_balance_account_verifier_test() {
         let base_pk = RistrettoPublicKey::generate_base_pk();
-        let updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
+        let mut updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
         let mut anonymity_accounts: Vec<Account> = Vec::new();
         let mut rscalar_comm: Vec<Scalar> = Vec::new();
 
-        for _i in 0..1 {
+        for _i in 0..4 {
             let (acc, r) = Account::generate_account(PublicKey::update_public_key(
                 &updated_key,
                 Scalar::random(&mut OsRng),
             ));
-
+            updated_key = PublicKey::update_public_key(&updated_key, Scalar::random(&mut OsRng));
             anonymity_accounts.push(acc);
             rscalar_comm.push(r);
         }
@@ -624,8 +600,42 @@ mod test {
         println!("Verifier");
 
         let check = Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x);
-        println!("{:?}", check.unwrap());
-        //assert!(check.is_ok());
+        //println!("{:?}", check.unwrap());
+        assert!(check.is_ok());
+    }
+    #[test]
+    fn zero_balance_account_verifier_fail_test() {
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+        let mut updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
+        let mut anonymity_accounts: Vec<Account> = Vec::new();
+        let mut rscalar_comm: Vec<Scalar> = Vec::new();
+
+        for _i in 0..4 {
+            let (acc, r) = Account::generate_account(PublicKey::update_public_key(
+                &updated_key,
+                Scalar::random(&mut OsRng),
+            ));
+            updated_key = PublicKey::update_public_key(&updated_key, Scalar::random(&mut OsRng));
+            anonymity_accounts.push(acc);
+            rscalar_comm.push(r);
+        }
+        let c_scalar = Scalar::random(&mut OsRng);
+        //let upk_scalar = Scalar::random(&mut OsRng);
+        let pk = RistrettoPublicKey::generate_base_pk();
+        let new_comm = ElGamalCommitment::generate_commitment(&pk, c_scalar, Scalar::from(0u64));
+        anonymity_accounts.push(Account {
+            pk: pk,
+            comm: new_comm,
+        });
+        rscalar_comm.push(rscalar_comm[0]);
+
+        println!("Prover");
+        let (z, x) = Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm);
+        println!("Verifier");
+
+        let check = Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x);
+        //  println!("{:?}", check.unwrap());
+        assert!(check.is_err());
     }
     #[test]
     fn verify_delta_identity_check_test() {

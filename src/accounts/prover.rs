@@ -455,11 +455,12 @@ impl<'a> Prover<'a> {
             //println!("res {:?}", res.unwrap());
         }
     }
-    // zero_balance_account_prover creates a sigma proof for zero balance commitment of all the random anonymity account
+    // zero_balance_account_prover creates a sigma proof for zero
+    // balance commitment of all the random anonymity account
     pub fn zero_balance_account_prover(
         anonymity_accounts: &[Account],
         comm_rscalar: &[Scalar],
-    ) -> (Vec<Scalar>, Scalar /*ElGamalCommitment*/) {
+    ) -> (Vec<Scalar>, Scalar) {
         //check length is same
         assert_eq!(anonymity_accounts.len(), comm_rscalar.len());
         // lets start a transcript and a prover script
@@ -470,7 +471,6 @@ impl<'a> Prover<'a> {
         //add statement accounts to transcript
         for acc in anonymity_accounts {
             prover.allocate_account(b"anonymity_account", acc);
-            println!("Account {:?}", acc);
         }
 
         let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
@@ -479,7 +479,6 @@ impl<'a> Prover<'a> {
         let r_vector: Vec<Scalar> = (0..comm_rscalar.len())
             .map(|_| Scalar::random(&mut transcript_rng))
             .collect();
-        println!("R {:?}", r_vector);
 
         //let create e_i = pk.g ^ r
         let e_i = anonymity_accounts
@@ -494,24 +493,13 @@ impl<'a> Prover<'a> {
             .zip(r_vector.iter())
             .map(|(acc, r)| acc.pk.grsk.decompress().unwrap() * r)
             .collect::<Vec<_>>();
-        //commit on r using elgamal commitment
-        /*let e_comm = ElGamalCommitment::generate_commitment(
-            &anonymity_accounts[0].pk,
-            r_vector[0],
-            Scalar::zero(),
-        );*/
-        //prover.allocate_point(b"e_c", &e_comm.c);
-        //prover.allocate_point(b"e_d", &e_comm.d);
-        //adding e to transcript
-        for (i, e) in e_i.iter().enumerate() {
+        //adding e,f to transcript
+        for (e, f) in e_i.iter().zip(f_i.iter()) {
             prover.allocate_point(b"e", &e.compress());
-            prover.allocate_point(b"f", &f_i[i].compress());
-            //println!("e_c {:?}", e_i.c);
-            //println!("e_d {:?}", e_i.d);
+            prover.allocate_point(b"f", &f.compress());
         }
         // obtain a scalar challenge
         let x = transcript.get_challenge(b"challenge");
-        println!("x{:?}", x);
 
         // lets create z = r - x * comm_scalar
         let x_comm_scalar = comm_rscalar.iter().map(|s| s * x).collect::<Vec<_>>();
@@ -522,7 +510,7 @@ impl<'a> Prover<'a> {
             .map(|(r, x_comm)| r - x_comm)
             .collect::<Vec<_>>();
 
-        return (z_vector, x /*e_comm*/);
+        return (z_vector, x);
     }
 }
 // ------------------------------------------------------------------------

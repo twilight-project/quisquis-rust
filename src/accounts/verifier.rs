@@ -343,6 +343,49 @@ impl<'a> Verifier<'a> {
             Err("Zero balance account verification failed")
         }
     }
+
+    // destroy_account_verifier verifies the knowledge
+    // of secret keys and the balance of the account to be destroyed is zero
+    pub fn destroy_account_verifier(
+        accounts: &[Account],
+        z: &[Scalar],
+        x: Scalar,
+    ) -> Result<(), &'static str> {
+        //check length is same
+        assert_eq!(accounts.len(), z.len());
+
+        // lets start a transcript and a verifier script
+        let mut transcript = Transcript::new(b"DestroyAccountProof");
+        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        //add statement accounts to transcript
+        for acc in accounts {
+            verifier.allocate_account(b"account", acc);
+        }
+
+        //recreate e,f
+        for (i, acc) in accounts.iter().enumerate() {
+            let combined_scalars = vec![z[i], x];
+            let point = vec![acc.pk.gr, acc.pk.grsk];
+            //let create e = (pk.g * z)  + (c * x)
+            let e = Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                .ok_or("Destroy Account Verify: Failed")?
+                .compress();
+            let point = vec![acc.comm.c, acc.comm.d];
+            // lets create f = d * x + pk.h * z
+            let f = Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                .ok_or("Destroy Account Verify: Failed")?
+                .compress();
+            verifier.allocate_point(b"e", &e);
+            verifier.allocate_point(b"f", &f);
+        }
+        // obtain a scalar challenge
+        let verify_x = transcript.get_challenge(b"challenge");
+        if x == verify_x {
+            Ok(())
+        } else {
+            Err("Destroy account verification failed")
+        }
+    }
 }
 
 // ------------------------------------------------------------------------
@@ -636,6 +679,28 @@ mod test {
         let check = Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x);
         //  println!("{:?}", check.unwrap());
         assert!(check.is_err());
+    }
+
+    #[test]
+    fn destroy_account_verifier_test() {
+        let mut zero_accounts: Vec<Account> = Vec::new();
+        let mut sk_vec: Vec<RistrettoSecretKey> = Vec::new();
+
+        for _i in 0..4 {
+            let (acc, sk) = Account::generate_random_account_with_value(0u64.into());
+            zero_accounts.push(acc);
+            sk_vec.push(sk);
+        }
+        // let (acc1, _) = Account::generate_random_account_with_value(0u64.into());
+        // zero_accounts.push(acc1);
+        // sk_vec.push(RistrettoSecretKey(Scalar::random(&mut OsRng)));
+        println!("Prover");
+        let (z, x) = Prover::destroy_account_prover(&zero_accounts, &sk_vec);
+        println!("Verifier");
+
+        let check = Verifier::destroy_account_verifier(&zero_accounts, &z, x);
+        //println!("{:?}", check.unwrap());
+        assert!(check.is_ok());
     }
     #[test]
     fn verify_delta_identity_check_test() {

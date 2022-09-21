@@ -512,6 +512,65 @@ impl<'a> Prover<'a> {
 
         return (z_vector, x);
     }
+
+    // destroy_account_prover creates a sigma proof for zero
+    // balance commitment and the knowledge of sk of all the accounts
+    pub fn destroy_account_prover(
+        accounts: &[Account],
+        sk: &[RistrettoSecretKey],
+    ) -> (Vec<Scalar>, Scalar) {
+        //check length is same
+        assert_eq!(accounts.len(), sk.len());
+        // lets start a transcript and a prover script
+        let mut transcript = Transcript::new(b"DestroyAccountProof");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        //adding witness to initialze transcript RNG (Random Number Generator)
+        let sk_scalar_vector: Vec<Scalar> = sk.iter().map(|s| s.0).collect();
+        prover.scalars = sk_scalar_vector.iter().cloned().collect();
+        //add statement accounts to transcript
+        for acc in accounts {
+            prover.allocate_account(b"account", acc);
+        }
+
+        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+
+        // create random vectors of r to commit on sk,
+        let r_vector: Vec<Scalar> = (0..sk.len())
+            .map(|_| Scalar::random(&mut transcript_rng))
+            .collect();
+
+        //let create e_i = pk.g ^ r
+        let e_i = accounts
+            .iter()
+            .zip(r_vector.iter())
+            .map(|(acc, r)| acc.pk.gr.decompress().unwrap() * r)
+            .collect::<Vec<_>>();
+
+        //let create f_i = acc.c ^ r
+        let f_i = accounts
+            .iter()
+            .zip(r_vector.iter())
+            .map(|(acc, r)| acc.comm.c.decompress().unwrap() * r)
+            .collect::<Vec<_>>();
+        //adding e,f to transcript
+        for (e, f) in e_i.iter().zip(f_i.iter()) {
+            prover.allocate_point(b"e", &e.compress());
+            prover.allocate_point(b"f", &f.compress());
+        }
+        // obtain a scalar challenge
+        let x = transcript.get_challenge(b"challenge");
+
+        // lets create z = r - x * comm_scalar
+        let x_sk = sk_scalar_vector.iter().map(|s| s * x).collect::<Vec<_>>();
+
+        let z_vector = r_vector
+            .iter()
+            .zip(x_sk.iter())
+            .map(|(r, x_comm)| r - x_comm)
+            .collect::<Vec<_>>();
+
+        return (z_vector, x);
+    }
 }
 // ------------------------------------------------------------------------
 // Tests

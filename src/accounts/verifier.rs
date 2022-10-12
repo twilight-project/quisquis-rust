@@ -69,10 +69,12 @@ impl<'a> Verifier<'a> {
         zr1_vector: &Vec<Scalar>,
         zr2_vector: &Vec<Scalar>,
         x: &Scalar,
+        verifier: &mut Verifier,
     ) -> Result<(), &'static str> {
-        let mut transcript = Transcript::new(b"VerifyDeltaCompact");
-        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
-
+        //let mut transcript = Transcript::new(b"VerifyDeltaCompact");
+        //let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
+        //Create new transcript
+        verifier.new_domain_sep(b"VerifyDeltaCompact");
         for (d, e) in delta_accounts.iter().zip(epsilon_accounts.iter()) {
             verifier.allocate_account(b"delta_account", d);
             verifier.allocate_account(b"epsilon_account", e);
@@ -124,7 +126,7 @@ impl<'a> Verifier<'a> {
         }
 
         // Obtain a scalar challenge
-        let verify_x = transcript.get_challenge(b"chal");
+        let verify_x = verifier.get_challenge(b"challenge");
 
         if x == &verify_x {
             Ok(())
@@ -139,6 +141,7 @@ impl<'a> Verifier<'a> {
         updated_delta_accounts: &[Account],
         z_vector: &[Scalar],
         x: &Scalar,
+        verifier: &mut Verifier,
     ) -> Result<(), &'static str> {
         let a = updated_input_accounts
             .iter()
@@ -167,9 +170,9 @@ impl<'a> Verifier<'a> {
             );
         }
 
-        let mut transcript = Transcript::new(b"VerifyUpdateAcct");
-        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
-
+        //let mut transcript = Transcript::new(b"VerifyUpdateAcct");
+        //let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        verifier.new_domain_sep(b"DLOGProof");
         // lets do x <- H(pk_input || pk_output || e)
         // pk_input is in updated_input_accounts
         // pk_output is in updated_delta_accounts
@@ -189,7 +192,7 @@ impl<'a> Verifier<'a> {
         }
 
         // obtain a scalar challenge
-        let verify_x = transcript.get_challenge(b"chal");
+        let verify_x = verifier.get_challenge(b"chal");
 
         if x == &verify_x {
             Ok(())
@@ -208,11 +211,13 @@ impl<'a> Verifier<'a> {
         zr: &[Scalar],
         x: Scalar,
         rp_verifier: &mut RangeProofVerifier,
+        verifier: &mut Verifier,
     ) -> Result<(), &'static str> {
         //lets start a transcript and a verifier script
 
-        let mut transcript = Transcript::new(b"VerifyAccountProver");
-        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
+        // let mut transcript = Transcript::new(b"VerifyAccountProver");
+        // let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
+        verifier.new_domain_sep(b"VerifyAccountProof");
         //add statement accounts to transcript
         for (delta, epsilon) in updated_delta_account_sender
             .iter()
@@ -259,7 +264,7 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"f_epsilon", &f_epsilon);
         }
         // obtain a scalar challenge
-        let verify_x = transcript.get_challenge(b"challenge");
+        let verify_x = verifier.get_challenge(b"challenge");
         println!("Verifier {:?}", verify_x);
         for i in 0..account_epsilon_sender.iter().count() {
             let res = rp_verifier.range_proof_verifier(account_epsilon_sender[i].comm.d);
@@ -306,13 +311,15 @@ impl<'a> Verifier<'a> {
         anonymity_accounts: &[Account],
         z: &[Scalar],
         x: Scalar,
+        verifier: &mut Verifier,
     ) -> Result<(), &'static str> {
         //check length is same
         assert_eq!(anonymity_accounts.len(), z.len());
 
         // lets start a transcript and a verifier script
-        let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
-        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        // let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
+        // let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        verifier.new_domain_sep(b"ZeroBalanceAccountProof");
         //add statement accounts to transcript
         for acc in anonymity_accounts {
             verifier.allocate_account(b"anonymity_account", acc);
@@ -335,7 +342,7 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"f", &f);
         }
         // obtain a scalar challenge
-        let verify_x = transcript.get_challenge(b"challenge");
+        let verify_x = verifier.get_challenge(b"challenge");
         if x == verify_x {
             Ok(())
         } else {
@@ -349,13 +356,16 @@ impl<'a> Verifier<'a> {
         accounts: &[Account],
         z: &[Scalar],
         x: Scalar,
+        verifier: &mut Verifier,
     ) -> Result<(), &'static str> {
         //check length is same
         assert_eq!(accounts.len(), z.len());
 
         // lets start a transcript and a verifier script
-        let mut transcript = Transcript::new(b"DestroyAccountProof");
-        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        // let mut transcript = Transcript::new(b"DestroyAccountProof");
+        // let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+
+        verifier.new_domain_sep(b"DestroyAccountProof");
         //add statement accounts to transcript
         for acc in accounts {
             verifier.allocate_account(b"account", acc);
@@ -378,7 +388,7 @@ impl<'a> Verifier<'a> {
             verifier.allocate_point(b"f", &f);
         }
         // obtain a scalar challenge
-        let verify_x = transcript.get_challenge(b"challenge");
+        let verify_x = verifier.get_challenge(b"challenge");
         if x == verify_x {
             Ok(())
         } else {
@@ -445,15 +455,20 @@ mod test {
                 &value_vector,
                 generate_base_pk,
             );
-
+        //create Prover
+        let mut transcript = Transcript::new(b"DeltaCompact");
+        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
         let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(
             &delta_accounts,
             &epislon_accounts,
             &rscalar,
             &rscalar,
             &value_vector,
+            &mut prover,
         );
-
+        //create Verifier
+        let mut transcript_verifier = Transcript::new(b"DeltaCompact");
+        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript_verifier);
         let check = Verifier::verify_delta_compact_verifier(
             &delta_accounts,
             &epislon_accounts,
@@ -461,6 +476,7 @@ mod test {
             &zr1_vector,
             &zr2_vector,
             &x,
+            &mut verifier,
         );
 
         assert!(check.is_ok());
@@ -514,18 +530,23 @@ mod test {
         let updated_delta_accounts_slice = &updated_delta_accounts.as_ref().unwrap()[2..9];
 
         let rscalars_slice = &rscalars[2..9];
-
+        //create Prover
+        let mut transcript = Transcript::new(b"UpdateAccount");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
         let (x, z_vector) = Prover::verify_update_account_prover(
             &updated_accounts_slice.to_vec(),
             &updated_delta_accounts_slice.to_vec(),
             &rscalars_slice.to_vec(),
+            &mut prover,
         );
-
+        let mut transcript = Transcript::new(b"UpdateAccount");
+        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
         let check = Verifier::verify_update_account_verifier(
             &updated_accounts_slice.to_vec(),
             &updated_delta_accounts_slice.to_vec(),
             &z_vector,
             &x,
+            &mut verifier,
         );
         assert!(check.is_ok());
     }
@@ -589,6 +610,9 @@ mod test {
         let pc_gens = PedersenGens::default();
         let cs = r1cs::Prover::new(&pc_gens, Transcript::new(b"Rangeproof.r1cs"));
         let mut prover = RangeProofProver { prover: cs };
+        //Create Prover
+        let mut transcript = Transcript::new(b"SenderAccountProof");
+        let mut prover_sender = Prover::new(b"DLOGProof", &mut transcript);
         let (zv, zsk, zr, x) = Prover::verify_account_prover(
             &updated_delta_account_sender,
             &epsilon_account_vec,
@@ -596,6 +620,7 @@ mod test {
             &sender_sk,
             &rscalar_sender,
             &mut prover,
+            &mut prover_sender,
         );
         //Create R1CS rangeproof on all sender accounts
         let range_proof = prover.build_proof();
@@ -607,6 +632,10 @@ mod test {
         let mut rp_verifier = RangeProofVerifier {
             verifier: verifier_initial,
         };
+        //create Verifier
+        let mut transcript = Transcript::new(b"SenderAccountProof");
+        let mut verifier_sender = Verifier::new(b"DLOGProof", &mut transcript);
+
         let check = Verifier::verify_account_verifier(
             &updated_delta_account_sender,
             &epsilon_account_vec,
@@ -616,6 +645,7 @@ mod test {
             &zr,
             x,
             &mut rp_verifier,
+            &mut verifier_sender,
         );
         //Verify r1cs rangeproof
         let bp_check = rp_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
@@ -639,11 +669,16 @@ mod test {
             anonymity_accounts.push(acc);
             rscalar_comm.push(r);
         }
-        println!("Prover");
-        let (z, x) = Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm);
-        println!("Verifier");
-
-        let check = Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x);
+        //create Prover
+        let mut transcript = Transcript::new(b"ZeroBalanceAccount");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        let (z, x) =
+            Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm, &mut prover);
+        //create Verifier
+        let mut transcript = Transcript::new(b"ZeroBalanceAccount");
+        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        let check =
+            Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x, &mut verifier);
         //println!("{:?}", check.unwrap());
         assert!(check.is_ok());
     }
@@ -673,11 +708,16 @@ mod test {
         });
         rscalar_comm.push(rscalar_comm[0]);
 
-        println!("Prover");
-        let (z, x) = Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm);
-        println!("Verifier");
+        let mut transcript = Transcript::new(b"ZeroBalanceAccount");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        let (z, x) =
+            Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm, &mut prover);
+        //create Verifier
+        let mut transcript = Transcript::new(b"ZeroBalanceAccount");
+        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
 
-        let check = Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x);
+        let check =
+            Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x, &mut verifier);
         //  println!("{:?}", check.unwrap());
         assert!(check.is_err());
     }
@@ -695,11 +735,16 @@ mod test {
         // let (acc1, _) = Account::generate_random_account_with_value(0u64.into());
         // zero_accounts.push(acc1);
         // sk_vec.push(RistrettoSecretKey(Scalar::random(&mut OsRng)));
-        println!("Prover");
-        let (z, x) = Prover::destroy_account_prover(&zero_accounts, &sk_vec);
-        println!("Verifier");
+        //create Prover
 
-        let check = Verifier::destroy_account_verifier(&zero_accounts, &z, x);
+        let mut transcript = Transcript::new(b"DestroyAccount");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        let (z, x) = Prover::destroy_account_prover(&zero_accounts, &sk_vec, &mut prover);
+        //create Verifier
+        let mut transcript = Transcript::new(b"DestroyAccount");
+        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+
+        let check = Verifier::destroy_account_verifier(&zero_accounts, &z, x, &mut verifier);
         //println!("{:?}", check.unwrap());
         assert!(check.is_ok());
     }

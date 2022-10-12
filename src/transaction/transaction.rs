@@ -7,136 +7,50 @@ use crate::{
     shuffle::{Shuffle, ShuffleProof, ShuffleStatement},
 };
 use bulletproofs::r1cs;
-use bulletproofs::r1cs::R1CSProof;
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 
-/// Transaction type: Transfer. Transition, Create, Vault
-///
-/// TransactionType implements [`Default`] and returns [`TransactionType::Transfer`].
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-enum TransactionType {
-    Transfer,
-    Transition,
-    Create,
-    Vault,
-}
-
-impl TransactionType {
-    pub fn from_u8(byte: u8) -> Result<TransactionType, &'static str> {
-        use TransactionType::*;
-        match byte {
-            0 => Ok(Transfer),
-            1 => Ok(Transition),
-            2 => Ok(Create),
-            3 => Ok(Vault),
-            _ => Err("Error::InvalidTransactionType"),
-        }
-    }
-}
-impl Default for TransactionType {
-    fn default() -> TransactionType {
-        TransactionType::Transfer
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-enum Transaction {
-    TransactionTransfer,
-    TransactionTransition,
-    TransactionCreate,
-    TransactionVault,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TransferProof {
+#[derive(Debug, Clone)]
+pub struct Transaction {
+    pub(crate) input_account_vector: Vec<Account>,
     pub(crate) updated_account_vector: Vec<Account>,
     pub(crate) account_delta_vector: Vec<Account>,
     pub(crate) account_epsilon_vector: Vec<Account>,
     pub(crate) account_updated_delta_vector: Vec<Account>,
-    pub(crate) dleq_z: Vec<Scalar>,
-    pub(crate) dleq_r: Vec<Scalar>,
-    pub(crate) dleq_rr: Vec<Scalar>,
-    pub(crate) dleq_x: Scalar,
-    pub(crate) dlog_z: Vec<Scalar>,
-    pub(crate) dlog_x: Scalar,
-    pub(crate) sender_z: Vec<Scalar>,
-    pub(crate) sender_sk: Vec<Scalar>,
-    pub(crate) sender_r: Vec<Scalar>,
-    pub(crate) sender_x: Scalar,
-    pub(crate) balance: R1CSProof,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UnifiedShuffleProof {
-    pub(crate) input_shuffle_statement: ShuffleStatement,
-    pub(crate) input_shuffle_proof: ShuffleProof,
-    pub(crate) output_shuffle_statement: ShuffleStatement,
-    pub(crate) output_shuffle_proof: ShuffleProof,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WitnessProof {
-    //fill this struct later
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TransactionTransfer {
-    pub(crate) version: u64,
-    pub(crate) byte_price: u64,
-    pub(crate) price_limit: u64,
-    pub(crate) maturity: u64,
-    pub(crate) input_count: u8,
-    pub(crate) output_count: u8,
-    pub(crate) input_account_vector: Vec<Account>,
     pub(crate) output_account_vector: Vec<Account>,
-    //non shuffle proof
-    pub(crate) proof: TransferProof,
-    //input and output shuffle proof
-    pub(crate) shuffle_proof: UnifiedShuffleProof,
-    //required for lit to dark case. contains same value proof
-    pub(crate) witness: Option<WitnessProof>,
-    // pub(crate) updated_account_vector: Vec<Account>,
-    // pub(crate) account_delta_vector: Vec<Account>,
-    // pub(crate) account_epsilon_vector: Vec<Account>,
-    //  pub(crate) account_updated_delta_vector: Vec<Account>,
-    //  pub(crate) output_account_vector: Vec<Account>,
+    pub(crate) non_negative_range_proof: Vec<String>,
+    pub(crate) non_negative_range_proof_commitments: Vec<String>,
+    pub(crate) settle_program_bytes: Vec<String>,
+    pub(crate) settle_program_proof: Vec<String>,
 }
 
-/*impl Transaction {
+impl Transaction {
     // Private constructor
     fn set_transaction(
-        transaction_type: TransactionType,
-
-        // input_account_vector: Vec<Account>,
-        // updated_account_vector: Vec<Account>,
-        // account_delta_vector: Vec<Account>,
-        // account_epsilon_vector: Vec<Account>,
-        // // account_updated_delta_vector: Vec<Account>,
-        // // output_account_vector: Vec<Account>,
-        // input_shuffle_statement: ShuffleStatement,
-        // input_shuffle_proof: ShuffleProof,
-        // output_shuffle_statement: ShuffleStatement,
-        // output_shuffle_proof: ShuffleProof,
+        input_account_vector: Vec<Account>,
+        updated_account_vector: Vec<Account>,
+        account_delta_vector: Vec<Account>,
+        account_epsilon_vector: Vec<Account>,
+        account_updated_delta_vector: Vec<Account>,
+        output_account_vector: Vec<Account>,
+        non_negative_range_proof: Vec<String>,
+        non_negative_range_proof_commitments: Vec<String>,
+        settle_program_bytes: Vec<String>,
+        settle_program_proof: Vec<String>,
     ) -> Transaction {
         Transaction {
-            // input_account_vector: input_account_vector,
+            input_account_vector: input_account_vector,
             updated_account_vector: updated_account_vector,
             account_delta_vector: account_delta_vector,
             account_epsilon_vector: account_epsilon_vector,
-            // account_updated_delta_vector: account_updated_delta_vector,
-            // output_account_vector: output_account_vector,
-            // non_negative_range_proof: non_negative_range_proof,
-            // non_negative_range_proof_commitments: non_negative_range_proof_commitments,
-            // settle_program_bytes: settle_program_bytes,
-            // settle_program_proof: settle_program_proof,
-            input_shuffle_statement: input_shuffle_statement,
-            input_shuffle_proof: input_shuffle_proof,
-            output_shuffle_statement: output_shuffle_statement,
-            output_shuffle_proof: output_shuffle_proof,
+            account_updated_delta_vector: account_updated_delta_vector,
+            output_account_vector: output_account_vector,
+            non_negative_range_proof: non_negative_range_proof,
+            non_negative_range_proof_commitments: non_negative_range_proof_commitments,
+            settle_program_bytes: settle_program_bytes,
+            settle_program_proof: settle_program_proof,
         }
     }
 
@@ -146,23 +60,15 @@ pub struct TransactionTransfer {
         let value_vector: Vec<i64> = vec![-balance, balance, 0, 0, 0, 0, 0, 0, 0];
         return value_vector;
     }
-}*/
+}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Receiver {
     amount: i64,
     public_key: RistrettoPublicKey,
 }
-impl Receiver {
-    pub fn set_receiver(amount: i64, public_key: RistrettoPublicKey) -> Receiver {
-        Receiver {
-            amount: amount,
-            public_key: public_key,
-        }
-    }
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Sender {
     total_amount: i64,
     account: Account,
@@ -170,16 +76,9 @@ pub struct Sender {
 }
 
 impl Sender {
-    pub fn set_sender(total_amount: i64, account: Account, receivers: Vec<Receiver>) -> Sender {
-        Sender {
-            total_amount: total_amount,
-            account: account,
-            receivers: receivers,
-        }
-    }
     pub fn generate_value_and_account_vector(
         tx_vector: Vec<Sender>,
-    ) -> Result<(Vec<i64>, Vec<Account>, Vec<Scalar>, usize, usize, usize), &'static str> {
+    ) -> Result<(Vec<i64>, Vec<Account>, usize, usize, usize), &'static str> {
         if tx_vector.len() < 9 {
             let mut value_vector: Vec<i64> = tx_vector.iter().map(|s| s.total_amount).collect();
             let mut account_vector: Vec<Account> = tx_vector.iter().map(|s| s.account).collect();
@@ -187,15 +86,13 @@ impl Sender {
             let mut receivers_count = 0;
             let mut receiver_amount_vector: Vec<i64> = Vec::new();
             let mut receiver_account_vector = Vec::new();
-            //keep track of all the r used for commitment of value zero
-            let mut annonymity_account_commmitment_scalars_vector: Vec<Scalar> = Vec::new();
 
             for sender in tx_vector.iter() {
                 receivers_count += &sender.receivers.iter().count();
 
                 for rec in sender.receivers.iter() {
                     receiver_amount_vector.push(rec.amount);
-                    let (receiver_account, _) = Account::generate_account(rec.public_key);
+                    let receiver_account = Account::generate_account(rec.public_key);
                     receiver_account_vector.push(receiver_account);
                 }
             }
@@ -209,29 +106,18 @@ impl Sender {
                 // this anonymity set may need to come from the blockchain state itself in the future
 
                 let diff = 9 - (senders_count + receivers_count);
-                //use receiver key as base pk for annonymity accounts
-                let pk_annonymity = PublicKey::update_public_key(
-                    &receiver_account_vector[0].pk,
-                    Scalar::random(&mut OsRng),
-                );
 
                 if diff >= 1 {
                     for _ in 0..diff {
                         value_vector.push(0);
-                        let (acc, comm_scalar) =
-                            Account::generate_account(PublicKey::update_public_key(
-                                &pk_annonymity,
-                                Scalar::random(&mut OsRng),
-                            ));
-                        account_vector.push(acc);
-                        annonymity_account_commmitment_scalars_vector.push(comm_scalar);
+                        account_vector
+                            .push(Account::generate_random_account_with_value(0u64.into()).0);
                     }
                 }
 
                 Ok((
                     value_vector,
                     account_vector,
-                    annonymity_account_commmitment_scalars_vector,
                     diff,
                     senders_count,
                     receivers_count,
@@ -245,7 +131,7 @@ impl Sender {
     }
 
     // create_transaction creates a quisquis transaction
-    pub fn create_quisquis_transaction(
+    pub fn create_transaction(
         value_vector: &Vec<i64>,
         account_vector: &Vec<Account>,
         sender_updated_balance: Vec<i64>,
@@ -254,7 +140,7 @@ impl Sender {
         senders_count: usize,
         receivers_count: usize,
     ) -> Result<
-        /*(
+        (
             Vec<Account>,
             Vec<Account>,
             Vec<Account>,
@@ -262,8 +148,7 @@ impl Sender {
             ShuffleStatement,
             ShuffleProof,
             ShuffleStatement,
-        )*/
-        TransactionTransfer,
+        ),
         &'static str,
     > {
         //convert the valur vector into scalar type to be used in the prover
@@ -328,7 +213,7 @@ impl Sender {
             );
 
         //4. generate proofs dleq proof
-        let (zv_vector, zr1_vector, zr2_vector, x_dleq) = Prover::verify_delta_compact_prover(
+        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(
             &delta_accounts,
             &epsilon_accounts,
             &delta_rscalar,
@@ -345,7 +230,7 @@ impl Sender {
             &zv_vector,
             &zr1_vector,
             &zr2_vector,
-            &x_dleq,
+            &x,
         )?;
         // if verify_delta_compact_proof == true {
         //3. update delta_accounts
@@ -370,7 +255,7 @@ impl Sender {
         let rscalars_slice = &delta_rscalar[anonymity_index..9];
 
         // generate proofs dlog proof
-        let (x_dlog, z_vector) = Prover::verify_update_account_prover(
+        let (x, z_vector) = Prover::verify_update_account_prover(
             &updated_accounts_slice,
             &updated_delta_accounts_slice,
             &rscalars_slice,
@@ -380,7 +265,7 @@ impl Sender {
             &updated_accounts_slice,
             &updated_delta_accounts_slice,
             &z_vector,
-            &x_dlog,
+            &x,
         )?;
         //println!("Account update proof {:?}", verify_update_account_proof);
 
@@ -405,7 +290,7 @@ impl Sender {
             );
             epsilon_account_vec.push(epsilon_account);
         }
-        let (zv, zsk, zr, x_sender) = Prover::verify_account_prover(
+        let (zv, zsk, zr, x) = Prover::verify_account_prover(
             &updated_delta_account_sender,
             &epsilon_account_vec,
             &sender_updated_balance,
@@ -415,7 +300,7 @@ impl Sender {
         );
 
         println!("zv {:?},  zsk {:?}, zr {:?}", zv, zsk, zr);
-        println!("X = {:?}", x_sender);
+        println!("X = {:?}", x);
         //Preparation for Non negative proof i.e, Rangeproof on reciever accaounts -> bl >= 0
         //balance vector for receivers
         let receiver_bl = &value_vector[senders_count..(senders_count + receivers_count)];
@@ -430,7 +315,7 @@ impl Sender {
         );
         //Generate range proof over sender/reciever account values. i.,e balance >=0 for all
         //Should be called after adding all values (sender+receiver) to the R1CS transcript
-        let range_proof = range_prover.build_proof().unwrap();
+        let range_proof = range_prover.build_proof();
         //verify sender account signature and remaining balance. Rangeproof R1CS is updated
         // Verifier::verify_account_verifier(
         //     &updated_delta_account_sender,
@@ -458,7 +343,7 @@ impl Sender {
         }
 
         //Verify r1cs rangeproof
-        let bp_check = range_verifier.verify_proof(&range_proof, &pc_gens);
+        let bp_check = range_verifier.verify_proof(&range_proof.unwrap(), &pc_gens);
         // if bp_check.is_err() {
         //     return Err("Range Proof verification failed");
         // }
@@ -491,44 +376,15 @@ impl Sender {
             &pc_gens,
             &xpc_gens,
         )?;
-
-        //create proof structs to construct Transaction
-        let shuffle_proof = UnifiedShuffleProof {
-            input_shuffle_statement: input_shuffle_statement,
-            input_shuffle_proof: input_shuffle_proof,
-            output_shuffle_statement: output_shuffle_statement,
-            output_shuffle_proof: output_shuffle_proof,
-        };
-        let transfer_proof = TransferProof {
-            updated_account_vector: updated_accounts,
-            account_delta_vector: delta_accounts,
-            account_epsilon_vector: epsilon_accounts,
-            account_updated_delta_vector: updated_delta_accounts,
-            dleq_z: zv_vector,
-            dleq_r: zr1_vector,
-            dleq_rr: zr2_vector,
-            dleq_x: x_dleq,
-            dlog_z: z_vector,
-            dlog_x: x_dlog,
-            sender_z: zv,
-            sender_sk: zsk,
-            sender_r: zr,
-            sender_x: x_sender,
-            balance: range_proof,
-        };
-        Ok(TransactionTransfer {
-            version: 1,
-            byte_price: 5,
-            price_limit: 5000,
-            maturity: 0,
-            input_count: 9,
-            output_count: 9,
-            input_account_vector: input_shuffle.get_inputs_vector(),
-            output_account_vector: output_shuffle.get_outputs_vector(),
-            proof: transfer_proof,
-            shuffle_proof: shuffle_proof,
-            witness: None,
-        })
+        Ok((
+            updated_again_account_vector,
+            delta_accounts,
+            epsilon_accounts,
+            input_shuffle_proof,
+            input_shuffle_statement,
+            output_shuffle_proof,
+            output_shuffle_statement,
+        ))
         // } else {
         //   Err("Sender account proof failed")
         //}
@@ -540,7 +396,6 @@ impl Sender {
         //}
     }
 }
-
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -593,21 +448,15 @@ mod test {
                 ],
             },
         ];
-        let (
-            value_vector,
-            account_vector,
-            annonymity_com_scalar_vector,
-            diff,
-            sender_count,
-            receiver_count,
-        ) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
+        let (value_vector, account_vector, diff, sender_count, receiver_count) =
+            Sender::generate_value_and_account_vector(tx_vector).unwrap();
         //Create sender updated account vector for the verification of sk and bl-v
         let bl_first_sender = 10 - 5; //bl-v
         let bl_second_sender = 20 - 3; //bl-v
         let updated_balance_sender: Vec<i64> = vec![bl_first_sender, bl_second_sender];
         //Create vector of sender secret keys
         let sk_sender: Vec<RistrettoSecretKey> = vec![bob_sk_account_1, bob_sk_account_2];
-        let transaction = Sender::create_quisquis_transaction(
+        let transaction = Sender::create_transaction(
             &value_vector,
             &account_vector,
             updated_balance_sender,
@@ -638,7 +487,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
             account_vector.push(acc);
         }
         println!("{:?}", account_vector);

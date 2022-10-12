@@ -425,7 +425,7 @@ mod test {
         for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
 
             // lets get a random scalar to update the account
             let updated_keys_scalar = Scalar::random(&mut OsRng);
@@ -484,7 +484,7 @@ mod test {
         for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
 
             // lets get a random scalar to update the account
             let updated_keys_scalar = Scalar::random(&mut OsRng);
@@ -722,7 +722,7 @@ mod test {
         for _ in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
 
             // lets get a random scalar to update the account
             let updated_keys_scalar = Scalar::random(&mut OsRng);

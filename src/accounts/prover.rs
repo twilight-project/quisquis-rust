@@ -26,14 +26,14 @@ impl<'a> Prover<'a> {
     }
 
     /// The compact and batchable proofs differ only by which data they store.
-    fn prove_impl(self) -> (Self, merlin::TranscriptRng) {
+    fn prove_impl(&self) -> merlin::TranscriptRng {
         // Construct a TranscriptRng
         let mut rng_builder = self.transcript.build_rng();
         for scalar in &self.scalars {
             rng_builder = rng_builder.rekey_with_witness_bytes(b"", scalar.as_bytes());
         }
         let transcript_rng = rng_builder.finalize(&mut thread_rng());
-        return (self, transcript_rng);
+        return transcript_rng;
     }
 
     /// Allocate and assign a secret variable with the given `label`.
@@ -69,6 +69,7 @@ impl<'a> Prover<'a> {
         rscalar1: &[Scalar],
         rscalar2: &[Scalar],
         value_vector: &[Scalar],
+        prover: &mut Prover,
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
         //lenghts of both delta and epsilon account slices should be same.
         assert_eq!(delta_accounts.len(), epsilon_accounts.len());
@@ -77,8 +78,10 @@ impl<'a> Prover<'a> {
         let mut r1_dash_vector: Vec<Scalar> = Vec::new();
         let mut r2_dash_vector: Vec<Scalar> = Vec::new();
         let mut v_doubledash_vector: Vec<Scalar> = Vec::new();
-        let mut transcript = Transcript::new(b"VerifyDeltaCompact");
-        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+        //Create new transcript
+        prover.new_domain_sep(b"VerifyDeltaCompact");
+        //let mut transcript = Transcript::new(b"VerifyDeltaCompact");
+        //let mut prover = Prover::new(b"DLEQProof", &mut transcript);
 
         //for value in value_vector.iter() {
         //  v_dash_vector.push(*value);
@@ -95,7 +98,7 @@ impl<'a> Prover<'a> {
             prover.allocate_account(b"epsilon_account", epsilon);
         }
 
-        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+        let mut transcript_rng = prover.prove_impl(); //confirm
 
         for _ in 0..delta_accounts.iter().count() {
             // Generate and collect three blindings
@@ -159,8 +162,8 @@ impl<'a> Prover<'a> {
         }
 
         // obtain a scalar challenge
-        let x = transcript.get_challenge(b"chal");
-
+        //let x = transcript.get_challenge(b"chal");
+        let x = prover.get_challenge(b"challenge");
         // lets create the outputs
 
         // lets create zv
@@ -201,6 +204,7 @@ impl<'a> Prover<'a> {
         updated_input_accounts: &[Account],
         updated_delta_accounts: &[Account],
         delta_rscalar: &[Scalar],
+        prover: &mut Prover,
     ) -> (Scalar, Vec<Scalar>) {
         // check if (c,d)/c,d) = pkdelta_r
         // lets do c-c and d-d for the commitments in both updated_input and updated_delta account vectors
@@ -231,12 +235,12 @@ impl<'a> Prover<'a> {
         let anonymity_set_index: Vec<_> = anonymity_set.iter().map(|i| i.0 .0).collect();
 
         // lets create random scalar s with the transcript
-        let mut transcript = Transcript::new(b"VerifyUpdateAcct");
-        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-
+        // let mut transcript = Transcript::new(b"VerifyUpdateAcct");
+        // let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        prover.new_domain_sep(b"DLOGProof");
         prover.scalars = delta_rscalar.to_vec();
 
-        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+        let mut transcript_rng = prover.prove_impl(); //confirm
 
         // Generate a single blinding factor
         let s_scalar = Scalar::random(&mut transcript_rng);
@@ -264,7 +268,7 @@ impl<'a> Prover<'a> {
         }
 
         // obtain a scalar challenge
-        let x = transcript.get_challenge(b"chal");
+        let x = prover.get_challenge(b"chal");
 
         let mut z_vector: Vec<Scalar> = Vec::new();
 
@@ -285,6 +289,7 @@ impl<'a> Prover<'a> {
         sk: &[RistrettoSecretKey],
         rscalar: &[Scalar],
         rp_prover: &mut RangeProofProver,
+        prover: &mut Prover,
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
         //check length is same
         assert_eq!(
@@ -292,9 +297,9 @@ impl<'a> Prover<'a> {
             epsilon_account_sender.len()
         );
         // lets start a transcript and a prover script
-        let mut transcript = Transcript::new(b"VerifyAccountProver");
-        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
-
+        //let mut transcript = Transcript::new(b"VerifyAccountProver");
+        //let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+        prover.new_domain_sep(b"VerifyAccountProof");
         //adding witness to initialze transcript RNG (Random Number Generator)
         let v_vector: Vec<Scalar> = bl
             .iter()
@@ -318,7 +323,7 @@ impl<'a> Prover<'a> {
             prover.allocate_account(b"epsilon_account", epsilon);
         }
 
-        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+        let mut transcript_rng = prover.prove_impl(); //confirm
 
         // create random vectors of r_v, r_sk and r_dash
         let rv_vector: Vec<Scalar> = (0..bl.len())
@@ -384,7 +389,7 @@ impl<'a> Prover<'a> {
             prover.allocate_point(b"f_epsilon", &f_epsilon[i].compress());
         }
         // obtain a scalar challenge
-        let x = transcript.get_challenge(b"challenge");
+        let x = prover.get_challenge(b"challenge");
 
         // lets create zv = r_v - x * v
         let xv_dash_vector = v_vector.iter().map(|v_dash| v_dash * x).collect::<Vec<_>>();
@@ -459,12 +464,15 @@ impl<'a> Prover<'a> {
     pub fn zero_balance_account_prover(
         anonymity_accounts: &[Account],
         comm_rscalar: &[Scalar],
+        prover: &mut Prover,
     ) -> (Vec<Scalar>, Scalar) {
         //check length is same
         assert_eq!(anonymity_accounts.len(), comm_rscalar.len());
         // lets start a transcript and a prover script
-        let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
-        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        //let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
+        //let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+
+        prover.new_domain_sep(b"ZeroBalanceAccountProof");
         //adding witness to initialze transcript RNG (Random Number Generator)
         prover.scalars = comm_rscalar.iter().cloned().collect();
         //add statement accounts to transcript
@@ -472,7 +480,7 @@ impl<'a> Prover<'a> {
             prover.allocate_account(b"anonymity_account", acc);
         }
 
-        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+        let mut transcript_rng = prover.prove_impl(); //confirm
 
         // create random vectors of r,
         let r_vector: Vec<Scalar> = (0..comm_rscalar.len())
@@ -498,7 +506,7 @@ impl<'a> Prover<'a> {
             prover.allocate_point(b"f", &f.compress());
         }
         // obtain a scalar challenge
-        let x = transcript.get_challenge(b"challenge");
+        let x = prover.get_challenge(b"challenge");
 
         // lets create z = r - x * comm_scalar
         let x_comm_scalar = comm_rscalar.iter().map(|s| s * x).collect::<Vec<_>>();
@@ -517,12 +525,14 @@ impl<'a> Prover<'a> {
     pub fn destroy_account_prover(
         accounts: &[Account],
         sk: &[RistrettoSecretKey],
+        prover: &mut Prover,
     ) -> (Vec<Scalar>, Scalar) {
         //check length is same
         assert_eq!(accounts.len(), sk.len());
         // lets start a transcript and a prover script
-        let mut transcript = Transcript::new(b"DestroyAccountProof");
-        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        // let mut transcript = Transcript::new(b"DestroyAccountProof");
+        // let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        prover.new_domain_sep(b"DestroyAccountProof");
         //adding witness to initialze transcript RNG (Random Number Generator)
         let sk_scalar_vector: Vec<Scalar> = sk.iter().map(|s| s.0).collect();
         prover.scalars = sk_scalar_vector.iter().cloned().collect();
@@ -531,7 +541,7 @@ impl<'a> Prover<'a> {
             prover.allocate_account(b"account", acc);
         }
 
-        let (mut prover, mut transcript_rng) = prover.prove_impl(); //confirm
+        let mut transcript_rng = prover.prove_impl(); //confirm
 
         // create random vectors of r to commit on sk,
         let r_vector: Vec<Scalar> = (0..sk.len())
@@ -557,7 +567,7 @@ impl<'a> Prover<'a> {
             prover.allocate_point(b"f", &f.compress());
         }
         // obtain a scalar challenge
-        let x = transcript.get_challenge(b"challenge");
+        let x = prover.get_challenge(b"challenge");
 
         // lets create z = r - x * comm_scalar
         let x_sk = sk_scalar_vector.iter().map(|s| s * x).collect::<Vec<_>>();

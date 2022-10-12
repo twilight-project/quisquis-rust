@@ -119,7 +119,7 @@ impl Shuffle {
     }
 
     pub fn input_shuffle(
-        inputs: &Vec<Account>, //Accounts to be shuffled
+        inputs: &[Account], //Accounts to be shuffled
     ) -> Result<Self, &'static str> {
         let len = inputs.len();
         if len == 0 {

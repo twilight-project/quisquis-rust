@@ -10,7 +10,6 @@ use curve25519_dalek::{
 use crate::accounts::{RangeProofVerifier, TranscriptProtocol};
 use merlin::Transcript;
 
-use crate::elgamal::elgamal::ElGamalCommitment;
 use crate::{accounts::Account, ristretto::RistrettoPublicKey};
 pub struct Verifier<'a> {
     transcript: &'a mut Transcript,
@@ -396,12 +395,14 @@ impl<'a> Verifier<'a> {
 mod test {
     use super::*;
     use crate::accounts::RangeProofProver;
+    use crate::elgamal::elgamal::ElGamalCommitment;
     use crate::{
         accounts::Account,
         accounts::Prover,
         keys::{PublicKey, SecretKey},
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
     };
+
     use bulletproofs::r1cs;
     use bulletproofs::PedersenGens;
     use rand::rngs::OsRng;
@@ -425,7 +426,7 @@ mod test {
         for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
 
             // lets get a random scalar to update the account
             let updated_keys_scalar = Scalar::random(&mut OsRng);
@@ -484,7 +485,7 @@ mod test {
         for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
 
             // lets get a random scalar to update the account
             let updated_keys_scalar = Scalar::random(&mut OsRng);
@@ -722,7 +723,7 @@ mod test {
         for _ in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
 
             // lets get a random scalar to update the account
             let updated_keys_scalar = Scalar::random(&mut OsRng);

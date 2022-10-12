@@ -3,9 +3,8 @@ use core::ops::{Mul, Sub};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
 pub struct ElGamalCommitment {
     pub(crate) c: CompressedRistretto,
     pub(crate) d: CompressedRistretto,

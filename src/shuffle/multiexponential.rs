@@ -22,11 +22,11 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use std::iter;
+
 ///Multiexponential Proof
 ///
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MultiexpoProof {
     pub c_A_0: CompressedRistretto,
     pub c_B_k: Vec<CompressedRistretto>,
@@ -776,7 +776,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
             account_vector.push(acc);
         }
         let result = Shuffle::output_shuffle(&account_vector);
@@ -893,7 +893,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
             account_vector.push(acc);
         }
         let result = Shuffle::output_shuffle(&account_vector);
@@ -1020,7 +1020,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
             account_vector.push(acc);
         }
         let result = Shuffle::output_shuffle(&account_vector);
@@ -1108,7 +1108,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
             account_vector.push(acc);
         }
         let result = Shuffle::output_shuffle(&account_vector);
@@ -1169,7 +1169,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
             account_vector.push(acc);
         }
         let result = Shuffle::output_shuffle(&account_vector);

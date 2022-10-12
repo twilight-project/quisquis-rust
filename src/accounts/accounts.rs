@@ -9,9 +9,8 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
-//use crate::ristretto::keys::_::_serde::ser::SerializeStruct;
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+
+#[derive(Debug, Copy, Clone)]
 pub struct Account {
     pub(crate) pk: RistrettoPublicKey,
     pub(crate) comm: ElGamalCommitment,
@@ -22,9 +21,10 @@ impl Account {
     fn set_account(pk: RistrettoPublicKey, comm: ElGamalCommitment) -> Account {
         Account { pk: pk, comm: comm }
     }
+
     /// generate_account creates a new account
-    /// returns an account with (pk and Commitment with 0 balance) and commitment scalar for Annoynimity account proof
-    pub fn generate_account(pk: RistrettoPublicKey) -> (Account, Scalar) {
+    /// returns PublicKey, SecretKey and a Commitment with 0 balance
+    pub fn generate_account(pk: RistrettoPublicKey) -> Account {
         // lets get a random scalar
         let comm_scalar = Scalar::random(&mut OsRng);
 
@@ -33,7 +33,7 @@ impl Account {
 
         let account = Account::set_account(pk, comm);
 
-        return (account, comm_scalar);
+        return account;
     }
     /// Verifies the account balance stored in commitment
     /// Verifies the Private key and balance passed as input
@@ -44,14 +44,6 @@ impl Account {
     ) -> Result<(), &'static str> {
         self.pk.verify_keypair(sk)?;
         self.comm.verify_commitment(sk, bl)
-    }
-    /// Verifies the account public key belongs to a secret key
-    ///
-    pub fn verify_account_keypair(
-        self: &Self,
-        sk: &RistrettoSecretKey,
-    ) -> Result<(), &'static str> {
-        self.pk.verify_keypair(sk)
     }
 
     /// Decrypts the account balance and returns G*bl. Discrete log should be solved to extract bl
@@ -245,7 +237,7 @@ impl Account {
         let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
 
-        let (acc, _) = Account::generate_account(pk);
+        let acc = Account::generate_account(pk);
 
         let updated_keys_scalar = Scalar::random(&mut OsRng);
 
@@ -267,19 +259,6 @@ impl PartialEq for Account {
     }
 }
 
-// impl Serialize for Account {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         // 3 is the number of fields in the struct.
-//         let mut state = serializer.serialize_struct("Account", 2)?;
-//         state.serialize_field("pk", &self.pk)?;
-//         state.serialize_field("comm", &self.comm)?;
-//         state.end()
-//     }
-// }
-
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -293,7 +272,7 @@ mod test {
         let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
         //generate a Zero balance account
-        let (acc, _) = Account::generate_account(pk);
+        let acc = Account::generate_account(pk);
 
         let updated_keys_scalar = Scalar::random(&mut OsRng);
 
@@ -311,7 +290,7 @@ mod test {
         let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
         //generate a Zero balance account
-        let (acc, _) = Account::generate_account(pk);
+        let acc = Account::generate_account(pk);
 
         let updated_keys_scalar = Scalar::random(&mut OsRng);
 
@@ -356,7 +335,7 @@ mod test {
         for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
 
             // lets get a random scalar to update the account
             let updated_keys_scalar = Scalar::random(&mut OsRng);
@@ -397,7 +376,7 @@ mod test {
         for _i in 0..9 {
             let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
-            let (acc, _) = Account::generate_account(pk);
+            let acc = Account::generate_account(pk);
             account_vector.push(acc);
 
             // lets get a random scalar to update the account

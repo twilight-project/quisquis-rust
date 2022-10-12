@@ -3,7 +3,6 @@
 use rand::thread_rng;
 
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
-use crate::elgamal::elgamal::ElGamalCommitment;
 use crate::{accounts::Account, ristretto::RistrettoSecretKey};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,

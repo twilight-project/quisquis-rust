@@ -240,8 +240,11 @@ impl ShuffleProof {
         for i in 0..ROWS {
             commitment_witness.push(xpc_gens.commit(&perm_scalar_as_rows[i], r[i]).compress());
         }
+        // transcriptRng using public transcript data + secret for proof + external source
+        let mut rng =
+            prover.prove_rekey_witness_transcript_rng(&shuffle.shuffled_tau.as_row_major());
         //commitment on tau using r'
-        let r_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let r_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut rng)).collect();
         //convert to column major representation
         let tau_as_rows = shuffle.shuffled_tau.as_rows();
 
@@ -268,8 +271,8 @@ impl ShuffleProof {
         let b_as_rows = b_matrix.as_rows();
         let b_dash_as_rows = b_dash_matrix.as_rows();
         //commitment on b using s and b' using s'
-        let s: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let s_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let s: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut rng)).collect();
+        let s_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut rng)).collect();
         //compute Xcomit on rows of b
         let mut commitment_b = Vec::<CompressedRistretto>::new();
         for i in 0..ROWS {

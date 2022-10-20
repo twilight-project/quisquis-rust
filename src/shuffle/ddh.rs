@@ -40,7 +40,8 @@ impl DDHProof {
     ) -> (DDHProof, DDHStatement) {
         //Create new transcript
         prover.new_domain_sep(b"DDHTupleProof");
-
+        // transcriptRng using public transcript data + secret for proof + external source
+        let mut rng = prover.prove_rekey_witness_transcript_rng(&exp_x);
         // x^i * rho
         let exp_x_rho: Vec<_> = exp_x.iter().map(|x| x * rho).collect();
         // (G', H') = prod of all i->N  pk_i ^ (x_i . rho)
@@ -48,7 +49,7 @@ impl DDHProof {
         let H_dash = RistrettoPoint::multiscalar_mul(exp_x_rho.iter(), h_i.iter()).compress();
 
         // Generate a single blinding factor
-        let r_scalar = Scalar::random(&mut OsRng);
+        let r_scalar = Scalar::random(&mut rng);
         // first messasge
         let g_r = (G * r_scalar).compress();
         let h_r = (H * r_scalar).compress();

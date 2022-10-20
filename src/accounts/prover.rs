@@ -4,6 +4,7 @@ use rand::thread_rng;
 
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
 use crate::{accounts::Account, ristretto::RistrettoSecretKey};
+use bulletproofs::{r1cs, BulletproofGens, PedersenGens};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
@@ -19,8 +20,11 @@ impl<'a> Prover<'a> {
     /// statements.
     pub fn new(proof_label: &'static [u8], transcript: &'a mut Transcript) -> Self {
         transcript.domain_sep(proof_label);
+        // // Initialise the Prover `ConstraintSystem` instance representing a merge gadget
+        // let cs_prover = r1cs::Prover::new(&pc_gens, Transcript::new(b"Rangeproof.r1cs"));
         Prover {
             transcript,
+            //  range_proof_prover: cs_prover,
             scalars: Vec::default(),
         }
     }
@@ -30,6 +34,17 @@ impl<'a> Prover<'a> {
         // Construct a TranscriptRng
         let mut rng_builder = self.transcript.build_rng();
         for scalar in &self.scalars {
+            rng_builder = rng_builder.rekey_with_witness_bytes(b"", scalar.as_bytes());
+        }
+        let transcript_rng = rng_builder.finalize(&mut thread_rng());
+        return transcript_rng;
+    }
+
+    /// The compact and batchable proofs differ only by which data they store.
+    pub fn prove_rekey_witness_transcript_rng(&self, scalars: &[Scalar]) -> merlin::TranscriptRng {
+        // Construct a TranscriptRng
+        let mut rng_builder = self.transcript.build_rng();
+        for scalar in scalars {
             rng_builder = rng_builder.rekey_with_witness_bytes(b"", scalar.as_bytes());
         }
         let transcript_rng = rng_builder.finalize(&mut thread_rng());
@@ -60,6 +75,28 @@ impl<'a> Prover<'a> {
     pub fn get_challenge(&mut self, label: &'static [u8]) -> Scalar {
         self.transcript.get_challenge(label)
     }
+
+    // // R1CS constraint system building
+    // pub fn range_proof_prover(
+    //     &mut self,
+    //     val: u64,
+    //     epsilon_blinding: Scalar,
+    // ) -> Result<CompressedRistretto, R1CSError> {
+    //     // Commit to the val as variable
+    //     let (com, var) = self.range_proof_prover.commit(val.into(), epsilon_blinding);
+    //     //Update range proof R1CS constraint system
+    //     self::rangeproof::range_proof(
+    //         &mut self.range_proof_prover,
+    //         var.into(),
+    //         Some(val),
+    //         64 as usize,
+    //     )?;
+    //     Ok(com)
+    // }
+    // pub fn build_proof(self) -> Result<R1CSProof, R1CSError> {
+    //     let bp_gens = BulletproofGens::new(512, 1);
+    //     self.range_proof_prover.prove(&bp_gens)
+    // }
 
     // verify_delta_compact_prover generates proves values committed in delta_accounts and epsilon_accounts are the same
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.1
@@ -288,7 +325,7 @@ impl<'a> Prover<'a> {
         bl: &[i64],
         sk: &[RistrettoSecretKey],
         rscalar: &[Scalar],
-        rp_prover: &mut RangeProofProver,
+        rp_prover: &mut RangeProofProver<Transcript>,
         prover: &mut Prover,
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
         //check length is same
@@ -442,7 +479,7 @@ impl<'a> Prover<'a> {
         /*epsilon_account: &Vec<Account>,*/
         bl: &[i64],
         rscalar: &[Scalar],
-        rp_prover: &mut RangeProofProver,
+        rp_prover: &mut RangeProofProver<Transcript>,
     ) {
         for (b, r) in bl.iter().zip(rscalar.iter()) {
             //panics in case range proof is not constructed properly

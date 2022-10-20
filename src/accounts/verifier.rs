@@ -210,7 +210,7 @@ impl<'a> Verifier<'a> {
         zsk: &[Scalar],
         zr: &[Scalar],
         x: Scalar,
-        rp_verifier: &mut RangeProofVerifier,
+        rp_verifier: &mut RangeProofVerifier<Transcript>,
         verifier: &mut Verifier,
     ) -> Result<(), &'static str> {
         //lets start a transcript and a verifier script
@@ -281,7 +281,7 @@ impl<'a> Verifier<'a> {
     //verify_non_negative_verifier verifies range proof on Receiver accounts with zero balance
     pub fn verify_non_negative_verifier(
         epsilon_account: &[Account],
-        rp_verifier: &mut RangeProofVerifier,
+        rp_verifier: &mut RangeProofVerifier<Transcript>,
     ) -> Result<(), R1CSError> {
         for i in 0..epsilon_account.iter().count() {
             let _ = rp_verifier.range_proof_verifier(epsilon_account[i].comm.d)?;

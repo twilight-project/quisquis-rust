@@ -42,6 +42,7 @@ impl MultiexpoProof {
     fn multiexpo_proof_inital_message_common(
         xpc_gens: &VectorPedersenGens,
         pc_gens: &PedersenGens,
+        rng: &mut merlin::TranscriptRng,
     ) -> (
         Vec<Scalar>,
         Vec<Scalar>,
@@ -51,12 +52,12 @@ impl MultiexpoProof {
         Scalar,
     ) {
         //compute random a_0 vectors of length n and r_0
-        let a_0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let r_0 = Scalar::random(&mut OsRng);
+        let a_0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(rng)).collect();
+        let r_0 = Scalar::random(rng);
 
         //compute random vectors b, and s of length 2*m. No need fpr tau in this case.
-        let mut b_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let mut s_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let mut b_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(rng)).collect();
+        let mut s_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(rng)).collect();
         //explicitly set values at index m
         b_vec[ROWS] = Scalar::zero();
         s_vec[ROWS] = Scalar::zero();
@@ -116,13 +117,14 @@ impl MultiexpoProof {
         prover.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
 
         let witness_as_rows = a_witness.as_rows();
-
+        // transcriptRng using public transcript data + secret for proof + external source
+        let mut rng = prover.prove_rekey_witness_transcript_rng(&a_witness.as_row_major());
         //Compute initial message
         let (a_0, b_vec, s_vec, c_A_0, cb_k, r_0) =
-            Self::multiexpo_proof_inital_message_common(&xpc_gens, &pc_gens);
+            Self::multiexpo_proof_inital_message_common(&xpc_gens, &pc_gens, &mut rng);
 
         //compute tau of length 2*m.
-        let mut tau_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let mut tau_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(&mut rng)).collect();
 
         //explicitly set values at index m
         tau_vec[ROWS] = rho;
@@ -194,10 +196,11 @@ impl MultiexpoProof {
         //Create new transcript
         prover.new_domain_sep(b"MultiExponentialPubKeyProof");
         let witness_as_rows = a_witness.as_rows();
-
+        // transcriptRng using public transcript data + secret for proof + external source
+        let mut rng = prover.prove_rekey_witness_transcript_rng(&a_witness.as_row_major());
         //Compute initial message
         let (a_0, b_vec, s_vec, c_A_0, cb_k, r_0) =
-            Self::multiexpo_proof_inital_message_common(&xpc_gens, &pc_gens);
+            Self::multiexpo_proof_inital_message_common(&xpc_gens, &pc_gens, &mut rng);
 
         //create E_k
         let g: Vec<_> = pks.iter().map(|pt| pt.gr.decompress().unwrap()).collect();

@@ -97,9 +97,10 @@ impl ProductProof {
             }
             bvec.push(product);
         }
-
+        // transcriptRng using public transcript data + secret for proof + external source
+        let mut rng = prover.prove_rekey_witness_transcript_rng(&bvec);
         //create challenge s for bvec comit
-        let s = Scalar::random(&mut OsRng);
+        let s = Scalar::random(&mut rng);
         let cb = xpc_gens.commit(&bvec, s);
 
         //create b. i.e., product of all elements in A
@@ -180,7 +181,6 @@ impl MultiHadamardProof {
     ) -> (MultiHadamardProof, MultiHadamardStatement) {
         //Create new transcript
         prover.new_domain_sep(b"MultiHadamardProductProof");
-
         //create b1,b2....bm using  columns of Matrix A. a1,a2...
         let perm_scalar_as_cols = pi_2d.as_columns();
         // b1 =a1
@@ -198,13 +198,14 @@ impl MultiHadamardProof {
             b2.clone(),
             bvec.clone().to_vec(),
         ];
-
+        // transcriptRng using public transcript data + secret for proof + external source
+        let mut rng = prover.prove_rekey_witness_transcript_rng(&bm);
         //creating s vector before challenge.
         // s_1 = r_1,
         //Pick s2,...,s_m−1 ← Zq ,
         //s_m = s from calling function
         let s_vec_product: Vec<Scalar> = iter::once(r[0])
-            .chain((1..COLUMNS - 1).map(|_| Scalar::random(&mut OsRng)))
+            .chain((1..COLUMNS - 1).map(|_| Scalar::random(&mut rng)))
             .chain(iter::once(s_3))
             .collect::<Vec<Scalar>>();
         //create C_B vector. Send C_B vector to verifier
@@ -387,14 +388,17 @@ impl ZeroProof {
     ) -> ZeroProof {
         //Create new transcript
         prover.new_domain_sep(b"ZeroArgumentProof");
+        // transcriptRng using public transcript data + secret for proof + external source
+        let random_scalars = a_2d.as_row_major();
+        let mut rng = prover.prove_rekey_witness_transcript_rng(&random_scalars);
         //Initial message
         //pick a0, bm
-        let a_0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let b_m: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
-
+        let a_0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut rng)).collect();
+        let b_m: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut rng)).collect();
+        println!("Randon {:?}", a_0);
         //pick r0, s3 randomly to commit on a0 and bm
-        let r_0 = Scalar::random(&mut OsRng);
-        let s_m = Scalar::random(&mut OsRng);
+        let r_0 = Scalar::random(&mut rng);
+        let s_m = Scalar::random(&mut rng);
 
         //comit on a0 and bm
         let c_a_0 = xpc_gens.commit(&a_0, r_0).compress();
@@ -422,7 +426,7 @@ impl ZeroProof {
 
         //pick random t for committing d
         let mut t: Vec<_> = (0..2 * ROWS + 1)
-            .map(|_| Scalar::random(&mut OsRng))
+            .map(|_| Scalar::random(&mut rng))
             .collect();
         t[ROWS + 1] = Scalar::zero();
 

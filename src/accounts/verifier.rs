@@ -462,7 +462,7 @@ mod test {
             &delta_accounts,
             &epislon_accounts,
             &rscalar,
-            &rscalar,
+            // &rscalar,
             &value_vector,
             &mut prover,
         );

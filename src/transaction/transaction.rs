@@ -8,7 +8,7 @@ use crate::{
 };
 use bulletproofs::r1cs;
 use bulletproofs::r1cs::R1CSProof;
-use bulletproofs::PedersenGens;
+use bulletproofs::{PedersenGens, RangeProof};
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand::rngs::OsRng;
@@ -129,11 +129,11 @@ impl Sender {
         }
     }
 
-    //create_transaction creates a quisquis transaction
+    //create_transaction creates a quisquis transaction using R1CS constraints for rangeproof
     pub fn create_transaction(
         value_vector: &[i64],
         account_vector: &[Account],
-        sender_updated_balance: &[i64],
+        sender_updated_balance: &[u64],
         sender_sk: &[RistrettoSecretKey],
         anonymity_comm_scalar: &[Scalar],
         anonymity_account_diff: usize,
@@ -285,14 +285,14 @@ impl Sender {
             let epsilon_account: Account = Account::create_epsilon_account(
                 generate_base_pk,
                 rscalar,
-                sender_updated_balance[i],
+                sender_updated_balance[i] as i64,
             );
             epsilon_account_vec.push(epsilon_account);
         } // Initialise the Prover `ConstraintSystem` instance representing a merge gadget
         let cs_prover = r1cs::Prover::new(&pc_gens, Transcript::new(b"Rangeproof.r1cs"));
         let mut range_prover = RangeProofProver { prover: cs_prover };
 
-        let (zv, zsk, zr, x) = Prover::verify_account_prover(
+        /* let (zv, zsk, zr, x) = Prover::verify_account_prover(
             &updated_delta_account_sender,
             &epsilon_account_vec,
             &sender_updated_balance,
@@ -300,7 +300,7 @@ impl Sender {
             &rscalar_sender,
             &mut range_prover,
             &mut qq_prover,
-        );
+        );*/
         // Initialise the Verifier `ConstraintSystem` instance representing a merge gadget
         let cs_verifier = r1cs::Verifier::new(Transcript::new(b"Rangeproof.r1cs"));
         let mut range_verifier = RangeProofVerifier {
@@ -330,17 +330,17 @@ impl Sender {
         //Should be called after adding all values (sender+receiver) to the R1CS transcript
         let range_proof = range_prover.build_proof().unwrap();
         //verify sender account signature and remaining balance. Rangeproof R1CS is updated
-        Verifier::verify_account_verifier(
-            &updated_delta_account_sender,
-            &epsilon_account_vec,
-            &generate_base_pk,
-            &zv,
-            &zsk,
-            &zr,
-            x,
-            &mut range_verifier,
-            &mut qq_verifier,
-        )?;
+        // Verifier::verify_account_verifier(
+        //     &updated_delta_account_sender,
+        //     &epsilon_account_vec,
+        //     &generate_base_pk,
+        //     &zv,
+        //     &zsk,
+        //     &zr,
+        //     x,
+        //     &mut range_verifier,
+        //     &mut qq_verifier,
+        // )?;
         //Prepare for rangeproof verification
         let reciever_epsilon_accounts_slice =
             &epsilon_accounts[senders_count..(senders_count + receivers_count)];
@@ -419,6 +419,262 @@ impl Sender {
         //  Err("dleq proof failed")
         //}
     }
+    //create_transaction creates a quisquis transaction using bulletproof implementation for rangeproof
+    pub fn create_quuisquis_transaction_bulletproof(
+        value_vector: &[i64],
+        account_vector: &[Account],
+        sender_updated_balance: &[u64],
+        sender_sk: &[RistrettoSecretKey],
+        anonymity_comm_scalar: &[Scalar],
+        anonymity_account_diff: usize,
+        reciver_updated_balance: &[u64],
+        senders_count: usize,
+        receivers_count: usize,
+    ) -> Result<
+        (
+            Transaction,
+            Vec<RangeProof>,
+            ShuffleProof,
+            ShuffleStatement,
+            ShuffleProof,
+            ShuffleStatement,
+        ),
+        &'static str,
+    > {
+        //convert the valur vector into scalar type to be used in the prover
+        let mut value_vector_scalar = Vec::<Scalar>::new();
+        for v in value_vector.iter() {
+            if v >= &0 {
+                value_vector_scalar.push(Scalar::from(*v as u64));
+            } else {
+                value_vector_scalar.push(-Scalar::from(*v as u64));
+            }
+        }
+        let generate_base_pk = RistrettoPublicKey::generate_base_pk();
+        //Step 1. update & shuffle input accounts
+        let input_shuffle = Shuffle::input_shuffle(account_vector)?;
+        let updated_accounts = input_shuffle.get_outputs_vector();
+        //Step 2. create proof for shuffle
+        //generate Xcomit generator points of length m+1
+        let xpc_gens = VectorPedersenGens::new(ROWS + 1);
+        // Prepare the constraint system
+        let pc_gens = PedersenGens::default();
+        //create shuffle Prover merlin transcript
+        let mut transcript_prover = Transcript::new(b"QuisQuisProof");
+        let mut qq_prover = Prover::new(b"QuisQuis", &mut transcript_prover);
+        //input shuffle proof
+        let (input_shuffle_proof, input_shuffle_statement) =
+            ShuffleProof::create_shuffle_proof(&mut qq_prover, &input_shuffle, &pc_gens, &xpc_gens);
+        //test Verify the input shuffle
+        //create shuffle Verifier merlin transcript
+        let mut transcript_verifier = Transcript::new(b"QuisQuisProof");
+        let mut qq_verifier = Verifier::new(b"QuisQuis", &mut transcript_verifier);
+        input_shuffle_proof.verify(
+            &mut qq_verifier,
+            &input_shuffle_statement,
+            &input_shuffle.get_inputs_vector(),
+            &updated_accounts,
+            &pc_gens,
+            &xpc_gens,
+        )?;
+
+        //Step 3. create delta_and_epsilon_accounts
+        let (delta_accounts, epsilon_accounts, delta_rscalar) =
+            Account::create_delta_and_epsilon_accounts(
+                &updated_accounts,
+                &value_vector_scalar,
+                generate_base_pk,
+            );
+        //Step 4. generate DLEQ proof based on Epsilon and delta account
+        let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(
+            &delta_accounts,
+            &epsilon_accounts,
+            &delta_rscalar,
+            &value_vector_scalar,
+            &mut qq_prover,
+        );
+        //identity check function to verify the construction of epsilon accounts using correct rscalars
+        Verifier::verify_delta_identity_check(&epsilon_accounts)?;
+
+        // verify dleq proof
+        Verifier::verify_delta_compact_verifier(
+            &delta_accounts,
+            &epsilon_accounts,
+            &zv_vector,
+            &zr1_vector,
+            &zr2_vector,
+            &x,
+            &mut qq_verifier,
+        )?;
+
+        //Step 5. update delta_accounts
+        let updated_delta_accounts =
+            Account::update_delta_accounts(&updated_accounts, &delta_accounts)?;
+        // sending anonymity set as we know it at this point
+        // lets say we have sender+receier = 5
+        // the difference we have is => 9 - 5 = 4
+        // if we have add one to the 4, that will start the slice range from 5..9
+        let anonymity_index = anonymity_account_diff + 1;
+        let updated_accounts_slice = &updated_accounts[anonymity_index..9];
+        let updated_delta_accounts_slice = &updated_delta_accounts[anonymity_index..9];
+        let rscalars_slice = &delta_rscalar[anonymity_index..9];
+
+        //Step 6. generate proofs DLOG proof on Anonymity accounts in Updated Delta accounts
+        let (x, z_vector) = Prover::verify_update_account_prover(
+            &updated_accounts_slice,
+            &updated_delta_accounts_slice,
+            &rscalars_slice,
+            &mut qq_prover,
+        );
+        //verify dlog proof
+        let _verify_update_account_proof = Verifier::verify_update_account_verifier(
+            &updated_accounts_slice,
+            &updated_delta_accounts_slice,
+            &z_vector,
+            &x,
+            &mut qq_verifier,
+        )?;
+
+        //Step 7. if annoymity accounts are created on the fly.
+        //create zero balance proof for all the anonymity accounts
+        let (z_zero_balance, x_zero_balance) = Prover::zero_balance_account_prover(
+            &account_vector[anonymity_index..9],
+            &anonymity_comm_scalar,
+            &mut qq_prover,
+        );
+
+        //verify zero balance proof for anonymity set
+        Verifier::zero_balance_account_verifier(
+            &account_vector[anonymity_index..9],
+            &z_zero_balance,
+            x_zero_balance,
+            &mut qq_verifier,
+        )?;
+
+        //Step 8. generate Sender account proof of remaining balance and signature on sk
+        //Create slice of Updated delta accounts of sender
+        let updated_delta_account_sender = &updated_delta_accounts[0..senders_count];
+
+        let (epsilon_sender_account_vec, epsilon_sender_rscalar_vector, zv, zsk, zr, x) =
+            Prover::verify_account_prover(
+                &updated_delta_account_sender,
+                sender_updated_balance,
+                sender_sk,
+                &mut qq_prover,
+                generate_base_pk,
+            );
+        //verify sender account signature and remaining balance. Rangeproof R1CS is updated
+        Verifier::verify_account_verifier_bulletproof(
+            &updated_delta_account_sender,
+            &epsilon_sender_account_vec,
+            &generate_base_pk,
+            &zv,
+            &zsk,
+            &zr,
+            x,
+            &mut qq_verifier,
+        )?;
+
+        //create rangeproof on senders and receivers
+        //create sender_final + reciver balance vector
+        let bl_rp_vector: Vec<u64> = sender_updated_balance
+            .into_iter()
+            .cloned()
+            .chain(reciver_updated_balance.iter().cloned())
+            .collect();
+        //create rscalar vector for sender and reciver epsilon accounts.
+        //extract rscalars for reciever epsilon accounts
+        let rec_rscalars_slice = &delta_rscalar[senders_count..senders_count + receivers_count];
+        //receiver rscalars are extracted from rscalars vector returned in create_delta_and_epsilon_accounts
+
+        let scalars_bp_vector: Vec<Scalar> = epsilon_sender_rscalar_vector
+            .iter()
+            .cloned()
+            .chain(rec_rscalars_slice.iter().cloned())
+            .collect();
+        //Generate range proof over sender/reciever account values. i.,e balance >=0 for all
+        let range_proof =
+            qq_prover.verify_non_negative_sender_reciver_prover(&bl_rp_vector, &scalars_bp_vector);
+        //Verify the bulletproofs
+        let reciever_epsilon_accounts_slice =
+            &epsilon_accounts[senders_count..(senders_count + receivers_count)].to_vec();
+        //prepare epsilon account vector for sender + reciver
+        let bp_epsilon_vec: Vec<Account> = epsilon_sender_account_vec
+            .iter()
+            .cloned()
+            .chain(reciever_epsilon_accounts_slice.iter().cloned())
+            .collect();
+        //check if batched or vector proof
+        if range_proof.len() == 1 {
+            assert!(qq_verifier
+                .verify_non_negative_sender_receiver_bulletproof_batch_verifier(
+                    &bp_epsilon_vec,
+                    &range_proof[0],
+                )
+                .is_ok())
+        } else {
+            assert!(qq_verifier
+                .verify_non_negative_sender_receiver_bulletproof_vector_verifier(
+                    &bp_epsilon_vec,
+                    &range_proof,
+                )
+                .is_ok())
+        }
+
+        //Shuffle accounts
+        let output_shuffle = Shuffle::output_shuffle(&updated_delta_accounts)?;
+        let updated_again_account_vector = output_shuffle.get_outputs_vector();
+        //Create shuffle proof for output shuffle
+        //create new shuffle transcript
+        //let mut transcript_output_shuffle_prover = Transcript::new(b"OutputShuffleProof");
+        //let mut output_shuffle_prover =
+        //  Prover::new(b"Shuffle", &mut transcript_output_shuffle_prover);
+        let (output_shuffle_proof, output_shuffle_statement) = ShuffleProof::create_shuffle_proof(
+            &mut qq_prover,
+            &output_shuffle,
+            &pc_gens,
+            &xpc_gens,
+        );
+        //Verify shuffle proof
+        //let mut transcript_output_shuffle_verifier = Transcript::new(b"OutputShuffleProof");
+        //let mut output_shuffle_verifier =
+        //  Verifier::new(b"Shuffle", &mut transcript_output_shuffle_verifier);
+        output_shuffle_proof.verify(
+            &mut qq_verifier,
+            &output_shuffle_statement,
+            &output_shuffle.get_inputs_vector(),
+            &updated_again_account_vector,
+            &pc_gens,
+            &xpc_gens,
+        )?;
+
+        // create transaction struct
+        let tx = Transaction::set_transaction(
+            input_shuffle.get_inputs_vector(),
+            updated_accounts,
+            delta_accounts,
+            epsilon_accounts,
+            updated_delta_accounts,
+            output_shuffle.get_outputs_vector(),
+        );
+        Ok((
+            tx,
+            range_proof,
+            input_shuffle_proof,
+            input_shuffle_statement,
+            output_shuffle_proof,
+            output_shuffle_statement,
+        ))
+        //  } else {
+        //    Err("Sender account proof failed")
+        // }
+        //} else {
+        //  Err("dlog proof failed")
+        //}
+        //} else {
+        //  Err("dleq proof failed")
+        //}
+    }
 }
 // ------------------------------------------------------------------------
 // Tests
@@ -483,7 +739,7 @@ mod test {
         //Create sender updated account vector for the verification of sk and bl-v
         let bl_first_sender = 10 - 5; //bl-v
         let bl_second_sender = 20 - 3; //bl-v
-        let updated_balance_sender: Vec<i64> = vec![bl_first_sender, bl_second_sender];
+        let updated_balance_sender: Vec<u64> = vec![bl_first_sender, bl_second_sender];
         //Create vector of sender secret keys
         let sk_sender: Vec<RistrettoSecretKey> = vec![bob_sk_account_1, bob_sk_account_2];
         let result = Sender::create_transaction(
@@ -507,7 +763,164 @@ mod test {
         println!("{:?}", result);
         // assert!(result.is_ok());
     }
+    #[test]
+    fn create_transaction_bulletproof_batch_test() {
+        // lets say bob wants to sent 5 tokens to alice from his one account and
+        // and 3 token to jay
 
+        // lets create sender accounts to send these amounts from
+        let (bob_account_1, bob_sk_account_1) =
+            Account::generate_random_account_with_value(10u64.into());
+        let (bob_account_2, bob_sk_account_2) =
+            Account::generate_random_account_with_value(20u64.into());
+
+        // lets create receiver accounts
+        let alice_account = Account::generate_random_account_with_value(10u64.into()).0;
+        let jay_account = Account::generate_random_account_with_value(20u64.into()).0;
+
+        // so we have 2 senders and 2 receivers, rest will be the anonymity set
+
+        //let mut tx_vector: Vec<Sender> = Vec::new();
+
+        let tx_vector: Vec<Sender> = vec![
+            Sender {
+                total_amount: -5,
+                account: bob_account_1,
+                receivers: vec![Receiver {
+                    amount: 5,
+                    public_key: alice_account.pk,
+                }],
+            },
+            Sender {
+                total_amount: -3,
+                account: bob_account_2,
+                receivers: vec![Receiver {
+                    amount: 3,
+                    public_key: jay_account.pk,
+                }],
+            },
+        ];
+        let (
+            value_vector,
+            account_vector,
+            annonymity_com_scalar_vector,
+            diff,
+            sender_count,
+            receiver_count,
+        ) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
+        println!(
+            "Value vector {:?} \n diff {:?} \n sender{:?} rec {:?}",
+            value_vector, diff, sender_count, receiver_count
+        );
+
+        //Create sender updated account vector for the verification of sk and bl-v
+        let bl_first_sender = 10 - 5; //bl-v
+        let bl_second_sender = 20 - 3; //bl-v
+        let updated_balance_sender: Vec<u64> = vec![bl_first_sender, bl_second_sender];
+        let updated_balance_receiver: Vec<u64> = vec![5u64, 3u64];
+        //Create vector of sender secret keys
+        let sk_sender: Vec<RistrettoSecretKey> = vec![bob_sk_account_1, bob_sk_account_2];
+        let result = Sender::create_quuisquis_transaction_bulletproof(
+            &value_vector,
+            &account_vector,
+            &updated_balance_sender,
+            &sk_sender,
+            &annonymity_com_scalar_vector,
+            diff,
+            &updated_balance_receiver,
+            sender_count,
+            receiver_count,
+        );
+        // let (
+        //     tx,
+        //     _range_proof,
+        //     _input_shuf_proof,
+        //     _input_shuffle_statement,
+        //     _out_shuffle_proof,
+        //     _out_shuffle_statement,
+        // ) = Result.unwrap();
+        println!("{:?}", result);
+        assert!(result.is_ok());
+    }
+    #[test]
+    fn create_transaction_bulletproof_vector_test() {
+        // lets say bob wants to sent 5 tokens to alice from his one account and 2 from his other account to fay
+        // and 1 token to jay
+
+        // lets create sender accounts to send these amounts from
+        let (bob_account_1, bob_sk_account_1) =
+            Account::generate_random_account_with_value(10u64.into());
+        let (bob_account_2, bob_sk_account_2) =
+            Account::generate_random_account_with_value(20u64.into());
+
+        // lets create receiver accounts
+        let alice_account = Account::generate_random_account_with_value(10u64.into()).0;
+        let fay_account = Account::generate_random_account_with_value(20u64.into()).0;
+        let jay_account = Account::generate_random_account_with_value(20u64.into()).0;
+
+        // so we have 2 senders and 3 receivers, rest will be the anonymity set
+
+        //let mut tx_vector: Vec<Sender> = Vec::new();
+
+        let tx_vector: Vec<Sender> = vec![
+            Sender {
+                total_amount: -5,
+                account: bob_account_1,
+                receivers: vec![Receiver {
+                    amount: 5,
+                    public_key: alice_account.pk,
+                }],
+            },
+            Sender {
+                total_amount: -3,
+                account: bob_account_2,
+                receivers: vec![
+                    Receiver {
+                        amount: 2,
+                        public_key: fay_account.pk,
+                    },
+                    Receiver {
+                        amount: 1,
+                        public_key: jay_account.pk,
+                    },
+                ],
+            },
+        ];
+        let (
+            value_vector,
+            account_vector,
+            annonymity_com_scalar_vector,
+            diff,
+            sender_count,
+            receiver_count,
+        ) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
+        //Create sender updated account vector for the verification of sk and bl-v
+        let bl_first_sender = 10 - 5; //bl-v
+        let bl_second_sender = 20 - 3; //bl-v
+        let updated_balance_sender: Vec<u64> = vec![bl_first_sender, bl_second_sender];
+        //Create vector of sender secret keys
+        let sk_sender: Vec<RistrettoSecretKey> = vec![bob_sk_account_1, bob_sk_account_2];
+        let result = Sender::create_transaction(
+            &value_vector,
+            &account_vector,
+            &updated_balance_sender,
+            &sk_sender,
+            &annonymity_com_scalar_vector,
+            diff,
+            sender_count,
+            receiver_count,
+        );
+        // let (
+        //     tx,
+        //     _range_proof,
+        //     _input_shuf_proof,
+        //     _input_shuffle_statement,
+        //     _out_shuffle_proof,
+        //     _out_shuffle_statement,
+        // ) = Result.unwrap();
+        println!("{:?}", result);
+        // assert!(result.is_ok());
+    }
     #[test]
     fn shuffle_get_test() {
         //use crate::{

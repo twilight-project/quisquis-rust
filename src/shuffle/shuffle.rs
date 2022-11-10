@@ -17,6 +17,7 @@ use crate::{
 use array2d::Array2D;
 use bulletproofs::PedersenGens;
 use curve25519_dalek::traits::MultiscalarMul;
+use std::convert::TryInto;
 
 use crate::keys::PublicKey;
 use curve25519_dalek::{
@@ -50,6 +51,14 @@ impl Permutation {
     //Set the permutation matrix explicitly
     pub fn set(&mut self, matrix: Array2D<usize>) {
         self.perm_matrix = matrix;
+    }
+
+    //Get the permutation matrix arranged as row major 1D array
+    pub fn get_row_major(&self) -> [usize; 9] {
+        self.perm_matrix
+            .as_row_major()
+            .try_into()
+            .unwrap_or_else(|v: Vec<usize>| panic!("Expected a Vec of length {}", 9))
     }
 
     //Inverse the permutation matrix for use in Input shuffle

@@ -290,6 +290,8 @@ impl<'a> Verifier<'a> {
         x: Scalar,
         verifier: &mut Verifier,
     ) -> Result<(), &'static str> {
+        println!("Verifier");
+
         //lets start a transcript and a verifier script
         verifier.new_domain_sep(b"VerifyAccountProof");
         //add statement accounts to transcript
@@ -297,10 +299,10 @@ impl<'a> Verifier<'a> {
             .iter()
             .zip(account_epsilon_sender.iter())
         {
+            //println!("Account {:?}", delta);
             verifier.allocate_account(b"delta_account", delta);
             verifier.allocate_account(b"epsilon_account", epsilon);
         }
-
         //recreate e,f delta and epsilon
         for (i, delta_account) in updated_delta_account_sender.iter().enumerate() {
             let combined_scalars = vec![zsk[i], x];
@@ -309,8 +311,12 @@ impl<'a> Verifier<'a> {
             let e_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point)
                 .ok_or("Account Verify: Failed")?
                 .compress();
+            //let minus_v_x = x * Scalar::from(5u64);
+            // let combined_scalars = vec![minus_v_x, zv[i]];
             let combined_scalars = vec![zv[i], zsk[i], x];
             let point = vec![base_pk.gr, delta_account.comm.c, delta_account.comm.d];
+            // [base_pk.gr, delta_account.comm.c, delta_account.comm.d];
+            // println!("Point {:?}", point);
             // lets create f_delta = d_delta * x + g * z_v + c_delta * z_sk
             let f_delta = Verifier::multiscalar_multiplication(&combined_scalars, &point)
                 .ok_or("Account Verify: Failed")?
@@ -331,6 +337,12 @@ impl<'a> Verifier<'a> {
             let f_epsilon = Verifier::multiscalar_multiplication(&combined_scalars, &point)
                 .ok_or("Account Verify: Failed")?
                 .compress();
+            // println!("e delta {:?}", e_delta);
+            //println!("Account {:?}", delta_account);
+            println!("f delta {:?}", f_delta);
+            //println!("e epsilon delta {:?}", e_epsilon);
+            // println!("f epsilon{:?}", f_epsilon);
+
             // add e and f points to transcript
             verifier.allocate_point(b"e_delta", &e_delta);
             verifier.allocate_point(b"f_delta", &f_delta);
@@ -339,7 +351,7 @@ impl<'a> Verifier<'a> {
         }
         // obtain a scalar challenge
         let verify_x = verifier.get_challenge(b"challenge");
-        println!("Verifier {:?}", verify_x);
+        // println!("Verifier {:?}", verify_x);
         if x == verify_x {
             Ok(())
         } else {
@@ -519,6 +531,7 @@ mod test {
         keys::{PublicKey, SecretKey},
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
     };
+    use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
 
     use bulletproofs::r1cs;
     use bulletproofs::PedersenGens;
@@ -765,9 +778,9 @@ mod test {
         let base_pk = RistrettoPublicKey::generate_base_pk();
         let value_vector: Vec<Scalar> = vec![
             -Scalar::from(5u64),
-            -Scalar::from(3u64),
-            5u64.into(),
-            3u64.into(),
+            Scalar::from(5u64),
+            0u64.into(),
+            0u64.into(),
             0u64.into(),
             0u64.into(),
             0u64.into(),
@@ -783,7 +796,9 @@ mod test {
             updated_accounts.push(updated_account);
 
             // lets save the first and second sk as sender's sk as we discard the rest
-            if i == 0 || i == 1 {
+            if i == 0
+            /*|| i == 1*/
+            {
                 sender_sk.push(sk);
             }
         }
@@ -796,21 +811,72 @@ mod test {
 
         // balance that we want to prove should be sender balance - the balance user is trying to send
 
-        let bl_first_sender = 10 - 5;
-        let bl_second_sender = 10 - 3;
+        let bl_first_sender = 5u64;
+        let bl_second_sender = 7u64;
 
         let delta_unwraped = updated_delta_accounts.unwrap();
-        let updated_delta_account_sender: Vec<Account> = vec![delta_unwraped[0], delta_unwraped[1]];
-        //let sender_sk_vector: Vec<Scalar> = vec!(sender_sk[0].0, sender_sk[1].0);
-        let value_vector_sender: Vec<u64> = vec![bl_first_sender, bl_second_sender];
+        let updated_delta_account_sender: Vec<Account> =
+            vec![delta_unwraped[0] /*delta_unwraped[1]*/];
+        //let sender_sk_vector: Vec<_> = vec![sender_sk[0] /*sender_sk[1].0*/];
+        let value_vector_sender: Vec<u64> = vec![bl_first_sender /*bl_second_sender*/];
+        /* HARD CODE VALUES */
+        //  Account[Account { pk: RistrettoPublicKey { gr: CompressedRistretto: [120, 139, 41, 68, 244, 251, 197, 104, 216, 148, 37, 70, 12, 187, 94, 144, 217, 41, 218, 163, 182, 128, 219, 86, 87, 165, 197, 225, 228, 102, 157, 86], grsk: CompressedRistretto: [20, 17, 124, 250, 164, 206, 124, 184, 108, 27, 99, 165, 23, 44, 123, 174, 79, 120, 23, 107, 73, 81, 238, 160, 218, 13, 241, 73, 207, 152, 55, 123] },
+        //comm: ElGamalCommitment { c: CompressedRistretto: [200, 65, 189, 121, 30, 95, 202, 52, 59, 247, 204, 244, 17, 21, 183, 76, 141, 22, 188, 66, 9, 40, 221, 78, 210, 123, 191, 52, 21, 46, 37, 69], d: CompressedRistretto: [42, 98, 219, 228, 242, 47, 54, 197, 0, 235, 183, 161, 168, 114, 251, 10, 35, 189, 190, 223, 16, 174, 185, 145, 203, 114, 17, 102, 181, 240, 188, 121] } }]
+        let gr: CompressedRistretto = CompressedRistretto([
+            120, 139, 41, 68, 244, 251, 197, 104, 216, 148, 37, 70, 12, 187, 94, 144, 217, 41, 218,
+            163, 182, 128, 219, 86, 87, 165, 197, 225, 228, 102, 157, 86,
+        ]);
+        let grsk: CompressedRistretto = CompressedRistretto([
+            20, 17, 124, 250, 164, 206, 124, 184, 108, 27, 99, 165, 23, 44, 123, 174, 79, 120, 23,
+            107, 73, 81, 238, 160, 218, 13, 241, 73, 207, 152, 55, 123,
+        ]);
+        let pk_hard = RistrettoPublicKey { gr: gr, grsk: grsk };
+        let comm_hard = ElGamalCommitment {
+            c: CompressedRistretto([
+                200, 65, 189, 121, 30, 95, 202, 52, 59, 247, 204, 244, 17, 21, 183, 76, 141, 22,
+                188, 66, 9, 40, 221, 78, 210, 123, 191, 52, 21, 46, 37, 69,
+            ]),
+            d: CompressedRistretto([
+                42, 98, 219, 228, 242, 47, 54, 197, 0, 235, 183, 161, 168, 114, 251, 10, 35, 189,
+                190, 223, 16, 174, 185, 145, 203, 114, 17, 102, 181, 240, 188, 121,
+            ]),
+        };
 
+        let account = Account {
+            pk: pk_hard,
+            comm: comm_hard,
+        };
+        let account_hard = vec![account];
+        //sk [RistrettoSecretKey(Scalar{
+        //	bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2],
+        //})]
+        let balance_sender = vec![5]; //Balance [5]
+                                      //bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2]
+
+        let scalar_bytes: [u8; 32] = [
+            22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81,
+            126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2,
+        ];
+        let sk_scalar: Scalar = Scalar::from_canonical_bytes(scalar_bytes).unwrap();
+        let sk_hard = vec![RistrettoSecretKey(sk_scalar)];
+        let v_kacc = account.verify_account(&RistrettoSecretKey(sk_scalar), Scalar::from(5u64));
+        println!("v kp {:?}", v_kacc);
+        let dec =
+            account.decrypt_account_balance(&RistrettoSecretKey(sk_scalar), Scalar::from(5u64));
+        let g_bp = &Scalar::from(5u64) * &RISTRETTO_BASEPOINT_TABLE;
+        if dec.unwrap() == g_bp.compress() {
+            println!("Yes");
+        }
         //Create Prover
         let mut transcript = Transcript::new(b"SenderAccountProof");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
         let (ep, _rs, zv, zsk, zr, x) = Prover::verify_account_prover(
-            &updated_delta_account_sender,
+            // &updated_delta_account_sender,
+            &account_hard,
+            //&balance_sender,
             &value_vector_sender,
-            &sender_sk,
+            //&sender_sk,
+            &sk_hard,
             &mut prover,
             base_pk,
         );
@@ -821,7 +887,8 @@ mod test {
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
 
         let check = Verifier::verify_account_verifier_bulletproof(
-            &updated_delta_account_sender,
+            &account_hard,
+            //&updated_delta_account_sender,
             &ep,
             &base_pk,
             &zv,
@@ -830,7 +897,7 @@ mod test {
             x,
             &mut verifier,
         );
-        // println!("{:?}", bp_check.is_ok());
+        println!("{:?}", check);
         assert!(check.is_ok());
     }
     #[test]

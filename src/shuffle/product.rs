@@ -395,7 +395,7 @@ impl ZeroProof {
         //pick a0, bm
         let a_0: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut rng)).collect();
         let b_m: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut rng)).collect();
-        println!("Randon {:?}", a_0);
+        //println!("Randon {:?}", a_0);
         //pick r0, s3 randomly to commit on a0 and bm
         let r_0 = Scalar::random(&mut rng);
         let s_m = Scalar::random(&mut rng);

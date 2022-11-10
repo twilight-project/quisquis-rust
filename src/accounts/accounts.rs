@@ -120,7 +120,9 @@ impl Account {
 
         for i in 0..9 {
             // lets generate commitment on v for delta using Pk and r'
+            //println!("bl = {:?}", bl[i]);
             let comm_delta = ElGamalCommitment::generate_commitment(&a[i].pk, rscalar[i], bl[i]);
+            //println!("comm delta {:?}", comm_delta);
             let account_delta = Account::set_account(a[i].pk, comm_delta);
             delta_account_vector.push(account_delta);
 
@@ -267,6 +269,7 @@ impl PartialEq for Account {
 mod test {
     use super::*;
     use rand::rngs::OsRng;
+    use std::i64;
     #[test]
     fn verify_account_test() {
         let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
@@ -400,5 +403,76 @@ mod test {
             &generate_commitment_scalar_vector,
         );
         assert!(check);
+    }
+    #[test]
+    fn verify_delta_account_creation_test() {
+        let mut account_vector: Vec<Account> = Vec::new();
+        let mut sk_vector: Vec<RistrettoSecretKey> = Vec::new();
+
+        //create random accounts
+        for _i in 0..9 {
+            let (acc, sk) = Account::generate_random_account_with_value(10u64.into());
+            account_vector.push(acc);
+            sk_vector.push(sk);
+        }
+        println!(
+            "{:?}",
+            account_vector[0].verify_account(&sk_vector[0], Scalar::from(10u64))
+        );
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+        let minus: i64 = -5i64;
+        let five: u64 = minus.unsigned_abs();
+        let value_vector: Vec<Scalar> = vec![
+            -Scalar::from(five),
+            4u64.into(),
+            3u64.into(),
+            2u64.into(),
+            1u64.into(),
+            Scalar::zero() - Scalar::from(5i64 as u64),
+            -Scalar::from(5u64),
+            0u64.into(),
+            0u64.into(),
+        ];
+
+        println!("Value : {:?}", value_vector);
+        let delta =
+            Account::create_delta_and_epsilon_accounts(&account_vector, &value_vector, base_pk).0;
+        //println!("Delta : {:?}", delta);
+        let updated_delta_vector = Account::update_delta_accounts(&account_vector, &delta).unwrap();
+
+        //test accounts for there sk
+        println!(
+            "{:?}",
+            delta[0].verify_account(&sk_vector[0], value_vector[0].clone())
+        );
+        println!(
+            "{:?}",
+            updated_delta_vector[0].verify_account(&sk_vector[0], Scalar::from(5u64))
+        );
+        // println!(
+        //     "{:?}",
+        //     delta[2]
+        //         .comm
+        //         .verify_commitment(&sk_vector[2], value_vector[2].clone())
+        // );
+        // println!(
+        //     "{:?}",
+        //     delta[3]
+        //         .comm
+        //         .verify_commitment(&sk_vector[3], value_vector[3].clone())
+        // );
+        // println!(
+        //     "{:?}",
+        //     delta[4]
+        //         .comm
+        //         .verify_commitment(&sk_vector[4], value_vector[4].clone())
+        // );
+        // for i in 0..9 {
+        //     println!(
+        //         "check : {:?}",
+        //         delta[i].verify_account(&sk_vector[i], value_vector[i].clone())
+        //     );
+        // }
+        //assert!(check);
     }
 }

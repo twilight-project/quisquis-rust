@@ -9,6 +9,7 @@ use crate::{
 use bulletproofs::r1cs;
 use bulletproofs::r1cs::R1CSProof;
 use bulletproofs::{PedersenGens, RangeProof};
+use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand::rngs::OsRng;
@@ -447,7 +448,7 @@ impl Sender {
             if v >= &0 {
                 value_vector_scalar.push(Scalar::from(*v as u64));
             } else {
-                value_vector_scalar.push(-Scalar::from(*v as u64));
+                value_vector_scalar.push(-Scalar::from(v.unsigned_abs()));
             }
         }
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
@@ -465,6 +466,7 @@ impl Sender {
         //input shuffle proof
         let (input_shuffle_proof, input_shuffle_statement) =
             ShuffleProof::create_shuffle_proof(&mut qq_prover, &input_shuffle, &pc_gens, &xpc_gens);
+
         //test Verify the input shuffle
         //create shuffle Verifier merlin transcript
         let mut transcript_verifier = Transcript::new(b"QuisQuisProof");
@@ -477,7 +479,6 @@ impl Sender {
             &pc_gens,
             &xpc_gens,
         )?;
-
         //Step 3. create delta_and_epsilon_accounts
         let (delta_accounts, epsilon_accounts, delta_rscalar) =
             Account::create_delta_and_epsilon_accounts(
@@ -485,7 +486,8 @@ impl Sender {
                 &value_vector_scalar,
                 generate_base_pk,
             );
-        //Step 4. generate DLEQ proof based on Epsilon and delta account
+
+        //Step 4. generate DLEQ proof for same balance value committed based on Epsilon and delta account
         let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(
             &delta_accounts,
             &epsilon_accounts,
@@ -512,9 +514,9 @@ impl Sender {
             Account::update_delta_accounts(&updated_accounts, &delta_accounts)?;
         // sending anonymity set as we know it at this point
         // lets say we have sender+receier = 5
-        // the difference we have is => 9 - 5 = 4
-        // if we have add one to the 4, that will start the slice range from 5..9
-        let anonymity_index = anonymity_account_diff + 1;
+        // num_anonymity_accounts => 9 - 5 = 4
+        // anonymity_index = 9 - num_anonymity_accounts
+        let anonymity_index = 9 - anonymity_account_diff;
         let updated_accounts_slice = &updated_accounts[anonymity_index..9];
         let updated_delta_accounts_slice = &updated_delta_accounts[anonymity_index..9];
         let rscalars_slice = &delta_rscalar[anonymity_index..9];
@@ -555,23 +557,32 @@ impl Sender {
         //Create slice of Updated delta accounts of sender
         let updated_delta_account_sender = &updated_delta_accounts[0..senders_count];
 
-        let (epsilon_sender_account_vec, epsilon_sender_rscalar_vector, zv, zsk, zr, x) =
-            Prover::verify_account_prover(
-                &updated_delta_account_sender,
-                sender_updated_balance,
-                sender_sk,
-                &mut qq_prover,
-                generate_base_pk,
-            );
+        //println!(" Account{:?}", updated_delta_account_sender);
+        println!("Balance {:?}", sender_updated_balance);
+        //println!("sk {:?}", sender_sk);
+        let (
+            epsilon_sender_account_vec,
+            epsilon_sender_rscalar_vector,
+            zv_v_acc,
+            zsk_v_acc,
+            zr_v_acc,
+            x_v_acc,
+        ) = Prover::verify_account_prover(
+            &updated_delta_account_sender,
+            sender_updated_balance,
+            sender_sk,
+            &mut qq_prover,
+            generate_base_pk,
+        );
         //verify sender account signature and remaining balance. Rangeproof R1CS is updated
         Verifier::verify_account_verifier_bulletproof(
             &updated_delta_account_sender,
             &epsilon_sender_account_vec,
             &generate_base_pk,
-            &zv,
-            &zsk,
-            &zr,
-            x,
+            &zv_v_acc,
+            &zsk_v_acc,
+            &zr_v_acc,
+            x_v_acc,
             &mut qq_verifier,
         )?;
 
@@ -771,12 +782,12 @@ mod test {
         // lets create sender accounts to send these amounts from
         let (bob_account_1, bob_sk_account_1) =
             Account::generate_random_account_with_value(10u64.into());
-        let (bob_account_2, bob_sk_account_2) =
-            Account::generate_random_account_with_value(20u64.into());
-
+        // let (bob_account_2, bob_sk_account_2) =
+        //   Account::generate_random_account_with_value(20u64.into());
         // lets create receiver accounts
-        let alice_account = Account::generate_random_account_with_value(10u64.into()).0;
-        let jay_account = Account::generate_random_account_with_value(20u64.into()).0;
+        let (alice_account, alice_account_sk) =
+            Account::generate_random_account_with_value(10u64.into());
+        //let jay_account = Account::generate_random_account_with_value(20u64.into()).0;
 
         // so we have 2 senders and 2 receivers, rest will be the anonymity set
 
@@ -791,14 +802,14 @@ mod test {
                     public_key: alice_account.pk,
                 }],
             },
-            Sender {
+            /*Sender {
                 total_amount: -3,
                 account: bob_account_2,
                 receivers: vec![Receiver {
                     amount: 3,
                     public_key: jay_account.pk,
                 }],
-            },
+            },*/
         ];
         let (
             value_vector,
@@ -809,17 +820,24 @@ mod test {
             receiver_count,
         ) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
         println!(
-            "Value vector {:?} \n diff {:?} \n sender{:?} rec {:?}",
-            value_vector, diff, sender_count, receiver_count
+            "Value vector {:?} \t diff {:?} \t sender{:?} \t rec {:?} ",
+            value_vector, diff, sender_count, receiver_count,
         );
+        // let b_kacc = account_vector[0].verify_account(&bob_sk_account_1, Scalar::from(10u64));
+        // println!("bob_acc   {:?}", b_kacc);
 
+        // let a_kacc = account_vector[1].verify_account(&alice_account_sk, Scalar::from(0u64));
+        // println!("alice_acc   {:?}", a_kacc);
         //Create sender updated account vector for the verification of sk and bl-v
-        let bl_first_sender = 10 - 5; //bl-v
-        let bl_second_sender = 20 - 3; //bl-v
-        let updated_balance_sender: Vec<u64> = vec![bl_first_sender, bl_second_sender];
-        let updated_balance_receiver: Vec<u64> = vec![5u64, 3u64];
+        let bl_first_sender = 5u64; //bl-v = 10 -5
+        let bl_second_sender = 17u64; //bl-v = 20 - 3
+        let updated_balance_sender: Vec<u64> = vec![bl_first_sender /* bl_second_sender*/];
+        let updated_balance_receiver: Vec<u64> = vec![5u64];
         //Create vector of sender secret keys
-        let sk_sender: Vec<RistrettoSecretKey> = vec![bob_sk_account_1, bob_sk_account_2];
+        let sk_sender: Vec<RistrettoSecretKey> = vec![
+            bob_sk_account_1,
+            /* bob_sk_account_2*/
+        ];
         let result = Sender::create_quuisquis_transaction_bulletproof(
             &value_vector,
             &account_vector,

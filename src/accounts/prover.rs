@@ -404,7 +404,7 @@ impl<'a> Prover<'a> {
         //adding e,f to transcript
         for (i, e_delta) in e_delta.iter().enumerate() {
             // println!("e delta {:?}", e_delta.compress());
-            println!("f delta {:?}", f_delta[i].compress());
+            // println!("f delta {:?}", f_delta[i].compress());
             // println!("f epsilon {:?}", e_epsilon[i].compress());
             // println!("f epsilon {:?}", f_epsilon[i].compress());
             prover.allocate_point(b"e_delta", &e_delta.compress());

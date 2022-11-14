@@ -301,9 +301,9 @@ impl<'a> Verifier<'a> {
             .sum();
 
         if !sum_c.is_identity() || !sum_d.is_identity() {
-            Ok(())
-        } else {
             Err("Identity sum verify: Failed")
+        } else {
+            Ok(())
         }
     }
     // zero_balance_account_verifier verifies the knowledge of commitment scalar for anonymity set accounts created randomly
@@ -462,7 +462,7 @@ mod test {
             &delta_accounts,
             &epislon_accounts,
             &rscalar,
-            // &rscalar,
+            &rscalar,
             &value_vector,
             &mut prover,
         );

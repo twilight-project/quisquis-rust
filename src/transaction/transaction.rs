@@ -448,7 +448,7 @@ impl Sender {
             if v >= &0 {
                 value_vector_scalar.push(Scalar::from(*v as u64));
             } else {
-                value_vector_scalar.push(-Scalar::from(v.unsigned_abs()));
+                value_vector_scalar.push(-Scalar::from((-*v) as u64));
             }
         }
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
@@ -558,7 +558,7 @@ impl Sender {
         let updated_delta_account_sender = &updated_delta_accounts[0..senders_count];
 
         //println!(" Account{:?}", updated_delta_account_sender);
-        println!("Balance {:?}", sender_updated_balance);
+        // println!("Balance {:?}", sender_updated_balance);
         //println!("sk {:?}", sender_sk);
         let (
             epsilon_sender_account_vec,
@@ -819,10 +819,10 @@ mod test {
             sender_count,
             receiver_count,
         ) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
-        println!(
-            "Value vector {:?} \t diff {:?} \t sender{:?} \t rec {:?} ",
-            value_vector, diff, sender_count, receiver_count,
-        );
+        // println!(
+        //   "Value vector {:?} \t diff {:?} \t sender{:?} \t rec {:?} ",
+        // value_vector, diff, sender_count, receiver_count,
+        //);
         // let b_kacc = account_vector[0].verify_account(&bob_sk_account_1, Scalar::from(10u64));
         // println!("bob_acc   {:?}", b_kacc);
 
@@ -857,7 +857,7 @@ mod test {
         //     _out_shuffle_proof,
         //     _out_shuffle_statement,
         // ) = Result.unwrap();
-        println!("{:?}", result);
+        //println!("{:?}", result);
         assert!(result.is_ok());
     }
     #[test]
@@ -913,18 +913,20 @@ mod test {
             receiver_count,
         ) = Sender::generate_value_and_account_vector(tx_vector).unwrap();
         //Create sender updated account vector for the verification of sk and bl-v
-        let bl_first_sender = 10 - 5; //bl-v
-        let bl_second_sender = 20 - 3; //bl-v
+        let bl_first_sender = 5u64; //bl-v
+        let bl_second_sender = 17u64; //bl-v
         let updated_balance_sender: Vec<u64> = vec![bl_first_sender, bl_second_sender];
         //Create vector of sender secret keys
         let sk_sender: Vec<RistrettoSecretKey> = vec![bob_sk_account_1, bob_sk_account_2];
-        let result = Sender::create_transaction(
+        let updated_balance_receiver: Vec<u64> = vec![5u64, 2u64, 1u64];
+        let result = Sender::create_quuisquis_transaction_bulletproof(
             &value_vector,
             &account_vector,
             &updated_balance_sender,
             &sk_sender,
             &annonymity_com_scalar_vector,
             diff,
+            &updated_balance_receiver,
             sender_count,
             receiver_count,
         );
@@ -936,8 +938,8 @@ mod test {
         //     _out_shuffle_proof,
         //     _out_shuffle_statement,
         // ) = Result.unwrap();
-        println!("{:?}", result);
-        // assert!(result.is_ok());
+        // println!("{:?}", result);
+        assert!(result.is_ok());
     }
     #[test]
     fn shuffle_get_test() {

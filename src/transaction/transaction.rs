@@ -156,7 +156,7 @@ impl Sender {
             if v >= &0 {
                 value_vector_scalar.push(Scalar::from(*v as u64));
             } else {
-                value_vector_scalar.push(-Scalar::from(*v as u64));
+                value_vector_scalar.push(-Scalar::from(-(*v) as u64));
             }
         }
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
@@ -198,6 +198,7 @@ impl Sender {
         let (zv_vector, zr1_vector, zr2_vector, x) = Prover::verify_delta_compact_prover(
             &delta_accounts,
             &epsilon_accounts,
+            &delta_rscalar,
             &delta_rscalar,
             &value_vector_scalar,
             &mut qq_prover,
@@ -504,8 +505,8 @@ mod test {
         //     _out_shuffle_proof,
         //     _out_shuffle_statement,
         // ) = Result.unwrap();
-        println!("{:?}", result);
-        // assert!(result.is_ok());
+        //println!("{:?}", result);
+        assert!(result.is_ok());
     }
 
     #[test]

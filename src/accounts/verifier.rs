@@ -339,7 +339,7 @@ impl<'a> Verifier<'a> {
                 .compress();
             // println!("e delta {:?}", e_delta);
             //println!("Account {:?}", delta_account);
-            println!("f delta {:?}", f_delta);
+            // println!("f delta {:?}", f_delta);
             //println!("e epsilon delta {:?}", e_epsilon);
             // println!("f epsilon{:?}", f_epsilon);
 
@@ -418,11 +418,11 @@ impl<'a> Verifier<'a> {
             .iter()
             .map(|s| s.comm.d.decompress().unwrap())
             .sum();
-
+        // sum should be Identity
         if !sum_c.is_identity() || !sum_d.is_identity() {
-            Ok(())
-        } else {
             Err("Identity sum verify: Failed")
+        } else {
+            Ok(())
         }
     }
     // zero_balance_account_verifier verifies the knowledge of commitment scalar for anonymity set accounts created randomly
@@ -1000,7 +1000,7 @@ mod test {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
         let value_vector: Vec<Scalar> = vec![
-            -Scalar::from(5u64),
+            -Scalar::from(-(-5i64) as u64),
             5u64.into(),
             0u64.into(),
             0u64.into(),

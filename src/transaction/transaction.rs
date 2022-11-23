@@ -202,7 +202,8 @@ impl Sender {
             &delta_rscalar,
             &value_vector_scalar,
             &mut qq_prover,
-        );
+        )
+        .get_dleq();
         //identity check function to verify the construction of epsilon accounts using correct rscalars
         Verifier::verify_delta_identity_check(&epsilon_accounts)?;
 
@@ -239,12 +240,13 @@ impl Sender {
         let rscalars_slice = &delta_rscalar[anonymity_index..9];
 
         //Step 6. generate proofs DLOG proof on Anonymity accounts in Updated Delta accounts
-        let (x, z_vector) = Prover::verify_update_account_prover(
+        let (z_vector, x) = Prover::verify_update_account_prover(
             &updated_accounts_slice,
             &updated_delta_accounts_slice,
             &rscalars_slice,
             &mut qq_prover,
-        );
+        )
+        .get_dlog();
         //verify dlog proof
         let _verify_update_account_proof = Verifier::verify_update_account_verifier(
             &updated_accounts_slice,
@@ -260,7 +262,8 @@ impl Sender {
             &account_vector[anonymity_index..9],
             &anonymity_comm_scalar,
             &mut qq_prover,
-        );
+        )
+        .get_dlog();
 
         //verify zero balance proof for anonymity set
         Verifier::zero_balance_account_verifier(
@@ -494,7 +497,8 @@ impl Sender {
             &delta_rscalar,
             &value_vector_scalar,
             &mut qq_prover,
-        );
+        )
+        .get_dleq();
         //identity check function to verify the construction of epsilon accounts using correct rscalars
         Verifier::verify_delta_identity_check(&epsilon_accounts)?;
 
@@ -522,12 +526,13 @@ impl Sender {
         let rscalars_slice = &delta_rscalar[anonymity_index..9];
 
         //Step 6. generate proofs DLOG proof on Anonymity accounts in Updated Delta accounts
-        let (x, z_vector) = Prover::verify_update_account_prover(
+        let (z_vector, x) = Prover::verify_update_account_prover(
             &updated_accounts_slice,
             &updated_delta_accounts_slice,
             &rscalars_slice,
             &mut qq_prover,
-        );
+        )
+        .get_dlog();
         //verify dlog proof
         let _verify_update_account_proof = Verifier::verify_update_account_verifier(
             &updated_accounts_slice,
@@ -543,7 +548,8 @@ impl Sender {
             &account_vector[anonymity_index..9],
             &anonymity_comm_scalar,
             &mut qq_prover,
-        );
+        )
+        .get_dlog();
 
         //verify zero balance proof for anonymity set
         Verifier::zero_balance_account_verifier(
@@ -560,20 +566,15 @@ impl Sender {
         //println!(" Account{:?}", updated_delta_account_sender);
         // println!("Balance {:?}", sender_updated_balance);
         //println!("sk {:?}", sender_sk);
-        let (
-            epsilon_sender_account_vec,
-            epsilon_sender_rscalar_vector,
-            zv_v_acc,
-            zsk_v_acc,
-            zr_v_acc,
-            x_v_acc,
-        ) = Prover::verify_account_prover(
-            &updated_delta_account_sender,
-            sender_updated_balance,
-            sender_sk,
-            &mut qq_prover,
-            generate_base_pk,
-        );
+        let (epsilon_sender_account_vec, epsilon_sender_rscalar_vector, sigma_dleq) =
+            Prover::verify_account_prover(
+                &updated_delta_account_sender,
+                sender_updated_balance,
+                sender_sk,
+                &mut qq_prover,
+                generate_base_pk,
+            );
+        let (zv_v_acc, zsk_v_acc, zr_v_acc, x_v_acc) = sigma_dleq.get_dleq();
         //verify sender account signature and remaining balance. Rangeproof R1CS is updated
         Verifier::verify_account_verifier_bulletproof(
             &updated_delta_account_sender,

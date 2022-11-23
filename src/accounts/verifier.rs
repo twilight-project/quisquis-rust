@@ -585,7 +585,8 @@ mod test {
             // &rscalar,
             &value_vector,
             &mut prover,
-        );
+        )
+        .get_dleq();
         //create Verifier
         let mut transcript_verifier = Transcript::new(b"DeltaCompact");
         let mut verifier = Verifier::new(b"DLEQProof", &mut transcript_verifier);
@@ -653,12 +654,13 @@ mod test {
         //create Prover
         let mut transcript = Transcript::new(b"UpdateAccount");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-        let (x, z_vector) = Prover::verify_update_account_prover(
+        let (z_vector, x) = Prover::verify_update_account_prover(
             &updated_accounts_slice.to_vec(),
             &updated_delta_accounts_slice.to_vec(),
             &rscalars_slice.to_vec(),
             &mut prover,
-        );
+        )
+        .get_dlog();
         let mut transcript = Transcript::new(b"UpdateAccount");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
         let check = Verifier::verify_update_account_verifier(
@@ -870,7 +872,7 @@ mod test {
         //Create Prover
         let mut transcript = Transcript::new(b"SenderAccountProof");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-        let (ep, _rs, zv, zsk, zr, x) = Prover::verify_account_prover(
+        let (ep, _rs, sigma_dleq) = Prover::verify_account_prover(
             // &updated_delta_account_sender,
             &account_hard,
             //&balance_sender,
@@ -880,6 +882,7 @@ mod test {
             &mut prover,
             base_pk,
         );
+        let (zv, zsk, zr, x) = sigma_dleq.get_dleq();
         // //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
         println!("Verifier");
         //create Verifier
@@ -920,7 +923,8 @@ mod test {
         let mut transcript = Transcript::new(b"ZeroBalanceAccount");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
         let (z, x) =
-            Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm, &mut prover);
+            Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm, &mut prover)
+                .get_dlog();
         //create Verifier
         let mut transcript = Transcript::new(b"ZeroBalanceAccount");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
@@ -958,7 +962,8 @@ mod test {
         let mut transcript = Transcript::new(b"ZeroBalanceAccount");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
         let (z, x) =
-            Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm, &mut prover);
+            Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm, &mut prover)
+                .get_dlog();
         //create Verifier
         let mut transcript = Transcript::new(b"ZeroBalanceAccount");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
@@ -986,7 +991,8 @@ mod test {
 
         let mut transcript = Transcript::new(b"DestroyAccount");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-        let (z, x) = Prover::destroy_account_prover(&zero_accounts, &sk_vec, &mut prover);
+        let (z, x) =
+            Prover::destroy_account_prover(&zero_accounts, &sk_vec, &mut prover).get_dlog();
         //create Verifier
         let mut transcript = Transcript::new(b"DestroyAccount");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
@@ -1085,14 +1091,14 @@ mod test {
         //Create Prover
         let mut transcript = Transcript::new(b"SenderAccountProof");
         let mut prover = Prover::new(b"BulletProof", &mut transcript);
-        let (ep_sender, rs_sender, zv, zsk, zr, x) = Prover::verify_account_prover(
+        let (ep_sender, rs_sender, sigma_dleq) = Prover::verify_account_prover(
             &updated_delta_account_sender,
             &value_vector_sender,
             &sender_sk,
             &mut prover,
             base_pk,
         );
-
+        let (zv, zsk, zr, x) = sigma_dleq.get_dleq();
         //create updated balance vector for updated sender + receiver
         let balance_vector_bp: Vec<u64> =
             vec![bl_first_sender, bl_second_sender, 5u64.into(), 3u64.into()];
@@ -1191,14 +1197,14 @@ mod test {
         //Create Prover
         let mut transcript = Transcript::new(b"SenderAccountProof");
         let mut prover = Prover::new(b"BulletProof", &mut transcript);
-        let (ep_sender, rs_sender, zv, zsk, zr, x) = Prover::verify_account_prover(
+        let (ep_sender, rs_sender, sigma_dleq) = Prover::verify_account_prover(
             &updated_delta_account_sender,
             &value_vector_sender,
             &sender_sk,
             &mut prover,
             base_pk,
         );
-
+        let (zv, zsk, zr, x) = sigma_dleq.get_dleq();
         //create updated balance vector for updated sender + receiver
         let balance_vector_bp: Vec<u64> = vec![
             bl_first_sender,

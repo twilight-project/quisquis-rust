@@ -11,6 +11,26 @@ use curve25519_dalek::{
 };
 use merlin::Transcript;
 
+#[derive(Clone, Debug)]
+pub enum SigmaProof {
+    Dlog(Vec<Scalar>, Scalar),
+    Dleq(Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar),
+}
+
+impl SigmaProof {
+    pub fn get_dlog(self) -> (Vec<Scalar>, Scalar) {
+        match self {
+            SigmaProof::Dlog(x, y) => (x, y),
+            _ => panic!("Not a DLOG sigma proof"),
+        }
+    }
+    pub fn get_dleq(self) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
+        match self {
+            SigmaProof::Dleq(a, b, c, d) => (a, b, c, d),
+            _ => panic!("Not a DLEQ sigma proof"),
+        }
+    }
+}
 pub struct Prover<'a> {
     transcript: &'a mut Transcript,
     scalars: Vec<Scalar>,
@@ -85,7 +105,7 @@ impl<'a> Prover<'a> {
         rscalar: &[Scalar],
         value_vector: &[Scalar],
         prover: &mut Prover,
-    ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
+    ) -> SigmaProof {
         //lenghts of both delta and epsilon account slices should be same.
         assert_eq!(delta_accounts.len(), epsilon_accounts.len());
 
@@ -211,7 +231,7 @@ impl<'a> Prover<'a> {
             .map(|(r2, xr2)| r2 - xr2)
             .collect::<Vec<_>>();
 
-        return (zv_vector, zr1_vector, zr2_vector, x);
+        return SigmaProof::Dleq(zv_vector, zr1_vector, zr2_vector, x);
     }
 
     // verify_update_account_prover confirms if anonymity set in delta accounts was updated correctly
@@ -220,7 +240,7 @@ impl<'a> Prover<'a> {
         updated_delta_accounts: &[Account],
         delta_rscalar: &[Scalar],
         prover: &mut Prover,
-    ) -> (Scalar, Vec<Scalar>) {
+    ) -> SigmaProof {
         // check if (c,d)/c,d) = pkdelta_r
         // lets do c-c and d-d for the commitments in both updated_input and updated_delta account vectors
         let check_delta = updated_input_accounts
@@ -292,7 +312,7 @@ impl<'a> Prover<'a> {
             z_vector.push(s_scalar - (x * delta_rscalar[i.0 .0]));
         }
 
-        return (x, z_vector);
+        return SigmaProof::Dlog(z_vector, x);
     }
 
     // verify_account_prover creates a signature for the sender account
@@ -306,10 +326,7 @@ impl<'a> Prover<'a> {
     ) -> (
         Vec<Account>, /*Epsilon accounts for Updated sender balance*/
         Vec<Scalar>, /*Rscalars used for creating the epsilon accounts. Will be needed at the time of Rangeproof*/
-        Vec<Scalar>,
-        Vec<Scalar>,
-        Vec<Scalar>,
-        Scalar,
+        SigmaProof,
     ) {
         //check length is same
         assert_eq!(updated_delta_account_sender.len(), bl_updated_sender.len());
@@ -448,10 +465,7 @@ impl<'a> Prover<'a> {
         return (
             epsilon_account_vector,
             epsilon_rscalar_vector,
-            zv_vector,
-            zsk_vector,
-            zr_vector,
-            x,
+            SigmaProof::Dleq(zv_vector, zsk_vector, zr_vector, x),
         );
     }
     //verify_non_negative_prover creates range proof on Receiver accounts with zero balance
@@ -531,7 +545,7 @@ impl<'a> Prover<'a> {
         anonymity_accounts: &[Account],
         comm_rscalar: &[Scalar],
         prover: &mut Prover,
-    ) -> (Vec<Scalar>, Scalar) {
+    ) -> SigmaProof {
         //check length is same
         assert_eq!(anonymity_accounts.len(), comm_rscalar.len());
         // lets start a transcript and a prover script
@@ -583,7 +597,7 @@ impl<'a> Prover<'a> {
             .map(|(r, x_comm)| r - x_comm)
             .collect::<Vec<_>>();
 
-        return (z_vector, x);
+        return SigmaProof::Dlog(z_vector, x);
     }
 
     // destroy_account_prover creates a sigma proof for zero
@@ -592,7 +606,7 @@ impl<'a> Prover<'a> {
         accounts: &[Account],
         sk: &[RistrettoSecretKey],
         prover: &mut Prover,
-    ) -> (Vec<Scalar>, Scalar) {
+    ) -> SigmaProof {
         //check length is same
         assert_eq!(accounts.len(), sk.len());
         // lets start a transcript and a prover script
@@ -644,7 +658,7 @@ impl<'a> Prover<'a> {
             .map(|(r, x_comm)| r - x_comm)
             .collect::<Vec<_>>();
 
-        return (z_vector, x);
+        return SigmaProof::Dlog(z_vector, x);
     }
 }
 // ------------------------------------------------------------------------

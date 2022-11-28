@@ -2,6 +2,7 @@ use crate::{
     elgamal::elgamal::ElGamalCommitment,
     keys::{PublicKey, SecretKey},
     ristretto::{RistrettoPublicKey, RistrettoSecretKey},
+    util::Address,
 };
 use curve25519_dalek::{
     ristretto::CompressedRistretto,
@@ -56,7 +57,11 @@ impl Account {
         self.verify_account(sk, bl)?;
         Ok(self.comm.decommit(sk))
     }
-
+    ///get Account Pk and commitment to create Tx Output
+    ///
+    pub fn get_account(&self) -> (RistrettoPublicKey, ElGamalCommitment) {
+        (self.pk, self.comm)
+    }
     // update_account updates an account by creating pk' and comm' with 0 balance
     // returns acc'(pk', comm')
     pub fn update_account(

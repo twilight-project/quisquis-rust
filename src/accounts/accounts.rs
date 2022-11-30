@@ -170,9 +170,9 @@ impl Account {
     }
     // verify_delta_update verifies if account delta was updated correctly
     pub fn verify_delta_update(
-        updated_delta_accounts: &Vec<Account>,
-        delta_accounts: &Vec<Account>,
-        updated_input_accounts: &Vec<Account>,
+        updated_delta_accounts: &[Account],
+        delta_accounts: &[Account],
+        updated_input_accounts: &[Account],
     ) -> Result<bool, &'static str> {
         // first check if pks of all accounts passed are the same
         if updated_delta_accounts

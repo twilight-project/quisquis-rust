@@ -1,9 +1,8 @@
+pub mod accounts;
+pub mod elgamal;
 pub mod keys;
 pub mod ristretto;
-pub mod elgamal;
-pub mod accounts;
-pub mod util;
-pub use util::address::Address;
-pub mod transaction;
-pub mod shuffle;
+//pub mod address;
 pub mod pedersen;
+pub mod shuffle;
+pub mod transaction;

@@ -118,7 +118,7 @@ impl Account {
         bl: &[Scalar],
         base_pk: RistrettoPublicKey,
     ) -> (Vec<Account>, Vec<Account>, Vec<Scalar>) {
-        let rscalar = Account::generate_sum_and_negate_rscalar();
+        let rscalar = Account::generate_sum_and_negate_rscalar(a.len());
         let mut delta_account_vector: Vec<Account> = Vec::new();
         let mut epsilon_account_vector: Vec<Account> = Vec::new();
 

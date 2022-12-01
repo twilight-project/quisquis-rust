@@ -45,7 +45,7 @@ pub struct RistrettoPublicKey {
 
 impl RistrettoPublicKey {
     // Private constructor
-    fn new_from_pk(gr: CompressedRistretto, grsk: CompressedRistretto) -> RistrettoPublicKey {
+    pub fn new_from_pk(gr: CompressedRistretto, grsk: CompressedRistretto) -> RistrettoPublicKey {
         RistrettoPublicKey { gr: gr, grsk: grsk }
     }
 }

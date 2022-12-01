@@ -122,10 +122,10 @@ impl Account {
         let mut delta_account_vector: Vec<Account> = Vec::new();
         let mut epsilon_account_vector: Vec<Account> = Vec::new();
 
-        for i in 0..9 {
+        for (i, acc) in a.iter().enumerate() {
             // lets generate commitment on v for delta using Pk and r'
             //println!("bl = {:?}", bl[i]);
-            let comm_delta = ElGamalCommitment::generate_commitment(&a[i].pk, rscalar[i], bl[i]);
+            let comm_delta = ElGamalCommitment::generate_commitment(&acc.pk, rscalar[i], bl[i]);
             //println!("comm delta {:?}", comm_delta);
             let account_delta = Account::set_account(a[i].pk, comm_delta);
             delta_account_vector.push(account_delta);
@@ -226,9 +226,9 @@ impl Account {
     // generate_sum_and_negate_rscalar generates scalars for delta and epsilon function
     // first 8 scalars are random, here returned in a vector
     // last scalar is the sum and then neg of the first 8 random scalars, here returned as a scalar
-    pub fn generate_sum_and_negate_rscalar() -> Vec<Scalar> {
+    pub fn generate_sum_and_negate_rscalar(len: usize) -> Vec<Scalar> {
         let mut random_scalars: Vec<Scalar> = Vec::new();
-        for _x in 0..8 {
+        for _x in 0..len - 1 {
             random_scalars.push(Scalar::random(&mut OsRng));
         }
         let sum: Scalar = random_scalars.iter().sum();

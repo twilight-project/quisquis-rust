@@ -185,9 +185,5 @@ mod test {
         println!("Bytes {:?}", comit_bytes);
         let comit = ElGamalCommitment::from_bytes(&comit_bytes).unwrap();
         assert_eq!(comm, comit);
-        // assert!(
-        //     comm.verify_commitment(&sk, Scalar::from(16 as u64)).is_ok(),
-        //     "Invalid Commitment"
-        // );
     }
 }

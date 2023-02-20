@@ -1,11 +1,12 @@
 use crate::ristretto::{RistrettoPublicKey, RistrettoSecretKey};
 use core::ops::{Mul, Sub};
 use std::convert::TryInto;
+use serde::{Serialize, Deserialize};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ElGamalCommitment {
     pub(crate) c: CompressedRistretto,
     pub(crate) d: CompressedRistretto,

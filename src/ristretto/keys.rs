@@ -2,7 +2,7 @@ use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
 use rand::{CryptoRng, Rng};
-
+use serde::{Serialize, Deserialize};
 use crate::{
     keys::{PublicKey, SecretKey},
     ristretto::constants::BASE_PK_BTC_COMPRESSED,
@@ -37,7 +37,7 @@ impl PartialEq for RistrettoSecretKey {
 }
 
 // ------- PublicKey ------- //
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct RistrettoPublicKey {
     pub(crate) gr: CompressedRistretto,
     pub(crate) grsk: CompressedRistretto,

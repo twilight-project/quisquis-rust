@@ -9,8 +9,9 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize, Copy)]
 pub struct Account {
     pub(crate) pk: RistrettoPublicKey,
     pub(crate) comm: ElGamalCommitment,

@@ -19,17 +19,17 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 use std::iter;
-
 ///Zero argument
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroStatement {
     pub c_A: Vec<CompressedRistretto>,
 }
 ///Zero argument proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroProof {
     pub c_A_0: CompressedRistretto,
     pub c_B_m: CompressedRistretto,
@@ -43,14 +43,14 @@ pub struct ZeroProof {
 
 ///MultiHadamard argument
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiHadamardStatement {
     pub c_b: CompressedRistretto,
     pub zero_statement: ZeroStatement,
 }
 ///MultiHadamard argument proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiHadamardProof {
     pub c_B: Vec<CompressedRistretto>,
     pub zero_proof: ZeroProof,
@@ -59,14 +59,14 @@ pub struct MultiHadamardProof {
 ///Product Proof argument
 /// an argument that a set of committed values have a particular product
 ///
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProductStatement {
     pub multi_hadamard_statement: MultiHadamardStatement,
     pub svp_statement: SVPStatement,
 }
 ///Product argument proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProductProof {
     pub multi_hadamard_proof: MultiHadamardProof,
     pub svp_proof: SVPProof,

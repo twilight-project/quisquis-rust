@@ -26,6 +26,7 @@ use curve25519_dalek::{
 };
 use rand::rngs::OsRng;
 use rand::{CryptoRng, Rng};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct Permutation {
@@ -96,13 +97,15 @@ pub struct Shuffle {
 }
 ///Shuffle argument proof
 ///
-#[derive(Debug, Clone)]
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ShuffleStatement {
     pub hadamard_statement: HadamardStatement,
     pub product_statement: ProductStatement,
     pub ddh_statement: DDHStatement,
 }
-#[derive(Debug, Clone)]
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ShuffleProof {
     pub c_A: Vec<CompressedRistretto>,
     pub c_tau: Vec<CompressedRistretto>,

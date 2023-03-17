@@ -1,7 +1,5 @@
 #![allow(non_snake_case)]
 
-use rand::thread_rng;
-
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
 use crate::{accounts::Account, ristretto::RistrettoPublicKey, ristretto::RistrettoSecretKey};
 use bulletproofs::r1cs::*;
@@ -10,8 +8,10 @@ use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
 use merlin::Transcript;
+use rand::thread_rng;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SigmaProof {
     Dlog(Vec<Scalar>, Scalar),
     Dleq(Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar),

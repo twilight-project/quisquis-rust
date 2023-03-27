@@ -19,7 +19,7 @@ pub struct Account {
 
 impl Account {
     // Private constructor
-    fn set_account(pk: RistrettoPublicKey, comm: ElGamalCommitment) -> Account {
+    pub fn set_account(pk: RistrettoPublicKey, comm: ElGamalCommitment) -> Account {
         Account { pk: pk, comm: comm }
     }
 

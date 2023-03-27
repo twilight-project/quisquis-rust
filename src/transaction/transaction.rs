@@ -130,77 +130,7 @@ impl Sender {
         }
     }
     
-    pub fn create_reference_tx_data_for_zkos_test() -> Result<(Vec<i64>, Vec<Account>, Vec<Scalar>, usize, usize, usize, Vec<RistrettoSecretKey>, Vec<i64>), &'static str>{
-     // lets say bob wants to sent 5 tokens to alice from his one account and 2 from his other account to fay
-        // and 1 token to jay
-
-        // lets create sender accounts to send these amounts from
-        let (bob_account_1, bob_sk_account_1) =
-            Account::generate_random_account_with_value(10u64.into());
-        let (bob_account_2, bob_sk_account_2) =
-            Account::generate_random_account_with_value(20u64.into());
-
-        // lets create receiver accounts
-        let alice_account = Account::generate_random_account_with_value(10u64.into()).0;
-        let fay_account = Account::generate_random_account_with_value(20u64.into()).0;
-        let jay_account = Account::generate_random_account_with_value(20u64.into()).0;
-
-        // so we have 2 senders and 3 receivers, rest will be the anonymity set
-
-        //let mut tx_vector: Vec<Sender> = Vec::new();
-
-        let tx_vector: Vec<Sender> = vec![
-            Sender {
-                total_amount: -5,
-                account: bob_account_1,
-                receivers: vec![Receiver {
-                    amount: 5,
-                    public_key: alice_account.,
-                }],
-            },
-            Sender {
-                total_amount: -3,
-                account: bob_account_2,
-                receivers: vec![
-                    Receiver {
-                        amount: 2,
-                        public_key: fay_account.pk,
-                    },
-                    Receiver {
-                        amount: 1,
-                        public_key: jay_account.pk,
-                    },
-                ],
-            },
-        ];
-        
-        let (
-            value_vector,
-            account_vector,
-            annonymity_com_scalar_vector,
-            diff,
-            sender_count,
-            receiver_count,
-        ) = Sender::generate_value_and_account_vector(tx_vector)?;
-        //Create sender updated account vector for the verification of sk and bl-v
-        let bl_first_sender = 10 - 5; //bl-v
-        let bl_second_sender = 20 - 3; //bl-v
-        let updated_balance_sender: Vec<i64> = vec![bl_first_sender, bl_second_sender];
-        //Create vector of sender secret keys
-        let sk_sender: Vec<RistrettoSecretKey> = vec![bob_sk_account_1, bob_sk_account_2];
-        
-        Ok((
-                    value_vector,
-                    account_vector,
-                    annonymity_account_commmitment_scalars_vector,
-                    diff,
-                    senders_count,
-                    receivers_count,
-                    sk_sender,
-                    updated_balance_sender,    
-                ))
     
-    }
 
     //create_transaction creates a quisquis transaction using R1CS constraints for rangeproof
     pub fn create_transaction(

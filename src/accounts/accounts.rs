@@ -20,6 +20,7 @@ pub struct Account {
 impl Account {
     // Private constructor
     pub fn set_account(pk: RistrettoPublicKey, comm: ElGamalCommitment) -> Account {
+        println!("Just checking the library update");
         Account { pk: pk, comm: comm }
     }
 

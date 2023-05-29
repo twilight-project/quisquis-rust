@@ -27,6 +27,7 @@ impl Account {
     /// generate_account creates a new account
     /// returns PublicKey, SecretKey and a Commitment with 0 balance and commitment scalar for Annoynimity account proof
     pub fn generate_account(pk: RistrettoPublicKey) -> (Account, Scalar) {
+        println!("Just checking the library update");
         // lets get a random scalar
         let comm_scalar = Scalar::random(&mut OsRng);
 

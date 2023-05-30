@@ -9,8 +9,8 @@ use curve25519_dalek::{
 };
 use merlin::Transcript;
 use rand::thread_rng;
-use serde::{Deserialize, Serialize};
-
+// use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SigmaProof {
     Dlog(Vec<Scalar>, Scalar),

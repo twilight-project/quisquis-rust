@@ -22,7 +22,8 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
+// use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::iter;
 ///Multiexponential Proof
 ///

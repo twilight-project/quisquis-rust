@@ -13,7 +13,8 @@ use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 //use rand::rngs::OsRng;
 
 use crate::shuffle::shuffle::COLUMNS;
-use serde::{Deserialize, Serialize};
+// use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 ///Single value Product argument
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -26,7 +26,8 @@ use curve25519_dalek::{
 };
 use rand::rngs::OsRng;
 use rand::{CryptoRng, Rng};
-use serde::{Deserialize, Serialize};
+// use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct Permutation {

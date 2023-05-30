@@ -20,14 +20,14 @@ pub struct Account {
 impl Account {
     // Private constructor
     pub fn set_account(pk: RistrettoPublicKey, comm: ElGamalCommitment) -> Account {
-        println!("Just checking the library update");
+        // println!("Just checking the library update");
         Account { pk: pk, comm: comm }
     }
 
     /// generate_account creates a new account
     /// returns PublicKey, SecretKey and a Commitment with 0 balance and commitment scalar for Annoynimity account proof
     pub fn generate_account(pk: RistrettoPublicKey) -> (Account, Scalar) {
-        println!("Just checking the library update");
+        // println!("Just checking the library update");
         // lets get a random scalar
         let comm_scalar = Scalar::random(&mut OsRng);
 

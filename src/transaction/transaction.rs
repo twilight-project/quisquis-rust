@@ -128,8 +128,6 @@ impl Sender {
             Err("account count is more than 9")
         }
     }
-    
-    
 
     //create_transaction creates a quisquis transaction using R1CS constraints for rangeproof
     pub fn create_transaction(

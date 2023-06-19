@@ -1,7 +1,7 @@
-//pub mod transaction;
-//pub mod signature;
+pub mod signature;
+pub mod transaction;
 // Re-export
-//pub use self::{
-    //transaction::{Sender, Receiver}
-    //signature::{Signature, VerificationKey, SigningKey}
-//};
+pub use self::{
+    signature::{Signature, SigningKey, VerificationKey},
+    transaction::{Receiver, Sender},
+};

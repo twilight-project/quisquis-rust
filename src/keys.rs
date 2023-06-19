@@ -4,7 +4,6 @@ use rand::{CryptoRng, Rng};
 pub trait SecretKey {
     fn key_length() -> usize;
     fn random<R: Rng + CryptoRng>(rng: &mut R) -> Self;
-    fn from_bytes(slice: &[u8]) -> Self;
 }
 
 pub trait PublicKey {

@@ -1,9 +1,10 @@
 use crate::ristretto::{RistrettoPublicKey, RistrettoSecretKey};
 use core::ops::{Mul, Sub};
+use std::convert::TryInto;
+use serde::{Serialize, Deserialize};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ElGamalCommitment {
@@ -72,6 +73,39 @@ impl ElGamalCommitment {
     pub fn decommit(self: &Self, pr: &RistrettoSecretKey) -> CompressedRistretto {
         (&self.d.decompress().unwrap() - &(&pr.0 * &self.c.decompress().unwrap())).compress()
     }
+    
+    /// Get c of the commitment
+    /// 
+    pub fn c(self: &Self) -> CompressedRistretto {
+        self.c
+    }
+
+    /// Get d of the commitment
+    /// 
+    pub fn d(self: &Self) -> CompressedRistretto {
+        self.d
+    }
+
+    /// Serializes the Commitment into a byte array of 64-byte elements.
+    pub fn to_bytes(&self) -> [u8;64] {
+        let mut buf = Vec::with_capacity(64);
+        buf.extend_from_slice(self.c.as_bytes());
+        buf.extend_from_slice(self.d.as_bytes());
+        buf.try_into().unwrap_or_else(|v: Vec<u8>| panic!("Expected a Vec of length {} but it was {}", 64, v.len()))
+    }
+
+    /// Deserializes the Commitment from a byte array of 64-byte elements.
+    pub fn from_bytes(data: &[u8]) -> Result<Self, &'static str> {
+        if data.len() != 64 {
+            return Err("Invalid Encryption Length");
+        }
+        let c: CompressedRistretto = slice_to_point(&data[0..32])?;
+        let d: CompressedRistretto = slice_to_point(&data[32..64])?;
+        Ok(ElGamalCommitment{
+            c , d
+        })
+    }
+
 }
 
 // ------- ElGamalCommitment Partial Eq, Eq, Sub, Mul ------- //
@@ -102,6 +136,21 @@ impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCommitment {
     }
 }
 
+// Deserialize a compressed ristretto point from a slice. The input slice is 32 bytes
+/// Utility Function
+fn slice_to_point(data: &[u8]) -> Result<CompressedRistretto, &'static str> {
+    if data.len() != 32 {
+        return Err("Invalid Length");
+    }
+    let pt = CompressedRistretto::from_slice(&data);
+    match pt.decompress() {
+        Some(_) => (),
+        None => {
+            return Err("InvalidPoint");
+        }
+    };
+    Ok(pt)
+}
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -122,5 +171,20 @@ mod test {
             comm.verify_commitment(&sk, Scalar::from(16 as u64)).is_ok(),
             "Invalid Commitment"
         );
+    }
+
+    #[test]
+    fn verify_bytes_test() {
+        use rand::rngs::OsRng;
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        let comm_scalar = Scalar::random(&mut OsRng);
+        let comm =
+            ElGamalCommitment::generate_commitment(&pk, comm_scalar, Scalar::from(16 as u64));
+        
+        let comit_bytes = comm.to_bytes();
+        println!("Bytes {:?}", comit_bytes);
+        let comit = ElGamalCommitment::from_bytes(&comit_bytes).unwrap();
+        assert_eq!(comm, comit);
     }
 }

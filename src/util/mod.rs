@@ -7,4 +7,4 @@
 pub mod address;
 
 // Re-export
-pub use self::{address::Address, address::AddressType, address::Network};
+pub use self::{address::Address, address::Network};

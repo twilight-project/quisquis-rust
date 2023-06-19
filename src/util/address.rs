@@ -63,17 +63,17 @@ pub enum AddressType {
 
 impl AddressType {
     /// Recover the address type given an address bytes and the network.
-    pub fn from_slice(bytes: u8, net: Network) -> Result<AddressType, &'static str> {
-        //let byte = bytes[0];
+    pub fn from_slice(bytes: &[u8], net: Network) -> Result<AddressType, &'static str> {
+        let byte = bytes[0];
         use AddressType::*;
         use Network::*;
         match net {
-            Mainnet => match bytes {
+            Mainnet => match byte {
                 12 => Ok(Standard),
                 24 => Ok(Contract),
                 _ => Err("Error::InvalidAddressTypeMagicByte"),
             },
-            Testnet => match bytes {
+            Testnet => match byte {
                 44 => Ok(Standard),
                 66 => Ok(Contract),
                 _ => Err("Error::InvalidAddressTypeMagicByte"),
@@ -98,7 +98,7 @@ impl fmt::Display for AddressType {
 }
 
 /// A complete twilight typed address valid for a specific network.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Address {
     /// The network on which the address is valid and should be used.
     pub network: Network,
@@ -131,7 +131,7 @@ impl Address {
     /// keys are not valid points, and if checksums missmatch.
     pub fn from_bytes(bytes: &[u8]) -> Result<Address, &'static str> {
         let network = Network::from_u8(bytes[0])?;
-        let addr_type = AddressType::from_slice(bytes[0], network)?;
+        let addr_type = AddressType::from_slice(&bytes, network)?;
         let gr = slice_to_pkpoint(&bytes[1..33])?;
         let grsk = slice_to_pkpoint(&bytes[33..65])?;
         let public_key = RistrettoPublicKey { gr, grsk };

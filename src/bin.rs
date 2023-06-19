@@ -17,7 +17,7 @@ pub fn main() {
     println!("{:?}", sk);
     println!("{:?}", pk);
 
-    let acc = Account::generate_account(pk);
+    let (acc, _) = Account::generate_account(pk);
     println!("generated account {:?}", acc);
 
     let updated_keys_scalar = Scalar::random(&mut OsRng);
@@ -65,7 +65,7 @@ pub fn main() {
     let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
     let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
 
-    let acc = Account::generate_account(pk);
+    let (acc, _) = Account::generate_account(pk);
     println!("generated account {:?}", acc);
 
     let updated_keys_scalar = Scalar::random(&mut OsRng);

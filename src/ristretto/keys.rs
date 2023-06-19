@@ -25,7 +25,6 @@ impl SecretKey for RistrettoSecretKey {
     fn random<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         RistrettoSecretKey(Scalar::random(rng))
     }
-
     fn from_bytes(slice: &[u8]) -> Self {
         RistrettoSecretKey(Scalar::hash_from_bytes::<Sha512>(slice))
     }

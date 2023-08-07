@@ -88,10 +88,9 @@ impl Sender {
                     receiver_account_vector.push(receiver_account);
                 }
             }
-
             if senders_count < 9 && receivers_count < 9 && senders_count + receivers_count <= 9 {
-                value_vector.append(&mut receiver_amount_vector);
-                account_vector.append(&mut receiver_account_vector);
+                value_vector.append(&mut receiver_amount_vector.clone());
+                account_vector.append(&mut receiver_account_vector.clone());
 
                 // lets create anonymity set - these are randomly generated on the fly
                 // this anonymity set may need to come from the blockchain state itself in the future

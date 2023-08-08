@@ -48,6 +48,14 @@ impl Account {
         self.pk.verify_keypair(sk)?;
         self.comm.verify_commitment(sk, bl)
     }
+    /// Verifies the account public key belongs to a secret key
+    ///
+    pub fn verify_account_keypair(
+        self: &Self,
+        sk: &RistrettoSecretKey,
+    ) -> Result<(), &'static str> {
+        self.pk.verify_keypair(sk)
+    }
 
     /// Decrypts the account balance and returns G*bl. Discrete log should be solved to extract bl
     /// The function shall be used with extreme caution. Ensure that account is verifiable before calling this method

@@ -660,6 +660,73 @@ impl<'a> Prover<'a> {
 
         return SigmaProof::Dlog(z_vector, x);
     }
+    ///Same Value Sigma proof protocol
+    /// Value and scalar used for commitment should be same for encryption and pedersen
+    ///  
+    pub fn same_value_compact_prover(
+        enc_account: Account,
+        rscalar: Scalar,
+        value: Scalar,
+        pedersen_commitment: CompressedRistretto,
+    ) -> SigmaProof {
+        //For pedersen commitment
+        let pc_gens = PedersenGens::default();
+
+        let mut transcript = Transcript::new(b"SameValueProof");
+        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+
+        //add witness to initialze transcript RNG (Random Number Generator)
+        prover.scalars = vec![rscalar, value];
+
+        //add elgmal encrypted accounts to transcript
+        prover.allocate_account(b"encrypted_account", &enc_account);
+        // add pedersen commitment and keys to the transcript
+        prover.allocate_point(b"G", &pc_gens.B.compress());
+        prover.allocate_point(b"H", &pc_gens.B_blinding.compress());
+        prover.allocate_point(b"d", &pedersen_commitment);
+
+        let mut transcript_rng = prover.prove_impl(); //confirm
+
+        // Step 1. Generate and collect two random blindings for value and scalar
+        let r1_dash = Scalar::random(&mut transcript_rng);
+        let v_doubledash = Scalar::random(&mut transcript_rng);
+
+        // lets create f_encrypted
+
+        let gv_doubledash = &RISTRETTO_BASEPOINT_TABLE * &v_doubledash;
+
+        let h_delta_r1_dash = enc_account.pk.grsk.decompress().unwrap() * &r1_dash;
+
+        let f_delta = gv_doubledash + h_delta_r1_dash;
+
+        // lets create f_epsilon
+
+        let h_epsilon_r2_dash = pc_gens.B_blinding * &r1_dash;
+
+        let f_epsilon = gv_doubledash + h_epsilon_r2_dash;
+
+        // lets append f_delta, and f_epsilon to the transcript
+
+        prover.allocate_point(b"f_delta", &f_delta.compress());
+
+        prover.allocate_point(b"f_epsilon", &f_epsilon.compress());
+
+        // obtain a scalar challenge
+        let x = prover.get_challenge(b"challenge");
+        // lets create the outputs
+
+        // lets create zv
+        let xv_dash = x * &value;
+
+        let zv_vector = vec![v_doubledash - xv_dash];
+
+        // lets create zr1
+        let x_rscalar = rscalar * &x;
+
+        let zr1 = r1_dash - x_rscalar;
+        //returning Empty vector for zr2 as it is not needed in this case
+        return SigmaProof::Dleq(zv_vector, vec![zr1], vec![], x);
+    }
 }
 // ------------------------------------------------------------------------
 // Tests

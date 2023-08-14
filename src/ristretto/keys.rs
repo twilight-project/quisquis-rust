@@ -158,6 +158,7 @@ impl<'b> Mul<&'b Scalar> for RistrettoPublicKey {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bulletproofs::PedersenGens;
     use rand::rngs::OsRng;
     #[test]
     fn update_key_test() {
@@ -180,5 +181,17 @@ mod test {
         let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
 
         assert!(updated_pk.verify_keypair(&sk).is_ok(), "Invalid Key Pair")
+    }
+    #[test]
+    fn base_pk_test() {
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+        println!("{:?}", base_pk);
+
+        let pd_gens = PedersenGens::default();
+        println!("{:?}", pd_gens.B.compress());
+        println!("{:?}", pd_gens.B_blinding.compress());
+
+        assert_eq!(base_pk.gr, BASE_PK_BTC_COMPRESSED[0]);
+        assert_eq!(base_pk.grsk, BASE_PK_BTC_COMPRESSED[1]);
     }
 }

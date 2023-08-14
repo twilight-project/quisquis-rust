@@ -11,6 +11,8 @@ use crate::accounts::{RangeProofVerifier, TranscriptProtocol};
 use crate::{accounts::Account, ristretto::RistrettoPublicKey};
 use bulletproofs::{BulletproofGens, PedersenGens, ProofError, RangeProof};
 use merlin::Transcript;
+
+use super::SigmaProof;
 pub struct Verifier<'a> {
     transcript: &'a mut Transcript,
     scalars: Vec<Scalar>,
@@ -512,6 +514,69 @@ impl<'a> Verifier<'a> {
             Ok(())
         } else {
             Err("Destroy account verification failed")
+        }
+    }
+
+    /// Verify the knowledgwe of same value commmited in Elgamal Encryption and Pedersen Commitment
+    /// Input:: Encrypted Account, Pedersen Commitment, SigmaProof
+    /// Output:: Result<(), &'static str>
+    ///
+    pub fn verify_same_value_compact_verifier(
+        enc_account: Account,
+        commitment: CompressedRistretto,
+        proof: SigmaProof,
+    ) -> Result<(), &'static str> {
+        //For pedersen commitment
+        let pc_gens = PedersenGens::default();
+
+        let mut transcript = Transcript::new(b"SameValueProof");
+        let mut verifier = Verifier::new(b"DLEQProof", &mut transcript);
+
+        //add encrypted account to statement
+        verifier.allocate_account(b"encrypted_account", &enc_account);
+        //add pedersen commitment and keys to statement
+        verifier.allocate_point(b"G", &pc_gens.B.compress());
+        verifier.allocate_point(b"H", &pc_gens.B_blinding.compress());
+        verifier.allocate_point(b"d", &commitment);
+
+        // lets create two points for the proof
+        // 1. f_encrypted = G ^ zv + h_pk ^ zr + d_encrypted ^ x
+        // 2. f_pedersen = G ^ zv + H ^ zr + commitment ^ x
+
+        //get Z_v, Z_r, X from proof
+        let (zv, zr, _, x) = proof.get_dleq();
+        // lets create f_encrypted
+        let combined_scalars = vec![zr[0], x, zv[0]];
+        let point = vec![
+            enc_account.pk.grsk,
+            enc_account.comm.d,
+            RISTRETTO_BASEPOINT_COMPRESSED,
+        ];
+        let f_enc = Verifier::multiscalar_multiplication(&combined_scalars, &point)
+            .ok_or("Delta Compact Proof Verify: Failed")?;
+
+        // lets create f_epsilon
+        let point = vec![
+            pc_gens.B_blinding.compress(),
+            commitment,
+            RISTRETTO_BASEPOINT_COMPRESSED,
+        ];
+        let f_pedersen = Verifier::multiscalar_multiplication(&combined_scalars, &point)
+            .ok_or("Delta Compact Proof Verify: Failed")?;
+
+        // lets append  f_encrypted and f_pedersen to the transcript
+
+        verifier.allocate_point(b"f_delta", &f_enc.compress());
+
+        verifier.allocate_point(b"f_epsilon", &f_pedersen.compress());
+
+        // Obtain a scalar challenge
+        let verify_x = verifier.get_challenge(b"challenge");
+
+        if x == verify_x {
+            Ok(())
+        } else {
+            Err("Same Value Proof Verify: Failed")
         }
     }
 }
@@ -1254,5 +1319,46 @@ mod test {
                 &proof,
             )
             .is_ok());
+    }
+    #[test]
+    fn same_value_compact_verifier_test() {
+        let pc_gens = PedersenGens::default();
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+
+        let rscalar = Scalar::random(&mut OsRng);
+        let bl_scalar = Scalar::from(10u64);
+        let enc = ElGamalCommitment::generate_commitment(&pk, rscalar, bl_scalar);
+        let acc = Account { pk, comm: enc };
+        let pc: CompressedRistretto = pc_gens.commit(bl_scalar, rscalar).compress();
+        let proof = Prover::same_value_compact_prover(acc, rscalar, bl_scalar, pc);
+
+        //create Verifier
+
+        let check = Verifier::verify_same_value_compact_verifier(acc, pc, proof);
+
+        assert!(check.is_ok());
+    }
+    #[test]
+    fn same_value_compact_verifier_fail_test() {
+        let pc_gens = PedersenGens::default();
+        //create public key randomly
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        //scalar for commitment
+        let rscalar = Scalar::random(&mut OsRng);
+        //create commitment
+        let enc = ElGamalCommitment::generate_commitment(&pk, rscalar, Scalar::from(10u64));
+        //create encrypted account
+        let acc = Account { pk, comm: enc };
+        //create pedersen commitment
+        let pc: CompressedRistretto = pc_gens.commit(Scalar::from(0u64), rscalar).compress();
+        //create proof
+        let proof = Prover::same_value_compact_prover(acc, rscalar, Scalar::from(10u64), pc);
+
+        //verify proof
+        let check = Verifier::verify_same_value_compact_verifier(acc, pc, proof);
+
+        assert!(check.is_err());
     }
 }

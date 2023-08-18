@@ -1,5 +1,6 @@
 use curve25519_dalek::scalar::Scalar;
 use rand::{CryptoRng, Rng};
+use zkschnorr::Signature;
 
 pub trait SecretKey {
     fn key_length() -> usize;
@@ -23,4 +24,8 @@ pub trait PublicKey {
     fn generate_base_pk() -> Self;
 
     fn verify_keypair(self: &Self, privkey: &Self::K) -> Result<(), &'static str>;
+
+    fn sign_msg(&self, msg: &[u8], privkey: &Self::K, label: &'static [u8]) -> Signature;
+
+    fn verify_msg(&self, msg: &[u8], sig: &Signature, label: &'static [u8]) -> Result<(), &'static str>;
 }

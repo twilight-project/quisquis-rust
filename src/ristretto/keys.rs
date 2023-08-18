@@ -9,6 +9,8 @@ use curve25519_dalek::{
 use rand::{CryptoRng, Rng};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
+use zkschnorr::{VerificationKey, Signature};
+use merlin::Transcript;
 const SCALAR_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -117,6 +119,28 @@ impl PublicKey for RistrettoPublicKey {
             Err("Invalid Account::Keypair Verification Failed")
         }
     }
+    ///Sign a message using ZkSchnor signature scheme\
+    /// Returns a tuple of (signature, random_scalar)
+    /// 
+    fn sign_msg(&self, msg: &[u8], privkey: &Self::K, label: &'static [u8]) -> Signature {
+       
+       // let signing_key = SigningKey::new(privkey.0);
+        let verifying_key = VerificationKey::new(self.gr, self.grsk);
+        Signature::sign_message(label, &msg, verifying_key, privkey.0)
+    }
+
+    /// Verify a message using ZkSchnor signature scheme
+    /// Returns a boolean
+    /// 
+    fn verify_msg(&self, msg: &[u8], signature: &Signature, label: &'static [u8]) -> Result<(), &'static str> {
+        let verifying_key = VerificationKey::new(self.gr, self.grsk);
+        let verify = Signature::verify_message(&signature, label, msg, verifying_key);
+        match verify {
+            Ok(_) => Ok(()),
+            Err(_) => Err("Invalid Signature"),
+        } 
+
+    }
 }
 
 // ------- PublicKey Partial Eq, Eq, Add, Mul ------- //
@@ -193,5 +217,16 @@ mod test {
 
         assert_eq!(base_pk.gr, BASE_PK_BTC_COMPRESSED[0]);
         assert_eq!(base_pk.grsk, BASE_PK_BTC_COMPRESSED[1]);
+    }
+    #[test]
+    fn signature_test() {
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        //convert to ZkSchnorr types
+
+        let msg  = "This is a signing message";
+        let sign = pk.sign_msg(msg.as_bytes(), &sk, ("valueSign").as_bytes());
+        let verify = pk.verify_msg(msg.as_bytes(), &sign, ("valueSign").as_bytes());
+        assert!(verify.is_ok(), "Invalid Signature");
     }
 }

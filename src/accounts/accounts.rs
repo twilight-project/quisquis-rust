@@ -67,6 +67,21 @@ impl Account {
         self.verify_account(sk, bl)?;
         Ok(self.comm.decommit(sk))
     }
+    /// Decrypts the account balance and returns bl.
+    /// The function also varifies that the keypair is valid  
+    pub fn decrypt_account_balance_value(
+        self: &Self,
+        sk: &RistrettoSecretKey,
+    ) -> Result<Scalar, &'static str> {
+        self.pk.verify_keypair(sk.clone())?;
+        match self.comm.decommit_value(sk) {
+            Some(bl) => Ok(bl),
+            None => Err("Decryption value failed."),
+        }
+
+        //Ok(self.comm.decommit(sk))
+    }
+
     ///get Account Pk and commitment to create Tx Output
     ///
     pub fn get_account(self: &Self) -> (RistrettoPublicKey, ElGamalCommitment) {
@@ -501,5 +516,17 @@ mod test {
         }
         let (pk, comm) = account_vector[0].get_account();
         println!("{:?} \n {:?}", pk, comm);
+    }
+    #[test]
+    fn test_account_decrypt_value() {
+        use rand::rngs::OsRng;
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        let comm_scalar = Scalar::random(&mut OsRng);
+        let comm =
+            ElGamalCommitment::generate_commitment(&pk, comm_scalar, Scalar::from(16734 as u64));
+        let account = Account::set_account(pk, comm);
+        let decrypted_scalar = account.decrypt_account_balance_value(&sk).unwrap();
+        assert_eq!(decrypted_scalar, Scalar::from(16734 as u64));
     }
 }

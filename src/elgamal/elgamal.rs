@@ -1,10 +1,11 @@
 use crate::ristretto::{RistrettoPublicKey, RistrettoSecretKey};
 use core::ops::{Mul, Sub};
-use std::convert::TryInto;
-use serde::{Serialize, Deserialize};
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto,
+    ristretto::RistrettoPoint, scalar::Scalar,
 };
+use serde::{Deserialize, Serialize};
+use std::{convert::TryInto, u128};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ElGamalCommitment {
@@ -73,25 +74,33 @@ impl ElGamalCommitment {
     pub fn decommit(self: &Self, pr: &RistrettoSecretKey) -> CompressedRistretto {
         (&self.d.decompress().unwrap() - &(&pr.0 * &self.c.decompress().unwrap())).compress()
     }
-    
+
+    /// Decrypts commitment to get bl
+    pub fn decommit_value(self: &Self, pr: &RistrettoSecretKey) -> Option<Scalar> {
+        let point: CompressedRistretto = self.decommit(pr);
+        brute_force_decrypt(point.decompress().unwrap())
+    }
+
     /// Get c of the commitment
-    /// 
+    ///
     pub fn c(self: &Self) -> CompressedRistretto {
         self.c
     }
 
     /// Get d of the commitment
-    /// 
+    ///
     pub fn d(self: &Self) -> CompressedRistretto {
         self.d
     }
 
     /// Serializes the Commitment into a byte array of 64-byte elements.
-    pub fn to_bytes(&self) -> [u8;64] {
+    pub fn to_bytes(&self) -> [u8; 64] {
         let mut buf = Vec::with_capacity(64);
         buf.extend_from_slice(self.c.as_bytes());
         buf.extend_from_slice(self.d.as_bytes());
-        buf.try_into().unwrap_or_else(|v: Vec<u8>| panic!("Expected a Vec of length {} but it was {}", 64, v.len()))
+        buf.try_into().unwrap_or_else(|v: Vec<u8>| {
+            panic!("Expected a Vec of length {} but it was {}", 64, v.len())
+        })
     }
 
     /// Deserializes the Commitment from a byte array of 64-byte elements.
@@ -101,13 +110,26 @@ impl ElGamalCommitment {
         }
         let c: CompressedRistretto = slice_to_point(&data[0..32])?;
         let d: CompressedRistretto = slice_to_point(&data[32..64])?;
-        Ok(ElGamalCommitment{
-            c , d
-        })
+        Ok(ElGamalCommitment { c, d })
     }
-
 }
+/// brute_force_decrypt tries to decrypt the encrypted key by brute force
+/// G * bl =>  bl
+///
+fn brute_force_decrypt(encrypted_key: RistrettoPoint) -> Option<Scalar> {
+    let basepoint = RISTRETTO_BASEPOINT_TABLE;
+    let u64_max = u64::MAX;
+    let mut scalar: Scalar;
+    for val in 0..u64_max {
+        scalar = Scalar::from(val);
+        let decrypted_point = &basepoint * &scalar;
 
+        if decrypted_point == encrypted_key {
+            return Some(scalar);
+        }
+    }
+    None
+}
 // ------- ElGamalCommitment Partial Eq, Eq, Sub, Mul ------- //
 
 impl PartialEq for ElGamalCommitment {
@@ -181,10 +203,21 @@ mod test {
         let comm_scalar = Scalar::random(&mut OsRng);
         let comm =
             ElGamalCommitment::generate_commitment(&pk, comm_scalar, Scalar::from(16 as u64));
-        
+
         let comit_bytes = comm.to_bytes();
         println!("Bytes {:?}", comit_bytes);
         let comit = ElGamalCommitment::from_bytes(&comit_bytes).unwrap();
         assert_eq!(comm, comit);
+    }
+    #[test]
+    fn verify_decommit_value() {
+        use rand::rngs::OsRng;
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        let comm_scalar = Scalar::random(&mut OsRng);
+        let comm =
+            ElGamalCommitment::generate_commitment(&pk, comm_scalar, Scalar::from(160000 as u64));
+        let decrypted_scalar = comm.decommit_value(&sk).unwrap();
+        assert_eq!(decrypted_scalar, Scalar::from(16000 as u64));
     }
 }

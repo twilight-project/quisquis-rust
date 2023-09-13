@@ -27,5 +27,10 @@ pub trait PublicKey {
 
     fn sign_msg(&self, msg: &[u8], privkey: &Self::K, label: &'static [u8]) -> Signature;
 
-    fn verify_msg(&self, msg: &[u8], sig: &Signature, label: &'static [u8]) -> Result<(), &'static str>;
+    fn verify_msg(
+        &self,
+        msg: &[u8],
+        sig: &Signature,
+        label: &'static [u8],
+    ) -> Result<(), &'static str>;
 }

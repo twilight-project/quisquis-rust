@@ -6,11 +6,11 @@ use core::ops::{Add, Mul};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
+use merlin::Transcript;
 use rand::{CryptoRng, Rng};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
-use zkschnorr::{VerificationKey, Signature};
-use merlin::Transcript;
+use zkschnorr::{Signature, VerificationKey};
 const SCALAR_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -33,12 +33,18 @@ impl SecretKey for RistrettoSecretKey {
     }
 }
 // ------- PrivateKey Partial Eq, Eq ------- //
-
+impl Eq for RistrettoSecretKey {}
 impl PartialEq for RistrettoSecretKey {
     fn eq(&self, other: &RistrettoSecretKey) -> bool {
-        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
-        // time comparision
-        self.0 == other.0
+        // uses contant time equal defined for Scalar
+        self.0.eq(&other.0)
+    }
+}
+
+impl Copy for RistrettoSecretKey {}
+impl Clone for RistrettoSecretKey {
+    fn clone(&self) -> RistrettoSecretKey {
+        *self
     }
 }
 
@@ -121,25 +127,28 @@ impl PublicKey for RistrettoPublicKey {
     }
     ///Sign a message using ZkSchnor signature scheme\
     /// Returns a tuple of (signature, random_scalar)
-    /// 
+    ///
     fn sign_msg(&self, msg: &[u8], privkey: &Self::K, label: &'static [u8]) -> Signature {
-       
-       // let signing_key = SigningKey::new(privkey.0);
+        // let signing_key = SigningKey::new(privkey.0);
         let verifying_key = VerificationKey::new(self.gr, self.grsk);
         Signature::sign_message(label, &msg, verifying_key, privkey.0)
     }
 
     /// Verify a message using ZkSchnor signature scheme
     /// Returns a boolean
-    /// 
-    fn verify_msg(&self, msg: &[u8], signature: &Signature, label: &'static [u8]) -> Result<(), &'static str> {
+    ///
+    fn verify_msg(
+        &self,
+        msg: &[u8],
+        signature: &Signature,
+        label: &'static [u8],
+    ) -> Result<(), &'static str> {
         let verifying_key = VerificationKey::new(self.gr, self.grsk);
         let verify = Signature::verify_message(&signature, label, msg, verifying_key);
         match verify {
             Ok(_) => Ok(()),
             Err(_) => Err("Invalid Signature"),
-        } 
-
+        }
     }
 }
 
@@ -224,7 +233,7 @@ mod test {
         let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
         //convert to ZkSchnorr types
 
-        let msg  = "This is a signing message";
+        let msg = "This is a signing message";
         let sign = pk.sign_msg(msg.as_bytes(), &sk, ("valueSign").as_bytes());
         let verify = pk.verify_msg(msg.as_bytes(), &sign, ("valueSign").as_bytes());
         assert!(verify.is_ok(), "Invalid Signature");

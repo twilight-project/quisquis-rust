@@ -73,7 +73,7 @@ impl Account {
         self: &Self,
         sk: &RistrettoSecretKey,
     ) -> Result<Scalar, &'static str> {
-        self.pk.verify_keypair(sk.clone())?;
+        self.pk.verify_keypair(sk)?;
         match self.comm.decommit_value(sk) {
             Some(bl) => Ok(bl),
             None => Err("Decryption value failed."),

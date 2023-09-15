@@ -579,6 +579,101 @@ impl<'a> Verifier<'a> {
             Err("Same Value Proof Verify: Failed")
         }
     }
+
+    /// erify_update_account_dark_tx_verifier verifies output accounts in dark transaction were updated correctly
+    pub fn verify_update_account_dark_tx_verifier(
+        delta_updated_accounts: &[Account],
+        output_accounts: &[Account],
+        z_vector: &[Scalar],
+        x: &Scalar,
+        verifier: &mut Verifier,
+    ) -> Result<(), &'static str> {
+        // check length is same and through error
+        if delta_updated_accounts.len() != output_accounts.len() {
+            return Err("Length of delta_updated_accounts and output_accounts is not same");
+        }
+        let mut e_gr: Vec<CompressedRistretto> = Vec::new();
+        let mut e_grsk: Vec<CompressedRistretto> = Vec::new();
+        // reconstruct e from prover. it proves that the sender account pk's were correctly updated
+        for i in 0..delta_updated_accounts.iter().count() {
+            let combined_scalars = vec![z_vector[0], *x];
+            let point = vec![delta_updated_accounts[i].pk.gr, output_accounts[i].pk.gr];
+            e_gr.push(
+                Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                    .ok_or("DLOG Proof Verify: Failed")?
+                    .compress(),
+            );
+
+            let combined_scalars = vec![z_vector[0], *x];
+            let point = vec![
+                delta_updated_accounts[i].pk.grsk,
+                output_accounts[i].pk.grsk,
+            ];
+            e_grsk.push(
+                Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                    .ok_or("DLOG Proof Verify: Failed")?
+                    .compress(),
+            );
+        }
+
+        //recreate f from prover. it proves that the sender account commitments were correctly updated and the updated committments were
+        // correctly created with a 0 balance
+        // updated_account.comm - account.comm should be equal to pk * comm_rscalar if 0 balance was commmitted
+
+        // create pk ^ comm_rscalar
+        let pk_comm_scalar = delta_updated_accounts
+            .iter()
+            .zip(output_accounts.iter())
+            .map(|(i, d)| d.comm - i.comm)
+            .collect::<Vec<_>>();
+
+        // recreate f from prover.
+        let mut f_c: Vec<CompressedRistretto> = Vec::new();
+        let mut f_d: Vec<CompressedRistretto> = Vec::new();
+
+        for i in 0..delta_updated_accounts.iter().count() {
+            let combined_scalars = vec![z_vector[1], *x];
+            let point = vec![delta_updated_accounts[i].pk.gr, pk_comm_scalar[i].c];
+            f_c.push(
+                Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                    .ok_or("DLOG Proof Verify: Failed")?
+                    .compress(),
+            );
+
+            let combined_scalars = vec![z_vector[1], *x];
+            let point = vec![delta_updated_accounts[i].pk.grsk, pk_comm_scalar[i].d];
+            f_d.push(
+                Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                    .ok_or("DLOG Proof Verify: Failed")?
+                    .compress(),
+            );
+        }
+
+        verifier.new_domain_sep(b"VerifyUpdateAccountDarkTx");
+        // lets do x <- H(updated_delta_accounts || output_accounts || e || f)
+        for (input, output) in delta_updated_accounts.iter().zip(output_accounts.iter()) {
+            verifier.allocate_account(b"account", &input);
+            verifier.allocate_account(b"updatedaccount", &output);
+        }
+
+        for (e11, e12) in e_gr.iter().zip(e_grsk.iter()) {
+            verifier.allocate_point(b"commitmentgr", e11);
+            verifier.allocate_point(b"commitmentgrsk", e12);
+        }
+        for (f11, f12) in f_c.iter().zip(f_d.iter()) {
+            verifier.allocate_point(b"commitmentc", f11);
+            verifier.allocate_point(b"commitmentd", f12);
+        }
+
+        // obtain a scalar challenge
+        let verify_x = verifier.get_challenge(b"challenge");
+
+        if x == &verify_x {
+            Ok(())
+        } else {
+            Err("DLOG Proof Verify: Failed")
+        }
+    }
 }
 
 // ------------------------------------------------------------------------
@@ -731,6 +826,45 @@ mod test {
         let check = Verifier::verify_update_account_verifier(
             &updated_accounts_slice.to_vec(),
             &updated_delta_accounts_slice.to_vec(),
+            &z_vector,
+            &x,
+            &mut verifier,
+        );
+        assert!(check.is_ok());
+    }
+
+    #[test]
+    fn verify_update_account_dark_tx_verifier_test() {
+        let mut accounts: Vec<Account> = Vec::new();
+        let mut updated_accounts: Vec<Account> = Vec::new();
+        // lets get a random scalar to update the account
+        let updated_keys_scalar = Scalar::random(&mut OsRng);
+        // lets get a random scalar to update the commitments
+        let comm_scalar = Scalar::random(&mut OsRng);
+        for _i in 0..4 {
+            let (acc, _) = Account::generate_random_account_with_value(Scalar::from(10u64));
+
+            let updated_account =
+                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
+            accounts.push(acc);
+            updated_accounts.push(updated_account);
+        }
+        //create Prover
+        let mut transcript = Transcript::new(b"UpdateAccount");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        let (z_vector, x) = Prover::verify_update_account_dark_tx_prover(
+            &accounts.to_vec(),
+            &updated_accounts.to_vec(),
+            updated_keys_scalar,
+            comm_scalar,
+            &mut prover,
+        )
+        .get_dlog();
+        let mut transcript = Transcript::new(b"UpdateAccount");
+        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        let check = Verifier::verify_update_account_dark_tx_verifier(
+            &accounts.to_vec(),
+            &updated_accounts.to_vec(),
             &z_vector,
             &x,
             &mut verifier,

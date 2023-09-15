@@ -727,6 +727,97 @@ impl<'a> Prover<'a> {
         //returning Empty vector for zr2 as it is not needed in this case
         return SigmaProof::Dleq(zv_vector, vec![zr1], vec![], x);
     }
+
+    /// verify_update_account_dark_tx_prover confirms that the set of output accounts
+    /// have been properly updated from inputs using the same key and commitment scalar
+    /// pk' = pk * pk_rscalar
+    /// comm' = comm + pk * comm_rscalar
+    /// comm is updated with 0 balance
+    pub fn verify_update_account_dark_tx_prover(
+        delta_updated_accounts: &[Account],
+        output_accounts: &[Account],
+        pk_rscalar: Scalar,
+        comm_rscalar: Scalar,
+        prover: &mut Prover,
+    ) -> SigmaProof {
+        //check length is same
+        assert_eq!(delta_updated_accounts.len(), output_accounts.len());
+        // Using a single scalar to update all the pks and another same scalar to update account commitments to save proof data
+
+        prover.new_domain_sep(b"VerifyUpdateAccountDarkTx");
+        prover.scalars.push(pk_rscalar);
+        prover.scalars.push(comm_rscalar);
+        let mut transcript_rng = prover.prove_impl(); //confirm
+
+        // Generate blinding factors to commit on the updated accounts
+        let pk_blinding_scalar = Scalar::random(&mut transcript_rng);
+        let comm_blinding_scalar = Scalar::random(&mut transcript_rng);
+
+        // lets multiply pk_blinding_scalar with the pk of the updated delta accounts
+        let delta_pk_blinding_scalar = delta_updated_accounts
+            .iter()
+            .map(|i| i.pk * &pk_blinding_scalar)
+            .collect::<Vec<_>>();
+
+        // check if (c,d)/c,d) = pkdelta_r
+        // lets do c-c and d-d for the commitments in both input and updated_account vectors
+        let check_zero_commitment = delta_updated_accounts
+            .iter()
+            .zip(output_accounts.iter())
+            .map(|(d, o)| o.comm - d.comm)
+            .collect::<Vec<_>>();
+
+        // lets create pkdelta_comm_rscalar that is the collection of all delta account pks with comm_rscalar multiplied
+        let pkdelta_comm_rscalar = delta_updated_accounts
+            .iter()
+            .map(|d| d.pk * &comm_rscalar)
+            .collect::<Vec<_>>();
+
+        // now check if the difference between output_accounts.comm and updated_delta_accounts.comm are equal to pkdelta_comm_rscalar
+        // check if len is same first
+        assert_eq!(check_zero_commitment.len(), pkdelta_comm_rscalar.len());
+        for (comm_diff, pk_scalar) in check_zero_commitment
+            .iter()
+            .zip(pkdelta_comm_rscalar.iter())
+        {
+            if comm_diff.c != pk_scalar.gr || comm_diff.d != pk_scalar.grsk {
+                panic!("Commitments are not properly updated. Every Commitment should be updated with 0 balance");
+            }
+        }
+
+        // Lets commit on comm_rscalar
+        // lets multiply comm_blinding_scalar with the pk of the updated delta accounts
+        let delta_pk_comm_blinding_scalar = delta_updated_accounts
+            .iter()
+            .map(|i| i.pk * &comm_blinding_scalar)
+            .collect::<Vec<_>>();
+
+        // lets do x <- H(updated_delta_accounts || output_accounts ||delta_pk_blinding_scalar ||delta_pk_comm_blinding_scalar)
+        for (inp, out) in delta_updated_accounts.iter().zip(output_accounts.iter()) {
+            prover.allocate_account(b"account", inp);
+            prover.allocate_account(b"updatedaccount", &out);
+        }
+
+        for pk in delta_pk_blinding_scalar.iter() {
+            prover.allocate_point(b"commitmentgr", &pk.gr);
+            prover.allocate_point(b"commitmentgrsk", &pk.grsk);
+        }
+
+        for pk in delta_pk_comm_blinding_scalar.iter() {
+            prover.allocate_point(b"commitmentc", &pk.gr);
+            prover.allocate_point(b"commitmentd", &pk.grsk);
+        }
+        // obtain a scalar challenge
+        let x = prover.get_challenge(b"challenge");
+
+        let mut z_vector: Vec<Scalar> = Vec::new();
+
+        // lets do z = blinding_scalar - (x * rscalar)
+        z_vector.push(pk_blinding_scalar - (x * pk_rscalar));
+        z_vector.push(comm_blinding_scalar - (x * comm_rscalar));
+
+        return SigmaProof::Dlog(z_vector, x);
+    }
 }
 // ------------------------------------------------------------------------
 // Tests

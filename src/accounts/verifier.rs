@@ -1317,7 +1317,7 @@ mod test {
         //create rscalar for epsilon vector for updated sender + receiver
         let r_scalar_bp = vec![rs_sender[0], rs_sender[1], r_scalars[2], r_scalars[3]];
         let proof =
-            prover.verify_non_negative_sender_reciver_prover(&balance_vector_bp, &r_scalar_bp);
+            prover.verify_non_negative_sender_receiver_prover(&balance_vector_bp, &r_scalar_bp);
 
         // let balance_odd: Vec<u64> = vec![5, 3, 0, 0, 0];
         // let r_odd: Vec<Scalar> = vec![
@@ -1330,7 +1330,7 @@ mod test {
 
         // let mut transcript = Transcript::new(b"Test_notPower");
         // let mut prover = Prover::new(b"Bulletproof", &mut transcript);
-        // let proof = prover.verify_non_negative_sender_reciver_prover(&balance_odd, &r_odd);
+        // let proof = prover.verify_non_negative_sender_receiver_prover(&balance_odd, &r_odd);
         // println!("{:?}", proof);
         //Verify
 
@@ -1434,7 +1434,7 @@ mod test {
             r_scalars[4],
         ];
         let proof =
-            prover.verify_non_negative_sender_reciver_prover(&balance_vector_bp, &r_scalar_bp);
+            prover.verify_non_negative_sender_receiver_prover(&balance_vector_bp, &r_scalar_bp);
 
         //Verify
 

@@ -543,7 +543,7 @@ impl<'a> Prover<'a> {
 
     // zero_balance_account_prover creates a sigma proof for zero
     // balance commitment of all the random anonymity account
-    pub fn zero_balance_account_prover(
+    pub fn zero_balance_account_vector_prover(
         anonymity_accounts: &[Account],
         comm_rscalar: &[Scalar],
         prover: &mut Prover,
@@ -554,7 +554,7 @@ impl<'a> Prover<'a> {
         //let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
         //let mut prover = Prover::new(b"DLOGProof", &mut transcript);
 
-        prover.new_domain_sep(b"ZeroBalanceAccountProof");
+        prover.new_domain_sep(b"ZeroBalanceAccountVectorProof");
         //adding witness to initialze transcript RNG (Random Number Generator)
         prover.scalars = comm_rscalar.iter().cloned().collect();
         //add statement accounts to transcript
@@ -601,7 +601,43 @@ impl<'a> Prover<'a> {
 
         return SigmaProof::Dlog(z_vector, x);
     }
+    // zero_balance_account_prover creates a sigma proof for zero
+    // balance commitment of all the random anonymity account
+    pub fn zero_balance_account_prover(
+        account: Account,
+        comm_rscalar: Scalar,
+        prover: &mut Prover,
+    ) -> SigmaProof {
+        prover.new_domain_sep(b"ZeroBalanceAccountProof");
+        //adding witness to initialze transcript RNG (Random Number Generator)
+        prover.scalars.push(comm_rscalar.clone());
+        //add statement accounts to transcript
 
+        prover.allocate_account(b"zero_account", &account);
+
+        let mut transcript_rng = prover.prove_impl(); //confirm
+
+        // create random  scalar r,
+        let r: Scalar = Scalar::random(&mut transcript_rng);
+
+        //let create e = pk.g ^ r
+        let e = account.pk.gr.decompress().unwrap() * r;
+
+        //let create f = pk.h ^ r
+        let f = account.pk.grsk.decompress().unwrap() * r;
+        //adding e,f to transcript
+
+        prover.allocate_point(b"e", &e.compress());
+        prover.allocate_point(b"f", &f.compress());
+
+        // obtain a scalar challenge
+        let x = prover.get_challenge(b"challenge");
+
+        // lets create z = r - x * comm_scalar
+        let z = r - comm_rscalar * x;
+
+        return SigmaProof::Dlog(vec![z], x);
+    }
     // destroy_account_prover creates a sigma proof for zero
     // balance commitment and the knowledge of sk of all the accounts
     pub fn destroy_account_prover(
@@ -753,7 +789,7 @@ impl<'a> Prover<'a> {
 
         // Generate blinding factors to commit on the updated accounts
         let pk_blinding_scalar = Scalar::random(&mut transcript_rng);
-        //let comm_blinding_scalar = Scalar::random(&mut transcript_rng);
+        let comm_blinding_scalar = Scalar::random(&mut transcript_rng);
 
         // lets multiply pk_blinding_scalar with the pk of the updated delta accounts
         let delta_pk_blinding_scalar = delta_updated_accounts
@@ -761,66 +797,66 @@ impl<'a> Prover<'a> {
             .map(|i| i.pk * &pk_blinding_scalar)
             .collect::<Vec<_>>();
 
-        // check if (c,d)/c,d) = pkdelta_r
-        // lets do c-c and d-d for the commitments in both input and updated_account vectors
-        // let check_zero_commitment = delta_updated_accounts
-        //     .iter()
-        //     .zip(output_accounts.iter())
-        //     .map(|(d, o)| o.comm - d.comm)
-        //     .collect::<Vec<_>>();
+        //check if (c,d)/c,d) = pkdelta_r
+        //lets do c-c and d-d for the commitments in both input and updated_account vectors
+        let check_zero_commitment = delta_updated_accounts
+            .iter()
+            .zip(output_accounts.iter())
+            .map(|(d, o)| o.comm - d.comm)
+            .collect::<Vec<_>>();
 
-        // // lets create pkdelta_comm_rscalar that is the collection of all delta account pks with comm_rscalar multiplied
-        // let pkdelta_comm_rscalar = delta_updated_accounts
-        //     .iter()
-        //     .map(|d| d.pk * &comm_rscalar)
-        //     .collect::<Vec<_>>();
+        // lets create pkdelta_comm_rscalar that is the collection of all delta account pks with comm_rscalar multiplied
+        let pkdelta_comm_rscalar = delta_updated_accounts
+            .iter()
+            .map(|d| d.pk * &comm_rscalar)
+            .collect::<Vec<_>>();
 
         // now check if the difference between output_accounts.comm and updated_delta_accounts.comm are equal to pkdelta_comm_rscalar
         // check if len is same first
-        // assert_eq!(check_zero_commitment.len(), pkdelta_comm_rscalar.len());
-        // for (comm_diff, pk_scalar) in check_zero_commitment
-        //     .iter()
-        //     .zip(pkdelta_comm_rscalar.iter())
-        // {
-        //     if comm_diff.c != pk_scalar.gr || comm_diff.d != pk_scalar.grsk {
-        //         panic!("Commitments are not properly updated. Every Commitment should be updated with 0 balance");
-        //     }
-        // }
+        assert_eq!(check_zero_commitment.len(), pkdelta_comm_rscalar.len());
+        for (comm_diff, pk_scalar) in check_zero_commitment
+            .iter()
+            .zip(pkdelta_comm_rscalar.iter())
+        {
+            if comm_diff.c != pk_scalar.gr || comm_diff.d != pk_scalar.grsk {
+                panic!("Commitments are not properly updated. Every Commitment should be updated with 0 balance");
+            }
+        }
 
-        // Lets commit on comm_rscalar
+        //Lets commit on comm_rscalar
         // lets multiply comm_blinding_scalar with the pk of the updated delta accounts
-        // let delta_pk_comm_blinding_scalar = delta_updated_accounts
-        //     .iter()
-        //     .map(|i| i.pk * &comm_blinding_scalar)
-        //     .collect::<Vec<_>>();
-        println!("Prover");
+        let delta_pk_comm_blinding_scalar = delta_updated_accounts
+            .iter()
+            .map(|i| i.pk * &comm_blinding_scalar)
+            .collect::<Vec<_>>();
+        // println!("Prover");
         // lets do x <- H(updated_delta_accounts || output_accounts ||delta_pk_blinding_scalar ||delta_pk_comm_blinding_scalar)
         for (inp, out) in delta_updated_accounts.iter().zip(output_accounts.iter()) {
             prover.allocate_account(b"account", inp);
             prover.allocate_account(b"updatedaccount", &out);
-            println!("inp {:?}", inp);
-            println!("out {:?}", out);
+            //   println!("inp {:?}", inp);
+            //   println!("out {:?}", out);
         }
 
         for pk in delta_pk_blinding_scalar.iter() {
             prover.allocate_point(b"commitmentgr", &pk.gr);
             prover.allocate_point(b"commitmentgrsk", &pk.grsk);
-            println!("gr {:?}", pk.gr);
-            println!("grsk {:?}", pk.grsk);
+            //   println!("gr {:?}", pk.gr);
+            //   println!("grsk {:?}", pk.grsk);
         }
 
-        // for pk in delta_pk_comm_blinding_scalar.iter() {
-        //     prover.allocate_point(b"commitmentc", &pk.gr);
-        //     prover.allocate_point(b"commitmentd", &pk.grsk);
-        // }
+        for pk in delta_pk_comm_blinding_scalar.iter() {
+            prover.allocate_point(b"commitmentc", &pk.gr);
+            prover.allocate_point(b"commitmentd", &pk.grsk);
+        }
         // obtain a scalar challenge
         let x = prover.get_challenge(b"challenge");
-        println!("x {:?}", x);
+        // println!("x {:?}", x);
         // lets do z = blinding_scalar - (x * rscalar)
         let z_pk_x_rscalar = pk_blinding_scalar - (x * pk_rscalar);
-        //let z_comm_x_rscalar = comm_blinding_scalar - (x * comm_rscalar);
-        let z_vector: Vec<Scalar> = vec![z_pk_x_rscalar];
-        println!("z_vector {:?}", z_vector);
+        let z_comm_x_rscalar = comm_blinding_scalar - (x * comm_rscalar);
+        let z_vector: Vec<Scalar> = vec![z_pk_x_rscalar, z_comm_x_rscalar];
+        // println!("z_vector {:?}", z_vector);
         return SigmaProof::Dlog(z_vector, x);
     }
 }

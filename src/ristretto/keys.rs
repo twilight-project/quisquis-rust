@@ -6,7 +6,7 @@ use core::ops::{Add, Mul};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
-use merlin::Transcript;
+
 use rand::{CryptoRng, Rng};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;

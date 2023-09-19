@@ -18,7 +18,6 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::iter;
 ///Zero argument
@@ -651,6 +650,7 @@ pub fn single_bilinearmap(ai: &[Scalar], bj: &[Scalar], yi: &[Scalar]) -> Scalar
 mod test {
     use super::*;
     use merlin::Transcript;
+    use rand::rngs::OsRng;
 
     const ROWS: usize = 3; //m
     const COLUMNS: usize = 3; //n

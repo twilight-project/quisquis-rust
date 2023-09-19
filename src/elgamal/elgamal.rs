@@ -5,7 +5,7 @@ use curve25519_dalek::{
     ristretto::RistrettoPoint, scalar::Scalar,
 };
 use serde::{Deserialize, Serialize};
-use std::{convert::TryInto, u128};
+use std::convert::TryInto;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ElGamalCommitment {

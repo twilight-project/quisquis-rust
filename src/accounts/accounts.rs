@@ -511,7 +511,7 @@ mod test {
 
         //create random accounts
         for _i in 0..2 {
-            let (acc, sk) = Account::generate_random_account_with_value(10u64.into());
+            let (acc, _sk) = Account::generate_random_account_with_value(10u64.into());
             account_vector.push(acc);
         }
         let (pk, comm) = account_vector[0].get_account();

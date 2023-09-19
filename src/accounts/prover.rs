@@ -2,8 +2,8 @@
 
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
 use crate::{accounts::Account, ristretto::RistrettoPublicKey, ristretto::RistrettoSecretKey};
-use bulletproofs::r1cs::*;
-use bulletproofs::{r1cs, BulletproofGens, PedersenGens, RangeProof};
+//use bulletproofs::r1cs::*;
+use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
@@ -491,16 +491,18 @@ impl<'a> Prover<'a> {
         }
     }
 
-    //verify_non_negative_sender_reciver_prover creates range proof on sender accounts and Receiver accounts with zero balance
+    //verify_non_negative_sender_reciver_prover creates range proof on sender accounts and Receiver accounts with +ve balance
     pub fn verify_non_negative_sender_reciver_prover(
         &mut self,
         bl: &[u64],
         rscalar: &[Scalar],
     ) -> Vec<RangeProof> {
         let size = bl.len();
-        //check if number of values for renage proof are a power of 2
-        let power_of_2 = (size & (size - 1)) == 0;
+
+        //check if number of values for range proof are a power of 2
         //if true use batch bulletproof
+        let power_of_2 = (size & (size - 1)) == 0;
+
         // Generators for Pedersen commitments.  These can be selected
         // independently of the Bulletproofs generators.
         let pc_gens = PedersenGens::default();
@@ -751,7 +753,7 @@ impl<'a> Prover<'a> {
 
         // Generate blinding factors to commit on the updated accounts
         let pk_blinding_scalar = Scalar::random(&mut transcript_rng);
-        let comm_blinding_scalar = Scalar::random(&mut transcript_rng);
+        //let comm_blinding_scalar = Scalar::random(&mut transcript_rng);
 
         // lets multiply pk_blinding_scalar with the pk of the updated delta accounts
         let delta_pk_blinding_scalar = delta_updated_accounts
@@ -761,61 +763,64 @@ impl<'a> Prover<'a> {
 
         // check if (c,d)/c,d) = pkdelta_r
         // lets do c-c and d-d for the commitments in both input and updated_account vectors
-        let check_zero_commitment = delta_updated_accounts
-            .iter()
-            .zip(output_accounts.iter())
-            .map(|(d, o)| o.comm - d.comm)
-            .collect::<Vec<_>>();
+        // let check_zero_commitment = delta_updated_accounts
+        //     .iter()
+        //     .zip(output_accounts.iter())
+        //     .map(|(d, o)| o.comm - d.comm)
+        //     .collect::<Vec<_>>();
 
-        // lets create pkdelta_comm_rscalar that is the collection of all delta account pks with comm_rscalar multiplied
-        let pkdelta_comm_rscalar = delta_updated_accounts
-            .iter()
-            .map(|d| d.pk * &comm_rscalar)
-            .collect::<Vec<_>>();
+        // // lets create pkdelta_comm_rscalar that is the collection of all delta account pks with comm_rscalar multiplied
+        // let pkdelta_comm_rscalar = delta_updated_accounts
+        //     .iter()
+        //     .map(|d| d.pk * &comm_rscalar)
+        //     .collect::<Vec<_>>();
 
         // now check if the difference between output_accounts.comm and updated_delta_accounts.comm are equal to pkdelta_comm_rscalar
         // check if len is same first
-        assert_eq!(check_zero_commitment.len(), pkdelta_comm_rscalar.len());
-        for (comm_diff, pk_scalar) in check_zero_commitment
-            .iter()
-            .zip(pkdelta_comm_rscalar.iter())
-        {
-            if comm_diff.c != pk_scalar.gr || comm_diff.d != pk_scalar.grsk {
-                panic!("Commitments are not properly updated. Every Commitment should be updated with 0 balance");
-            }
-        }
+        // assert_eq!(check_zero_commitment.len(), pkdelta_comm_rscalar.len());
+        // for (comm_diff, pk_scalar) in check_zero_commitment
+        //     .iter()
+        //     .zip(pkdelta_comm_rscalar.iter())
+        // {
+        //     if comm_diff.c != pk_scalar.gr || comm_diff.d != pk_scalar.grsk {
+        //         panic!("Commitments are not properly updated. Every Commitment should be updated with 0 balance");
+        //     }
+        // }
 
         // Lets commit on comm_rscalar
         // lets multiply comm_blinding_scalar with the pk of the updated delta accounts
-        let delta_pk_comm_blinding_scalar = delta_updated_accounts
-            .iter()
-            .map(|i| i.pk * &comm_blinding_scalar)
-            .collect::<Vec<_>>();
-
+        // let delta_pk_comm_blinding_scalar = delta_updated_accounts
+        //     .iter()
+        //     .map(|i| i.pk * &comm_blinding_scalar)
+        //     .collect::<Vec<_>>();
+        println!("Prover");
         // lets do x <- H(updated_delta_accounts || output_accounts ||delta_pk_blinding_scalar ||delta_pk_comm_blinding_scalar)
         for (inp, out) in delta_updated_accounts.iter().zip(output_accounts.iter()) {
             prover.allocate_account(b"account", inp);
             prover.allocate_account(b"updatedaccount", &out);
+            println!("inp {:?}", inp);
+            println!("out {:?}", out);
         }
 
         for pk in delta_pk_blinding_scalar.iter() {
             prover.allocate_point(b"commitmentgr", &pk.gr);
             prover.allocate_point(b"commitmentgrsk", &pk.grsk);
+            println!("gr {:?}", pk.gr);
+            println!("grsk {:?}", pk.grsk);
         }
 
-        for pk in delta_pk_comm_blinding_scalar.iter() {
-            prover.allocate_point(b"commitmentc", &pk.gr);
-            prover.allocate_point(b"commitmentd", &pk.grsk);
-        }
+        // for pk in delta_pk_comm_blinding_scalar.iter() {
+        //     prover.allocate_point(b"commitmentc", &pk.gr);
+        //     prover.allocate_point(b"commitmentd", &pk.grsk);
+        // }
         // obtain a scalar challenge
         let x = prover.get_challenge(b"challenge");
-
-        let mut z_vector: Vec<Scalar> = Vec::new();
-
+        println!("x {:?}", x);
         // lets do z = blinding_scalar - (x * rscalar)
-        z_vector.push(pk_blinding_scalar - (x * pk_rscalar));
-        z_vector.push(comm_blinding_scalar - (x * comm_rscalar));
-
+        let z_pk_x_rscalar = pk_blinding_scalar - (x * pk_rscalar);
+        //let z_comm_x_rscalar = comm_blinding_scalar - (x * comm_rscalar);
+        let z_vector: Vec<Scalar> = vec![z_pk_x_rscalar];
+        println!("z_vector {:?}", z_vector);
         return SigmaProof::Dlog(z_vector, x);
     }
 }
@@ -826,13 +831,9 @@ impl<'a> Prover<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        accounts::{Account, Prover, RangeProofVerifier, Verifier},
-        keys::{PublicKey, SecretKey},
-        ristretto::{RistrettoPublicKey, RistrettoSecretKey},
-    };
-    use bulletproofs::r1cs;
-    use bulletproofs::{BulletproofGens, PedersenGens};
+    use crate::accounts::Prover;
+    // use bulletproofs::*;
+    //use bulletproofs::{BulletproofGens, PedersenGens};
     use rand::rngs::OsRng;
     #[test]
     fn verify_non_negative_sender_reciver_prover_test() {

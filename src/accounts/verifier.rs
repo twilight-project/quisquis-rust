@@ -9,7 +9,7 @@ use curve25519_dalek::{
 
 use crate::accounts::{RangeProofVerifier, TranscriptProtocol};
 use crate::{accounts::Account, ristretto::RistrettoPublicKey};
-use bulletproofs::{BulletproofGens, PedersenGens, ProofError, RangeProof};
+use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use merlin::Transcript;
 
 use super::SigmaProof;
@@ -376,7 +376,7 @@ impl<'a> Verifier<'a> {
         &mut self,
         epsilon_account: &[Account],
         proof: &RangeProof,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), &'static str> {
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(64, 16);
 
@@ -385,15 +385,19 @@ impl<'a> Verifier<'a> {
         let commitments: Vec<CompressedRistretto> =
             epsilon_account.iter().map(|acc| acc.comm.d).collect();
 
-        proof.verify_multiple(&bp_gens, &pc_gens, self.transcript, &commitments, 64)?;
-        Ok(())
+        let result = proof.verify_multiple(&bp_gens, &pc_gens, self.transcript, &commitments, 64);
+        println!("Result {:?}", result);
+        match result {
+            Ok(_) => Ok(()),
+            Err(_) => Err("Bulletproof verification failed"),
+        }
     }
     //verify_non_negative_verifier verifies range proof on Receiver accounts with zero balance
     pub fn verify_non_negative_sender_receiver_bulletproof_vector_verifier(
         &mut self,
         epsilon_account: &[Account],
         proof_vector: &[RangeProof],
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), &'static str> {
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(64, 1);
 
@@ -403,7 +407,10 @@ impl<'a> Verifier<'a> {
             epsilon_account.iter().map(|acc| acc.comm.d).collect();
 
         for (proof, com) in proof_vector.iter().zip(commitments.iter()) {
-            proof.verify_single(&bp_gens, &pc_gens, self.transcript, &com, 64)?;
+            match proof.verify_single(&bp_gens, &pc_gens, self.transcript, &com, 64) {
+                Ok(_) => (),
+                Err(_) => return Err("Bulletproof verification failed"),
+            }
         }
 
         Ok(())
@@ -600,7 +607,7 @@ impl<'a> Verifier<'a> {
             let point = vec![delta_updated_accounts[i].pk.gr, output_accounts[i].pk.gr];
             e_gr.push(
                 Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                    .ok_or("DLOG Proof Verify: Failed")?
+                    .ok_or("Update Account: DLOG Proof Verify: Failed")?
                     .compress(),
             );
 
@@ -611,7 +618,7 @@ impl<'a> Verifier<'a> {
             ];
             e_grsk.push(
                 Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                    .ok_or("DLOG Proof Verify: Failed")?
+                    .ok_or("Update Account: DLOG Proof Verify: Failed")?
                     .compress(),
             );
         }
@@ -621,57 +628,63 @@ impl<'a> Verifier<'a> {
         // updated_account.comm - account.comm should be equal to pk * comm_rscalar if 0 balance was commmitted
 
         // create pk ^ comm_rscalar
-        let pk_comm_scalar = delta_updated_accounts
-            .iter()
-            .zip(output_accounts.iter())
-            .map(|(i, d)| d.comm - i.comm)
-            .collect::<Vec<_>>();
+        // let pk_comm_scalar = delta_updated_accounts
+        //     .iter()
+        //     .zip(output_accounts.iter())
+        //     .map(|(i, d)| d.comm - i.comm)
+        //     .collect::<Vec<_>>();
 
-        // recreate f from prover.
-        let mut f_c: Vec<CompressedRistretto> = Vec::new();
-        let mut f_d: Vec<CompressedRistretto> = Vec::new();
+        // // recreate f from prover.
+        // let mut f_c: Vec<CompressedRistretto> = Vec::new();
+        // let mut f_d: Vec<CompressedRistretto> = Vec::new();
 
-        for i in 0..delta_updated_accounts.iter().count() {
-            let combined_scalars = vec![z_vector[1], *x];
-            let point = vec![delta_updated_accounts[i].pk.gr, pk_comm_scalar[i].c];
-            f_c.push(
-                Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                    .ok_or("DLOG Proof Verify: Failed")?
-                    .compress(),
-            );
+        // for i in 0..delta_updated_accounts.iter().count() {
+        //     let combined_scalars = vec![z_vector[1], *x];
+        //     let point = vec![delta_updated_accounts[i].pk.gr, pk_comm_scalar[i].c];
+        //     f_c.push(
+        //         Verifier::multiscalar_multiplication(&combined_scalars, &point)
+        //             .ok_or("DLOG Proof Verify: Failed")?
+        //             .compress(),
+        //     );
 
-            let combined_scalars = vec![z_vector[1], *x];
-            let point = vec![delta_updated_accounts[i].pk.grsk, pk_comm_scalar[i].d];
-            f_d.push(
-                Verifier::multiscalar_multiplication(&combined_scalars, &point)
-                    .ok_or("DLOG Proof Verify: Failed")?
-                    .compress(),
-            );
-        }
-
+        //     let combined_scalars = vec![z_vector[1], *x];
+        //     let point = vec![delta_updated_accounts[i].pk.grsk, pk_comm_scalar[i].d];
+        //     f_d.push(
+        //         Verifier::multiscalar_multiplication(&combined_scalars, &point)
+        //             .ok_or("DLOG Proof Verify: Failed")?
+        //             .compress(),
+        //     );
+        // }
+        println!("Verifier");
+        println!("Z vector {:?}", z_vector);
+        println!("X {:?}", x);
         verifier.new_domain_sep(b"VerifyUpdateAccountDarkTx");
         // lets do x <- H(updated_delta_accounts || output_accounts || e || f)
         for (input, output) in delta_updated_accounts.iter().zip(output_accounts.iter()) {
             verifier.allocate_account(b"account", &input);
             verifier.allocate_account(b"updatedaccount", &output);
+            println!("Account {:?}", input);
+            println!("Updated Account {:?}", output);
         }
 
         for (e11, e12) in e_gr.iter().zip(e_grsk.iter()) {
             verifier.allocate_point(b"commitmentgr", e11);
             verifier.allocate_point(b"commitmentgrsk", e12);
+            println!("e11 {:?}", e11);
+            println!("e12 {:?}", e12);
         }
-        for (f11, f12) in f_c.iter().zip(f_d.iter()) {
-            verifier.allocate_point(b"commitmentc", f11);
-            verifier.allocate_point(b"commitmentd", f12);
-        }
+        // for (f11, f12) in f_c.iter().zip(f_d.iter()) {
+        //     verifier.allocate_point(b"commitmentc", f11);
+        //     verifier.allocate_point(b"commitmentd", f12);
+        // }
 
         // obtain a scalar challenge
         let verify_x = verifier.get_challenge(b"challenge");
-
+        println!("Verifier {:?}", verify_x);
         if x == &verify_x {
             Ok(())
         } else {
-            Err("DLOG Proof Verify: Failed")
+            Err("Update Output Challenge : DLOG Proof Verify: Failed")
         }
     }
 }
@@ -683,7 +696,6 @@ impl<'a> Verifier<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::accounts::RangeProofProver;
     use crate::elgamal::elgamal::ElGamalCommitment;
     use crate::{
         accounts::Account,
@@ -693,7 +705,7 @@ mod test {
     };
     use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
 
-    use bulletproofs::r1cs;
+    // use bulletproofs::r1cs;
     use bulletproofs::PedersenGens;
     use rand::rngs::OsRng;
     #[test]
@@ -869,6 +881,7 @@ mod test {
             &x,
             &mut verifier,
         );
+        println!("{:?}", check);
         assert!(check.is_ok());
     }
     // #[test]
@@ -1013,10 +1026,10 @@ mod test {
         // balance that we want to prove should be sender balance - the balance user is trying to send
 
         let bl_first_sender = 5u64;
-        let bl_second_sender = 7u64;
+        let _bl_second_sender = 7u64;
 
         let delta_unwraped = updated_delta_accounts.unwrap();
-        let updated_delta_account_sender: Vec<Account> =
+        let _updated_delta_account_sender: Vec<Account> =
             vec![delta_unwraped[0] /*delta_unwraped[1]*/];
         //let sender_sk_vector: Vec<_> = vec![sender_sk[0] /*sender_sk[1].0*/];
         let value_vector_sender: Vec<u64> = vec![bl_first_sender /*bl_second_sender*/];
@@ -1051,8 +1064,8 @@ mod test {
         //sk [RistrettoSecretKey(Scalar{
         //	bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2],
         //})]
-        let balance_sender = vec![5]; //Balance [5]
-                                      //bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2]
+        let _balance_sender = vec![5]; //Balance [5]
+                                       //bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2]
 
         let scalar_bytes: [u8; 32] = [
             22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81,

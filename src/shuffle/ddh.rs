@@ -9,7 +9,7 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use rand::rngs::OsRng;
+
 // use serde::{Deserialize, Serialize};
 use serde_derive::{Deserialize, Serialize};
 ///DDH Statement

@@ -491,8 +491,8 @@ impl<'a> Prover<'a> {
         }
     }
 
-    //verify_non_negative_sender_reciver_prover creates range proof on sender accounts and Receiver accounts with +ve balance
-    pub fn verify_non_negative_sender_reciver_prover(
+    //verify_non_negative_sender_receiver_prover creates range proof on sender accounts and Receiver accounts with +ve balance
+    pub fn verify_non_negative_sender_receiver_prover(
         &mut self,
         bl: &[u64],
         rscalar: &[Scalar],
@@ -836,7 +836,7 @@ mod test {
     //use bulletproofs::{BulletproofGens, PedersenGens};
     use rand::rngs::OsRng;
     #[test]
-    fn verify_non_negative_sender_reciver_prover_test() {
+    fn verify_non_negative_sender_receiver_prover_test() {
         let balance: Vec<u64> = vec![5, 3, 0, 0];
         let r: Vec<Scalar> = vec![
             Scalar::random(&mut OsRng),
@@ -847,7 +847,7 @@ mod test {
 
         let mut transcript = Transcript::new(b"Test");
         let mut prover = Prover::new(b"Bulletproof", &mut transcript);
-        let proof = prover.verify_non_negative_sender_reciver_prover(&balance, &r);
+        let proof = prover.verify_non_negative_sender_receiver_prover(&balance, &r);
         println!("{:?}", proof);
 
         let balance_odd: Vec<u64> = vec![5, 3, 0, 0, 0];
@@ -861,7 +861,7 @@ mod test {
 
         let mut transcript = Transcript::new(b"Test_notPower");
         let mut prover = Prover::new(b"Bulletproof", &mut transcript);
-        let proof = prover.verify_non_negative_sender_reciver_prover(&balance_odd, &r_odd);
+        let proof = prover.verify_non_negative_sender_receiver_prover(&balance_odd, &r_odd);
         println!("{:?}", proof);
     }
 

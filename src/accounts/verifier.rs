@@ -386,7 +386,7 @@ impl<'a> Verifier<'a> {
             epsilon_account.iter().map(|acc| acc.comm.d).collect();
 
         let result = proof.verify_multiple(&bp_gens, &pc_gens, self.transcript, &commitments, 64);
-        println!("Result {:?}", result);
+        //println!("Result {:?}", result);
         match result {
             Ok(_) => Ok(()),
             Err(_) => Err("Bulletproof verification failed"),
@@ -435,7 +435,7 @@ impl<'a> Verifier<'a> {
         }
     }
     // zero_balance_account_verifier verifies the knowledge of commitment scalar for anonymity set accounts created randomly
-    pub fn zero_balance_account_verifier(
+    pub fn zero_balance_account_vector_verifier(
         anonymity_accounts: &[Account],
         z: &[Scalar],
         x: Scalar,
@@ -447,7 +447,7 @@ impl<'a> Verifier<'a> {
         // lets start a transcript and a verifier script
         // let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
         // let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
-        verifier.new_domain_sep(b"ZeroBalanceAccountProof");
+        verifier.new_domain_sep(b"ZeroBalanceAccounVectorProof");
         //add statement accounts to transcript
         for acc in anonymity_accounts {
             verifier.allocate_account(b"anonymity_account", acc);
@@ -478,6 +478,41 @@ impl<'a> Verifier<'a> {
         }
     }
 
+    // zero_balance_account_verifier verifies the knowledge of commitment scalar for zero balance account
+    pub fn zero_balance_account_verifier(
+        account: Account,
+        z: Scalar,
+        x: Scalar,
+        verifier: &mut Verifier,
+    ) -> Result<(), &'static str> {
+        verifier.new_domain_sep(b"ZeroBalanceAccountProof");
+
+        verifier.allocate_account(b"zero_account", &account);
+
+        //recreate e,f
+        let combined_scalars = vec![z, x];
+        let point = vec![account.pk.gr, account.comm.c];
+        //let create e = (pk.g * z)  + (c * x)
+        let e = Verifier::multiscalar_multiplication(&combined_scalars, &point)
+            .ok_or("Zero balance Account Verify: Failed")?
+            .compress();
+        let point = vec![account.pk.grsk, account.comm.d];
+        // lets create f = d * x + pk.h * z
+        let f = Verifier::multiscalar_multiplication(&combined_scalars, &point)
+            .ok_or("Zero balance Account Verify: Failed")?
+            .compress();
+
+        verifier.allocate_point(b"e", &e);
+        verifier.allocate_point(b"f", &f);
+
+        // obtain a scalar challenge
+        let verify_x = verifier.get_challenge(b"challenge");
+        if x == verify_x {
+            Ok(())
+        } else {
+            Err("Zero balance account verification failed")
+        }
+    }
     // destroy_account_verifier verifies the knowledge
     // of secret keys and the balance of the account to be destroyed is zero
     pub fn destroy_account_verifier(
@@ -628,59 +663,59 @@ impl<'a> Verifier<'a> {
         // updated_account.comm - account.comm should be equal to pk * comm_rscalar if 0 balance was commmitted
 
         // create pk ^ comm_rscalar
-        // let pk_comm_scalar = delta_updated_accounts
-        //     .iter()
-        //     .zip(output_accounts.iter())
-        //     .map(|(i, d)| d.comm - i.comm)
-        //     .collect::<Vec<_>>();
+        let pk_comm_scalar = delta_updated_accounts
+            .iter()
+            .zip(output_accounts.iter())
+            .map(|(i, d)| d.comm - i.comm)
+            .collect::<Vec<_>>();
 
         // // recreate f from prover.
-        // let mut f_c: Vec<CompressedRistretto> = Vec::new();
-        // let mut f_d: Vec<CompressedRistretto> = Vec::new();
+        let mut f_c: Vec<CompressedRistretto> = Vec::new();
+        let mut f_d: Vec<CompressedRistretto> = Vec::new();
 
-        // for i in 0..delta_updated_accounts.iter().count() {
-        //     let combined_scalars = vec![z_vector[1], *x];
-        //     let point = vec![delta_updated_accounts[i].pk.gr, pk_comm_scalar[i].c];
-        //     f_c.push(
-        //         Verifier::multiscalar_multiplication(&combined_scalars, &point)
-        //             .ok_or("DLOG Proof Verify: Failed")?
-        //             .compress(),
-        //     );
+        for i in 0..delta_updated_accounts.iter().count() {
+            let combined_scalars = vec![z_vector[1], *x];
+            let point = vec![delta_updated_accounts[i].pk.gr, pk_comm_scalar[i].c];
+            f_c.push(
+                Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                    .ok_or("DLOG Proof Verify: Failed")?
+                    .compress(),
+            );
 
-        //     let combined_scalars = vec![z_vector[1], *x];
-        //     let point = vec![delta_updated_accounts[i].pk.grsk, pk_comm_scalar[i].d];
-        //     f_d.push(
-        //         Verifier::multiscalar_multiplication(&combined_scalars, &point)
-        //             .ok_or("DLOG Proof Verify: Failed")?
-        //             .compress(),
-        //     );
-        // }
-        println!("Verifier");
-        println!("Z vector {:?}", z_vector);
-        println!("X {:?}", x);
+            let combined_scalars = vec![z_vector[1], *x];
+            let point = vec![delta_updated_accounts[i].pk.grsk, pk_comm_scalar[i].d];
+            f_d.push(
+                Verifier::multiscalar_multiplication(&combined_scalars, &point)
+                    .ok_or("DLOG Proof Verify: Failed")?
+                    .compress(),
+            );
+        }
+        //println!("Verifier");
+        // println!("Z vector {:?}", z_vector);
+        // println!("X {:?}", x);
         verifier.new_domain_sep(b"VerifyUpdateAccountDarkTx");
         // lets do x <- H(updated_delta_accounts || output_accounts || e || f)
         for (input, output) in delta_updated_accounts.iter().zip(output_accounts.iter()) {
             verifier.allocate_account(b"account", &input);
             verifier.allocate_account(b"updatedaccount", &output);
-            println!("Account {:?}", input);
-            println!("Updated Account {:?}", output);
+            // println!("Account {:?}", input);
+            // println!("Updated Account {:?}", output);
         }
 
         for (e11, e12) in e_gr.iter().zip(e_grsk.iter()) {
             verifier.allocate_point(b"commitmentgr", e11);
             verifier.allocate_point(b"commitmentgrsk", e12);
-            println!("e11 {:?}", e11);
-            println!("e12 {:?}", e12);
+            // println!("e11 {:?}", e11);
+            // println!("e12 {:?}", e12);
         }
-        // for (f11, f12) in f_c.iter().zip(f_d.iter()) {
-        //     verifier.allocate_point(b"commitmentc", f11);
-        //     verifier.allocate_point(b"commitmentd", f12);
-        // }
+        for (f11, f12) in f_c.iter().zip(f_d.iter()) {
+            verifier.allocate_point(b"commitmentc", f11);
+            verifier.allocate_point(b"commitmentd", f12);
+        }
 
         // obtain a scalar challenge
         let verify_x = verifier.get_challenge(b"challenge");
-        println!("Verifier {:?}", verify_x);
+        // println!("Verifier {:?}", verify_x);
         if x == &verify_x {
             Ok(())
         } else {
@@ -1116,7 +1151,7 @@ mod test {
         assert!(check.is_ok());
     }
     #[test]
-    fn zero_balance_account_verifier_test() {
+    fn zero_balance_account_vector_verifier_test() {
         let base_pk = RistrettoPublicKey::generate_base_pk();
         let mut updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
         let mut anonymity_accounts: Vec<Account> = Vec::new();
@@ -1134,19 +1169,47 @@ mod test {
         //create Prover
         let mut transcript = Transcript::new(b"ZeroBalanceAccount");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-        let (z, x) =
-            Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm, &mut prover)
-                .get_dlog();
+        let (z, x) = Prover::zero_balance_account_vector_prover(
+            &anonymity_accounts,
+            &rscalar_comm,
+            &mut prover,
+        )
+        .get_dlog();
         //create Verifier
         let mut transcript = Transcript::new(b"ZeroBalanceAccount");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
-        let check =
-            Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x, &mut verifier);
+        let check = Verifier::zero_balance_account_vector_verifier(
+            &anonymity_accounts,
+            &z,
+            x,
+            &mut verifier,
+        );
         //println!("{:?}", check.unwrap());
         assert!(check.is_ok());
     }
     #[test]
-    fn zero_balance_account_verifier_fail_test() {
+    fn zero_balance_account_verifier_test() {
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+        let updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
+
+        let (acc, r) = Account::generate_account(PublicKey::update_public_key(
+            &updated_key,
+            Scalar::random(&mut OsRng),
+        ));
+        //create Prover
+        let mut transcript = Transcript::new(b"ZeroBalanceAccount");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        let (z, x) =
+            Prover::zero_balance_account_prover(acc.clone(), r.clone(), &mut prover).get_dlog();
+        //create Verifier
+        let mut transcript = Transcript::new(b"ZeroBalanceAccount");
+        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+        let check = Verifier::zero_balance_account_verifier(acc, z[0].clone(), x, &mut verifier);
+        //println!("{:?}", check.unwrap());
+        assert!(check.is_ok());
+    }
+    #[test]
+    fn zero_balance_account_vector_verifier_fail_test() {
         let base_pk = RistrettoPublicKey::generate_base_pk();
         let mut updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
         let mut anonymity_accounts: Vec<Account> = Vec::new();
@@ -1173,15 +1236,22 @@ mod test {
 
         let mut transcript = Transcript::new(b"ZeroBalanceAccount");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-        let (z, x) =
-            Prover::zero_balance_account_prover(&anonymity_accounts, &rscalar_comm, &mut prover)
-                .get_dlog();
+        let (z, x) = Prover::zero_balance_account_vector_prover(
+            &anonymity_accounts,
+            &rscalar_comm,
+            &mut prover,
+        )
+        .get_dlog();
         //create Verifier
         let mut transcript = Transcript::new(b"ZeroBalanceAccount");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
 
-        let check =
-            Verifier::zero_balance_account_verifier(&anonymity_accounts, &z, x, &mut verifier);
+        let check = Verifier::zero_balance_account_vector_verifier(
+            &anonymity_accounts,
+            &z,
+            x,
+            &mut verifier,
+        );
         //  println!("{:?}", check.unwrap());
         assert!(check.is_err());
     }

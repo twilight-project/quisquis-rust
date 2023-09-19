@@ -60,7 +60,7 @@ impl Permutation {
         self.perm_matrix
             .as_row_major()
             .try_into()
-            .unwrap_or_else(|v: Vec<usize>| panic!("Expected a Vec of length {}", 9))
+            .unwrap_or_else(|_v: Vec<usize>| panic!("Expected a Vec of length {}", 9))
     }
 
     //Inverse the permutation matrix for use in Input shuffle

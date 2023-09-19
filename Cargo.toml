@@ -33,6 +33,8 @@ curve25519-dalek = { version = "3", default-features = false }
 [dependencies.ed25519-dalek]
 version = "1"
 
+[features]
+debug_print = []  # Define a custom feature for enabling debug prints
 
 
 [dependencies.bulletproofs]

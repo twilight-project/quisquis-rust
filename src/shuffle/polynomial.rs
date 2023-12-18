@@ -273,7 +273,7 @@ impl<'a, 'b> Add<&'a Polynomial> for &'b Polynomial {
             .iter()
             .zip_longest(other.coefficients.iter())
             .map(|a: itertools::EitherOrBoth<&Scalar, &Scalar>| match a {
-                Both(l, r) => (*l + *r),
+                Both(l, r) => *l + *r,
                 Left(l) => *l,
                 Right(r) => *r,
             })
@@ -298,7 +298,7 @@ impl<'a, 'b> Sub<&'a Polynomial> for &'b Polynomial {
             .iter()
             .zip_longest(other.coefficients.iter())
             .map(|a: itertools::EitherOrBoth<&Scalar, &Scalar>| match a {
-                Both(l, r) => (*l - *r),
+                Both(l, r) => *l - *r,
                 Left(l) => *l,
                 Right(r) => -*r,
             })

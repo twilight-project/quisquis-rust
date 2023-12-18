@@ -17,6 +17,7 @@ use crate::{
 use array2d::Array2D;
 use bulletproofs::PedersenGens;
 use curve25519_dalek::traits::MultiscalarMul;
+use std::convert::TryInto;
 
 use crate::keys::PublicKey;
 use curve25519_dalek::{
@@ -25,6 +26,8 @@ use curve25519_dalek::{
 };
 use rand::rngs::OsRng;
 use rand::{CryptoRng, Rng};
+// use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct Permutation {
@@ -50,6 +53,14 @@ impl Permutation {
     //Set the permutation matrix explicitly
     pub fn set(&mut self, matrix: Array2D<usize>) {
         self.perm_matrix = matrix;
+    }
+
+    //Get the permutation matrix arranged as row major 1D array
+    pub fn get_row_major(&self) -> [usize; 9] {
+        self.perm_matrix
+            .as_row_major()
+            .try_into()
+            .unwrap_or_else(|_v: Vec<usize>| panic!("Expected a Vec of length {}", 9))
     }
 
     //Inverse the permutation matrix for use in Input shuffle
@@ -87,13 +98,15 @@ pub struct Shuffle {
 }
 ///Shuffle argument proof
 ///
-#[derive(Debug, Clone)]
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ShuffleStatement {
     pub hadamard_statement: HadamardStatement,
     pub product_statement: ProductStatement,
     pub ddh_statement: DDHStatement,
 }
-#[derive(Debug, Clone)]
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ShuffleProof {
     pub c_A: Vec<CompressedRistretto>,
     pub c_tau: Vec<CompressedRistretto>,
@@ -119,7 +132,7 @@ impl Shuffle {
     }
 
     pub fn input_shuffle(
-        inputs: &Vec<Account>, //Accounts to be shuffled
+        inputs: &[Account], //Accounts to be shuffled
     ) -> Result<Self, &'static str> {
         let len = inputs.len();
         if len == 0 {
@@ -240,8 +253,11 @@ impl ShuffleProof {
         for i in 0..ROWS {
             commitment_witness.push(xpc_gens.commit(&perm_scalar_as_rows[i], r[i]).compress());
         }
+        // transcriptRng using public transcript data + secret for proof + external source
+        let mut rng =
+            prover.prove_rekey_witness_transcript_rng(&shuffle.shuffled_tau.as_row_major());
         //commitment on tau using r'
-        let r_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let r_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut rng)).collect();
         //convert to column major representation
         let tau_as_rows = shuffle.shuffled_tau.as_rows();
 
@@ -268,8 +284,8 @@ impl ShuffleProof {
         let b_as_rows = b_matrix.as_rows();
         let b_dash_as_rows = b_dash_matrix.as_rows();
         //commitment on b using s and b' using s'
-        let s: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let s_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let s: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut rng)).collect();
+        let s_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut rng)).collect();
         //compute Xcomit on rows of b
         let mut commitment_b = Vec::<CompressedRistretto>::new();
         for i in 0..ROWS {
@@ -607,7 +623,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
             account_vector.push(acc);
         }
         let result = Shuffle::input_shuffle(&account_vector);
@@ -661,7 +677,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
             account_vector.push(acc);
         }
         let len = account_vector.len();
@@ -683,7 +699,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
             account_vector.push(acc);
         }
         // 1 for input , 2 for output
@@ -714,7 +730,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
             account_vector.push(acc);
         }
         // 1 for input , 2 for output
@@ -742,7 +758,7 @@ mod test {
             let mut rng = rand::thread_rng();
             let sk: RistrettoSecretKey = SecretKey::random(&mut rng);
             let pk = RistrettoPublicKey::from_secret_key(&sk, &mut rng);
-            let acc = Account::generate_account(pk);
+            let (acc, _) = Account::generate_account(pk);
             account_vector.push(acc);
         }
         // 1 for input , 2 for output

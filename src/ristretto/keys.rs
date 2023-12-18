@@ -1,14 +1,16 @@
-use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
-};
-use rand::{CryptoRng, Rng};
-
 use crate::{
     keys::{PublicKey, SecretKey},
     ristretto::constants::BASE_PK_BTC_COMPRESSED,
 };
 use core::ops::{Add, Mul};
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
+};
 
+use rand::{CryptoRng, Rng};
+use serde::{Deserialize, Serialize};
+use sha2::Sha512;
+use zkschnorr::{Signature, VerificationKey};
 const SCALAR_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
 
@@ -25,19 +27,32 @@ impl SecretKey for RistrettoSecretKey {
     fn random<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         RistrettoSecretKey(Scalar::random(rng))
     }
+
+    fn from_bytes(slice: &[u8]) -> Self {
+        RistrettoSecretKey(Scalar::hash_from_bytes::<Sha512>(slice))
+    }
+    fn as_bytes(&self) -> [u8; 32] {
+        self.0.to_bytes()
+    }
 }
 // ------- PrivateKey Partial Eq, Eq ------- //
-
+impl Eq for RistrettoSecretKey {}
 impl PartialEq for RistrettoSecretKey {
     fn eq(&self, other: &RistrettoSecretKey) -> bool {
-        // Although this is slower than `self.compressed == other.compressed`, expanded point comparison is an equal
-        // time comparision
-        self.0 == other.0
+        // uses contant time equal defined for Scalar
+        self.0.eq(&other.0)
+    }
+}
+
+impl Copy for RistrettoSecretKey {}
+impl Clone for RistrettoSecretKey {
+    fn clone(&self) -> RistrettoSecretKey {
+        *self
     }
 }
 
 // ------- PublicKey ------- //
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct RistrettoPublicKey {
     pub(crate) gr: CompressedRistretto,
     pub(crate) grsk: CompressedRistretto,
@@ -45,7 +60,7 @@ pub struct RistrettoPublicKey {
 
 impl RistrettoPublicKey {
     // Private constructor
-    fn new_from_pk(gr: CompressedRistretto, grsk: CompressedRistretto) -> RistrettoPublicKey {
+    pub fn new_from_pk(gr: CompressedRistretto, grsk: CompressedRistretto) -> RistrettoPublicKey {
         RistrettoPublicKey { gr: gr, grsk: grsk }
     }
 }
@@ -113,6 +128,31 @@ impl PublicKey for RistrettoPublicKey {
             Err("Invalid Account::Keypair Verification Failed")
         }
     }
+    ///Sign a message using ZkSchnor signature scheme\
+    /// Returns a tuple of (signature, random_scalar)
+    ///
+    fn sign_msg(&self, msg: &[u8], privkey: &Self::K, label: &'static [u8]) -> Signature {
+        // let signing_key = SigningKey::new(privkey.0);
+        let verifying_key = VerificationKey::new(self.gr, self.grsk);
+        Signature::sign_message(label, &msg, verifying_key, privkey.0)
+    }
+
+    /// Verify a message using ZkSchnor signature scheme
+    /// Returns a boolean
+    ///
+    fn verify_msg(
+        &self,
+        msg: &[u8],
+        signature: &Signature,
+        label: &'static [u8],
+    ) -> Result<(), &'static str> {
+        let verifying_key = VerificationKey::new(self.gr, self.grsk);
+        let verify = Signature::verify_message(&signature, label, msg, verifying_key);
+        match verify {
+            Ok(_) => Ok(()),
+            Err(_) => Err("Invalid Signature"),
+        }
+    }
 }
 
 // ------- PublicKey Partial Eq, Eq, Add, Mul ------- //
@@ -154,6 +194,7 @@ impl<'b> Mul<&'b Scalar> for RistrettoPublicKey {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bulletproofs::PedersenGens;
     use rand::rngs::OsRng;
     #[test]
     fn update_key_test() {
@@ -176,5 +217,28 @@ mod test {
         let updated_pk = RistrettoPublicKey::update_public_key(&pk, random_scalar);
 
         assert!(updated_pk.verify_keypair(&sk).is_ok(), "Invalid Key Pair")
+    }
+    #[test]
+    fn base_pk_test() {
+        let base_pk = RistrettoPublicKey::generate_base_pk();
+        println!("{:?}", base_pk);
+
+        let pd_gens = PedersenGens::default();
+        println!("{:?}", pd_gens.B.compress());
+        println!("{:?}", pd_gens.B_blinding.compress());
+
+        assert_eq!(base_pk.gr, BASE_PK_BTC_COMPRESSED[0]);
+        assert_eq!(base_pk.grsk, BASE_PK_BTC_COMPRESSED[1]);
+    }
+    #[test]
+    fn signature_test() {
+        let sk: RistrettoSecretKey = SecretKey::random(&mut OsRng);
+        let pk = RistrettoPublicKey::from_secret_key(&sk, &mut OsRng);
+        //convert to ZkSchnorr types
+
+        let msg = "This is a signing message";
+        let sign = pk.sign_msg(msg.as_bytes(), &sk, ("valueSign").as_bytes());
+        let verify = pk.verify_msg(msg.as_bytes(), &sign, ("valueSign").as_bytes());
+        assert!(verify.is_ok(), "Invalid Signature");
     }
 }

@@ -6,6 +6,7 @@ use core::ops::{Add, Mul};
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
 };
+use std::convert::TryInto;
 
 use rand::{CryptoRng, Rng};
 use serde::{Deserialize, Serialize};
@@ -83,11 +84,22 @@ impl PublicKey for RistrettoPublicKey {
     }
 
     /// as_bytes convert a public key to bytes
-    fn as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> [u8; 64] {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(self.gr.as_bytes());
         bytes.extend_from_slice(self.grsk.as_bytes());
         bytes
+            .try_into()
+            .expect("slice with incorrect length. Should be 64 bytes")
+    }
+    /// from_bytes converts a slice of bytes to a public key
+    fn from_bytes(slice: &[u8]) -> Result<RistrettoPublicKey, &'static str> {
+        if slice.len() != 64 {
+            return Err("slice with incorrect length. Should be 64 bytes");
+        }
+        let gr = CompressedRistretto::from_slice(&slice[0..32]);
+        let grsk = CompressedRistretto::from_slice(&slice[32..64]);
+        Ok(RistrettoPublicKey::new_from_pk(gr, grsk))
     }
     // update_public_key multiplies pk with a random scalar r
     // returns UpdatedPublicKey and random scalar used

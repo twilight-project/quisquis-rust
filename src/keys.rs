@@ -2,6 +2,8 @@ use curve25519_dalek::scalar::Scalar;
 use rand::{CryptoRng, Rng};
 use zkschnorr::Signature;
 
+use crate::ristretto::RistrettoPublicKey;
+
 pub trait SecretKey {
     fn key_length() -> usize;
     fn random<R: Rng + CryptoRng>(rng: &mut R) -> Self;
@@ -16,7 +18,8 @@ pub trait PublicKey {
 
     fn key_length() -> usize;
 
-    fn as_bytes(&self) -> Vec<u8>;
+    fn as_bytes(&self) -> [u8; 64];
+    fn from_bytes(slice: &[u8]) -> Result<RistrettoPublicKey, &'static str>;
 
     fn update_public_key(p: &Self, rscalar: Scalar) -> Self;
 

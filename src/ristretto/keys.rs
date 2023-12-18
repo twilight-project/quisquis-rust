@@ -31,6 +31,9 @@ impl SecretKey for RistrettoSecretKey {
     fn from_bytes(slice: &[u8]) -> Self {
         RistrettoSecretKey(Scalar::hash_from_bytes::<Sha512>(slice))
     }
+    fn as_bytes(&self) -> [u8; 32] {
+        self.0.to_bytes()
+    }
 }
 // ------- PrivateKey Partial Eq, Eq ------- //
 impl Eq for RistrettoSecretKey {}

@@ -292,7 +292,7 @@ impl<'a> Verifier<'a> {
         x: Scalar,
         verifier: &mut Verifier,
     ) -> Result<(), &'static str> {
-        println!("Verifier");
+        // println!("Verifier");
 
         //lets start a transcript and a verifier script
         verifier.new_domain_sep(b"VerifyAccountProof");
@@ -748,7 +748,7 @@ mod test {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
 
         let value_vector: Vec<Scalar> = vec![
-            -Scalar::from(5u64),
+            -Scalar::from(-(-5i64) as u64),
             5u64.into(),
             0u64.into(),
             0u64.into(),
@@ -814,7 +814,7 @@ mod test {
     fn verify_update_account_verifier_test() {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
         let value_vector: Vec<Scalar> = vec![
-            -Scalar::from(5u64),
+            -Scalar::from(-(-5i64) as u64),
             5u64.into(),
             0u64.into(),
             0u64.into(),
@@ -862,17 +862,17 @@ mod test {
         let mut transcript = Transcript::new(b"UpdateAccount");
         let mut prover = Prover::new(b"DLOGProof", &mut transcript);
         let (z_vector, x) = Prover::verify_update_account_prover(
-            &updated_accounts_slice.to_vec(),
-            &updated_delta_accounts_slice.to_vec(),
-            &rscalars_slice.to_vec(),
+            &updated_accounts_slice,
+            &updated_delta_accounts_slice,
+            &rscalars_slice,
             &mut prover,
         )
         .get_dlog();
         let mut transcript = Transcript::new(b"UpdateAccount");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
         let check = Verifier::verify_update_account_verifier(
-            &updated_accounts_slice.to_vec(),
-            &updated_delta_accounts_slice.to_vec(),
+            &updated_accounts_slice,
+            &updated_delta_accounts_slice,
             &z_vector,
             &x,
             &mut verifier,
@@ -1131,7 +1131,7 @@ mod test {
         );
         let (zv, zsk, zr, x) = sigma_dleq.get_dleq();
         // //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
-        println!("Verifier");
+        //println!("Verifier");
         //create Verifier
         let mut transcript = Transcript::new(b"SenderAccountProof");
         let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);

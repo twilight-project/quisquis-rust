@@ -6,6 +6,7 @@ pub trait SecretKey {
     fn key_length() -> usize;
     fn random<R: Rng + CryptoRng>(rng: &mut R) -> Self;
     fn from_bytes(slice: &[u8]) -> Self;
+    fn as_bytes(&self) -> [u8; 32];
 }
 
 pub trait PublicKey {

@@ -10,20 +10,21 @@ use crate::{
 };
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
-use rand::rngs::OsRng;
+//use rand::rngs::OsRng;
 
 use crate::shuffle::shuffle::COLUMNS;
-
+// use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 ///Single value Product argument
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SVPStatement {
     pub commitment_a: CompressedRistretto,
     pub b: Scalar,
 }
 ///Single value Product Proof
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SVPProof {
     pub commitment_d: CompressedRistretto,
     pub commitment_delta_small: CompressedRistretto,
@@ -45,7 +46,6 @@ impl SVPProof {
     ) -> SVPProof {
         //Create new transcript
         prover.new_domain_sep(b"SingleValueProductProof");
-
         //compute the first message
 
         //compute b1 =a1, b2 =a1 ·a2, b3 =b2 ·b3, b4= b3 ·a4
@@ -56,19 +56,21 @@ impl SVPProof {
             prod = prod * ai;
             bvec.push(prod);
         }
+        // transcriptRng using public transcript data + secret for proof + external source
+        let mut rng = prover.prove_rekey_witness_transcript_rng(&bvec);
         //Pick d1,...,dn, and rd randomly
-        let d_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
-        let rd = Scalar::random(&mut OsRng);
+        let d_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut rng)).collect();
+        let rd = Scalar::random(&mut rng);
         //Compute vector commitment on d_vec. send it to verifier
         let commit_d = xpc_gens.commit(&d_vec, rd).compress();
 
         //compute random delta of COLUMN size and set delta_1 as d_1 and delta_n as 0
-        let mut delta_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut OsRng)).collect();
+        let mut delta_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut rng)).collect();
         delta_vec[0] = d_vec[0];
         delta_vec[COLUMNS - 1] = Scalar::zero();
         //pick local random s_1 and s_x to comit on delta_vec_lowecase and delta_vec_uppercase
-        let s_1 = Scalar::random(&mut OsRng);
-        let s_x = Scalar::random(&mut OsRng);
+        let s_1 = Scalar::random(&mut rng);
+        let s_x = Scalar::random(&mut rng);
 
         //Create commitments on delta and d_delta
         // cdelta and cDelta have n-1 entries
@@ -233,6 +235,7 @@ mod test {
     use array2d::Array2D;
     use curve25519_dalek::ristretto::RistrettoPoint;
     use merlin::Transcript;
+    use rand::rngs::OsRng;
     #[test]
     fn single_value_product_proof_test() {
         //generate Xcomit generator points of length m+1

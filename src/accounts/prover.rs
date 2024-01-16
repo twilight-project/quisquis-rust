@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use core::num;
+
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
 use crate::{accounts::Account, ristretto::RistrettoPublicKey, ristretto::RistrettoSecretKey};
 //use bulletproofs::r1cs::*;
@@ -467,6 +469,129 @@ impl<'a> Prover<'a> {
             epsilon_rscalar_vector,
             SigmaProof::Dleq(zv_vector, zsk_vector, zr_vector, x),
         );
+    }
+
+     // verify_account_prover_isolated creates a signature for the sender account with values passed from caller rather than created inside and returned as done in sibling function 
+    // it proves the sender has secretkey and enough balance after updation to make the transfer using rangeproof
+    pub fn verify_account_prover_isolated(
+        updated_delta_account_sender: &[Account],
+        bl_updated_sender: &[u64],
+        sk: &[RistrettoSecretKey],
+        epsilon_account_vector: &[Account],
+        epsilon_rscalar_vector: &[Scalar],
+        prover: &mut Prover,
+    ) -> SigmaProof {
+        //check length is same
+        assert_eq!(updated_delta_account_sender.len(), bl_updated_sender.len());
+        // lets start a transcript and a prover script
+        prover.new_domain_sep(b"VerifyAccountProof");
+        //adding witness to initialze transcript RNG (Random Number Generator)
+        let v_vector: Vec<Scalar> = bl_updated_sender
+            .iter()
+            .map(|balance| Scalar::from(*balance as u64))
+            .collect();
+
+        prover.scalars = v_vector.iter().cloned().collect();
+
+        let mut transcript_rng = prover.prove_impl(); //confirm
+
+        //add statement accounts to transcript
+        for (delta, epsilon) in updated_delta_account_sender
+            .iter()
+            .zip(epsilon_account_vector.iter())
+        {
+            //   println!("c {:?} d {:?}", delta.comm.c, delta.comm.d);
+            prover.allocate_account(b"delta_account", delta);
+            prover.allocate_account(b"epsilon_account", epsilon);
+        }
+        let num_senders = updated_delta_account_sender.len();
+        // create random vectors of r_v, r_sk and r_dash
+        let rv_vector: Vec<Scalar> = (0..num_senders)
+            .map(|_| Scalar::random(&mut transcript_rng))
+            .collect();
+        let rsk_vector: Vec<Scalar> = (0..num_senders)
+            .map(|_| Scalar::random(&mut transcript_rng))
+            .collect();
+        let r_dash_vector: Vec<Scalar> = (0..num_senders)
+            .map(|_| Scalar::random(&mut transcript_rng))
+            .collect();
+
+        //let create e_delta = g_delta * r_sk
+        let e_delta = updated_delta_account_sender
+            .iter()
+            .zip(rsk_vector.iter())
+            .map(|(updated_account, rsk)| updated_account.pk.gr.decompress().unwrap() * rsk)
+            .collect::<Vec<_>>();
+        // lets create f_delta = g * r_v + c_delta * r_sk
+        let g_rv = epsilon_account_vector
+            .iter()
+            .zip(rv_vector.iter())
+            .map(|(epsilon, rv)| epsilon.pk.gr.decompress().unwrap() * rv)
+            .collect::<Vec<_>>();
+        let c_rsk = updated_delta_account_sender
+            .iter()
+            .zip(rsk_vector.iter())
+            .map(|(updated_account, rsk)| updated_account.comm.c.decompress().unwrap() * rsk)
+            .collect::<Vec<_>>();
+        let f_delta = g_rv
+            .iter()
+            .zip(c_rsk.iter())
+            .map(|(grv, crsk)| grv + crsk)
+            .collect::<Vec<_>>();
+        //let create e_epsilon = g * r_dash
+        let e_epsilon = epsilon_account_vector
+            .iter()
+            .zip(r_dash_vector.iter())
+            .map(|(epsilon, rdash)| epsilon.pk.gr.decompress().unwrap() * rdash)
+            .collect::<Vec<_>>();
+
+        // lets create f_epsilon = g * r_v + h * r_dash
+        let h_rdash = epsilon_account_vector
+            .iter()
+            .zip(r_dash_vector.iter())
+            .map(|(epsilon, rdash)| epsilon.pk.grsk.decompress().unwrap() * rdash)
+            .collect::<Vec<_>>();
+
+        let f_epsilon = g_rv
+            .iter()
+            .zip(h_rdash.iter())
+            .map(|(grv, hrdash)| grv + hrdash)
+            .collect::<Vec<_>>();
+
+        //adding e,f to transcript
+        for (i, e_delta) in e_delta.iter().enumerate() {
+            prover.allocate_point(b"e_delta", &e_delta.compress());
+            prover.allocate_point(b"f_delta", &f_delta[i].compress());
+            prover.allocate_point(b"e_epsilon", &e_epsilon[i].compress());
+            prover.allocate_point(b"f_epsilon", &f_epsilon[i].compress());
+        }
+        // obtain a scalar challenge
+        let x = prover.get_challenge(b"challenge");
+
+        // lets create zv = r_v - x * v
+
+        let zv_vector = rv_vector
+            .iter()
+            .zip(v_vector.iter())
+            .map(|(rv, v)| rv - v * x)
+            .collect::<Vec<_>>();
+
+        // lets create zsk = r_sk - x * sk
+
+        let zsk_vector = rsk_vector
+            .iter()
+            .zip(sk.iter())
+            .map(|(rsk, sk)| rsk - sk.0 * x)
+            .collect::<Vec<_>>();
+
+        let zr_vector = r_dash_vector
+            .iter()
+            .zip(epsilon_rscalar_vector.iter())
+            .map(|(r_dash, rscalar)| r_dash - rscalar * x)
+            .collect::<Vec<_>>();
+
+    
+       return SigmaProof::Dleq(zv_vector, zsk_vector, zr_vector, x);
     }
     //verify_non_negative_prover creates range proof on Receiver accounts with zero balance
     pub fn verify_non_negative_prover(

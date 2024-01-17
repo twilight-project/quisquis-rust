@@ -106,8 +106,9 @@ impl<'a> Prover<'a> {
         epsilon_accounts: &[Account],
         rscalar: &[Scalar],
         value_vector: &[Scalar],
-        prover: &mut Prover,
+        //prover: &mut Prover,
     ) -> SigmaProof {
+        
         //lenghts of both delta and epsilon account slices should be same.
         assert_eq!(delta_accounts.len(), epsilon_accounts.len());
 
@@ -116,9 +117,9 @@ impl<'a> Prover<'a> {
         let mut r2_dash_vector: Vec<Scalar> = Vec::new();
         let mut v_doubledash_vector: Vec<Scalar> = Vec::new();
         //Create new transcript
-        prover.new_domain_sep(b"VerifyDeltaCompact");
-        //let mut transcript = Transcript::new(b"VerifyDeltaCompact");
-        //let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+       // prover.new_domain_sep(b"VerifyDeltaCompact");
+        let mut transcript = Transcript::new(b"VerifyDeltaCompact");
+        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
 
         //for value in value_vector.iter() {
         //  v_dash_vector.push(*value);
@@ -241,7 +242,7 @@ impl<'a> Prover<'a> {
         updated_input_accounts: &[Account],
         updated_delta_accounts: &[Account],
         delta_rscalar: &[Scalar],
-        prover: &mut Prover,
+       // prover: &mut Prover,
     ) -> SigmaProof {
         // check if (c,d)/c,d) = pkdelta_r
         // lets do c-c and d-d for the commitments in both updated_input and updated_delta account vectors
@@ -272,9 +273,9 @@ impl<'a> Prover<'a> {
         let anonymity_set_index: Vec<_> = anonymity_set.iter().map(|i| i.0 .0).collect();
 
         // lets create random scalar s with the transcript
-        // let mut transcript = Transcript::new(b"VerifyUpdateAcct");
-        // let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-        prover.new_domain_sep(b"DLOGProof");
+        let mut transcript = Transcript::new(b"VerifyUpdateAcct");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+       // prover.new_domain_sep(b"DLOGProof");
         prover.scalars = delta_rscalar.to_vec();
 
         let mut transcript_rng = prover.prove_impl(); //confirm
@@ -323,7 +324,7 @@ impl<'a> Prover<'a> {
         updated_delta_account_sender: &[Account],
         bl_updated_sender: &[u64],
         sk: &[RistrettoSecretKey],
-        prover: &mut Prover,
+        // prover: &mut Prover,
         base_pk: RistrettoPublicKey,
     ) -> (
         Vec<Account>, /*Epsilon accounts for Updated sender balance*/
@@ -333,7 +334,11 @@ impl<'a> Prover<'a> {
         //check length is same
         assert_eq!(updated_delta_account_sender.len(), bl_updated_sender.len());
         // lets start a transcript and a prover script
-        prover.new_domain_sep(b"VerifyAccountProof");
+        let mut transcript = Transcript::new(b"VerifyAccountProof");
+        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+        
+        //prover.new_domain_sep(b"VerifyAccountProof");
+        
         //adding witness to initialze transcript RNG (Random Number Generator)
         let v_vector: Vec<Scalar> = bl_updated_sender
             .iter()
@@ -479,12 +484,14 @@ impl<'a> Prover<'a> {
         sk: &[RistrettoSecretKey],
         epsilon_account_vector: &[Account],
         epsilon_rscalar_vector: &[Scalar],
-        prover: &mut Prover,
+       // prover: &mut Prover,
     ) -> SigmaProof {
         //check length is same
         assert_eq!(updated_delta_account_sender.len(), bl_updated_sender.len());
         // lets start a transcript and a prover script
-        prover.new_domain_sep(b"VerifyAccountProof");
+        let mut transcript = Transcript::new(b"VerifyAccountProver");
+        let mut prover = Prover::new(b"DLEQProof", &mut transcript);
+        //prover.new_domain_sep(b"VerifyAccountProof");
         //adding witness to initialze transcript RNG (Random Number Generator)
         let v_vector: Vec<Scalar> = bl_updated_sender
             .iter()
@@ -618,7 +625,7 @@ impl<'a> Prover<'a> {
 
     //verify_non_negative_sender_receiver_prover creates range proof on sender accounts and Receiver accounts with +ve balance
     pub fn verify_non_negative_sender_receiver_prover(
-        &mut self,
+        //&mut self,
         bl: &[u64],
         rscalar: &[Scalar],
     ) -> Vec<RangeProof> {
@@ -634,7 +641,9 @@ impl<'a> Prover<'a> {
         let mut proof_vector: Vec<RangeProof> = Vec::new();
         // The proof can be chained to an existing transcript.
         // Here we create a transcript with a doctest domain separator.
-        self.new_domain_sep(b"AggregateBulletProof");
+        let mut transcript = Transcript::new(b"AggregateBulletProof");
+        //let mut prover = Prover::new(b"VectorBatchProof", &mut transcript);
+        //self.new_domain_sep(b"AggregateBulletProof");
         if power_of_2 {
             // Generators for Bulletproofs, valid for proofs up to bitsize 64
             // and aggregation size up to 16.
@@ -644,7 +653,7 @@ impl<'a> Prover<'a> {
 
             // Create an aggregated 64-bit rangeproof and corresponding commitments.
             let (proof, _) =
-                RangeProof::prove_multiple(&bp_gens, &pc_gens, self.transcript, bl, rscalar, 64)
+                RangeProof::prove_multiple(&bp_gens, &pc_gens, &mut transcript, bl, rscalar, 64)
                     .expect("Batch RangeProof creation failed");
             proof_vector.push(proof);
         } else {
@@ -654,7 +663,7 @@ impl<'a> Prover<'a> {
                 let (proof, _committed_value) = RangeProof::prove_single(
                     &bp_gens,
                     &pc_gens,
-                    self.transcript,
+                    &mut transcript,
                     *balance,
                     scalar,
                     64,
@@ -671,15 +680,15 @@ impl<'a> Prover<'a> {
     pub fn zero_balance_account_vector_prover(
         anonymity_accounts: &[Account],
         comm_rscalar: &[Scalar],
-        prover: &mut Prover,
+      //  prover: &mut Prover,
     ) -> SigmaProof {
         //check length is same
         assert_eq!(anonymity_accounts.len(), comm_rscalar.len());
         // lets start a transcript and a prover script
-        //let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
-        //let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        let mut transcript = Transcript::new(b"ZeroBalanceAccountVectorProof");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
 
-        prover.new_domain_sep(b"ZeroBalanceAccountVectorProof");
+       // prover.new_domain_sep(b"ZeroBalanceAccountVectorProof");
         //adding witness to initialze transcript RNG (Random Number Generator)
         prover.scalars = comm_rscalar.iter().cloned().collect();
         //add statement accounts to transcript
@@ -731,9 +740,12 @@ impl<'a> Prover<'a> {
     pub fn zero_balance_account_prover(
         account: Account,
         comm_rscalar: Scalar,
-        prover: &mut Prover,
+       // prover: &mut Prover,
     ) -> SigmaProof {
-        prover.new_domain_sep(b"ZeroBalanceAccountProof");
+        // create new transcript and prover
+        let mut transcript = Transcript::new(b"ZeroBalanceAccountProof");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+        //prover.new_domain_sep(b"ZeroBalanceAccountProof");
         //adding witness to initialze transcript RNG (Random Number Generator)
         prover.scalars.push(comm_rscalar.clone());
         //add statement accounts to transcript
@@ -901,13 +913,16 @@ impl<'a> Prover<'a> {
         output_accounts: &[Account],
         pk_rscalar: Scalar,
         comm_rscalar: Scalar,
-        prover: &mut Prover,
+      //  prover: &mut Prover,
     ) -> SigmaProof {
         //check length is same
         assert_eq!(delta_updated_accounts.len(), output_accounts.len());
         // Using a single scalar to update all the pks and another same scalar to update account commitments to save proof data
+        // lets start a transcript and a prover script
 
-        prover.new_domain_sep(b"VerifyUpdateAccountDarkTx");
+        let mut transcript = Transcript::new(b"VerifyUpdateAccountDarkTx");
+        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+       // prover.new_domain_sep(b"VerifyUpdateAccountDarkTx");
         prover.scalars.push(pk_rscalar);
         prover.scalars.push(comm_rscalar);
         let mut transcript_rng = prover.prove_impl(); //confirm
@@ -1006,9 +1021,9 @@ mod test {
             Scalar::random(&mut OsRng),
         ];
 
-        let mut transcript = Transcript::new(b"Test");
-        let mut prover = Prover::new(b"Bulletproof", &mut transcript);
-        let proof = prover.verify_non_negative_sender_receiver_prover(&balance, &r);
+       // let mut transcript = Transcript::new(b"Test");
+       // let mut prover = Prover::new(b"Bulletproof", &mut transcript);
+        let proof = Prover::verify_non_negative_sender_receiver_prover(&balance, &r);
         println!("{:?}", proof);
 
         let balance_odd: Vec<u64> = vec![5, 3, 0, 0, 0];
@@ -1020,9 +1035,9 @@ mod test {
             Scalar::random(&mut OsRng),
         ];
 
-        let mut transcript = Transcript::new(b"Test_notPower");
-        let mut prover = Prover::new(b"Bulletproof", &mut transcript);
-        let proof = prover.verify_non_negative_sender_receiver_prover(&balance_odd, &r_odd);
+      //  let mut transcript = Transcript::new(b"Test_notPower");
+       // let mut prover = Prover::new(b"Bulletproof", &mut transcript);
+        let proof = Prover::verify_non_negative_sender_receiver_prover(&balance_odd, &r_odd);
         println!("{:?}", proof);
     }
 

@@ -39,13 +39,15 @@ impl SVPProof {
     ///Create Single Value Argument proof
     ///
     pub fn create_single_value_argument_proof(
-        prover: &mut Prover,
+        //prover: &mut Prover,
         xpc_gens: &VectorPedersenGens,
         r: Scalar,
         a_vec: &[Scalar],
     ) -> SVPProof {
-        //Create new transcript
-        prover.new_domain_sep(b"SingleValueProductProof");
+        //Create new transcript and Prover Instance
+        let mut transcript = merlin::Transcript::new(b"SingleValueProductProof");
+        let mut prover = Prover::new(b"ProductProof", &mut transcript);
+        //prover.new_domain_sep(b"SingleValueProductProof");
         //compute the first message
 
         //compute b1 =a1, b2 =a1 ·a2, b3 =b2 ·b3, b4= b3 ·a4
@@ -145,7 +147,7 @@ impl SVPProof {
     ///This method is for verifying the single value product proof
     pub fn verify(
         &self,
-        verifier: &mut Verifier,
+       // verifier: &mut Verifier,
         svparg: &SVPStatement,
         xpc_gens: &VectorPedersenGens,
     ) -> Result<(), &'static str> {
@@ -153,8 +155,10 @@ impl SVPProof {
         //checking the length of a_twildle and b_twildle vectors
         if self.a_twildle.len() == COLUMNS && self.b_twildle.len() == COLUMNS {
             if self.a_twildle[0] == self.b_twildle[0] {
-                //Create new transcript
-                verifier.new_domain_sep(b"SingleValueProductProof");
+                //Create new transcript and verifier instance
+                let mut transcript = merlin::Transcript::new(b"SingleValueProductProof");
+                let mut verifier = Verifier::new(b"ProductProof", &mut transcript);
+                //verifier.new_domain_sep(b"SingleValueProductProof");
                 //RECREATE X FROM MERLIN HERE
                 //Add variables to Merlin transcript for challenge generation
                 verifier.allocate_point(b"DeltaSmall", &self.commitment_delta_small);
@@ -234,7 +238,6 @@ mod test {
     use crate::shuffle::singlevalueproduct::SVPProof;
     use array2d::Array2D;
     use curve25519_dalek::ristretto::RistrettoPoint;
-    use merlin::Transcript;
     use rand::rngs::OsRng;
     #[test]
     fn single_value_product_proof_test() {
@@ -281,19 +284,13 @@ mod test {
         //create b. i.e., product of all elements in A
         let b = bvec.iter().product::<Scalar>();
 
-        //create Prover and verifier
-        let mut transcript_p = Transcript::new(b"SingleValue");
-        let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
-
-        let proof = SVPProof::create_single_value_argument_proof(&mut prover, &xpc_gens, s, &bvec);
+        let proof = SVPProof::create_single_value_argument_proof(&xpc_gens, s, &bvec);
         let arg = SVPStatement {
             commitment_a: cb.compress(),
             b: b,
         };
 
-        let mut transcript_v = Transcript::new(b"SingleValue");
-        let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
-        let verify = proof.verify(&mut verifier, &arg, &xpc_gens);
+        let verify = proof.verify( &arg, &xpc_gens);
         //println!("{:?}", verify.unwrap());
         assert!(verify.is_ok());
     }

@@ -3,6 +3,7 @@
 
 #![allow(non_snake_case)]
 
+use crate::accounts::transcript;
 use crate::shuffle::shuffle::COLUMNS;
 use crate::shuffle::shuffle::ROWS;
 use crate::{
@@ -104,7 +105,7 @@ impl MultiexpoProof {
         (a_vec, r, bx, sx)
     }
     pub fn create_multiexponential_elgamal_commit_proof(
-        prover: &mut Prover,
+       // prover: &mut Prover,
         commit: &[ElGamalCommitment],
         a_witness: &Array2D<Scalar>,
         s_dash: &[Scalar],
@@ -113,8 +114,10 @@ impl MultiexpoProof {
         base_pk: &RistrettoPublicKey,
         rho: Scalar,
     ) -> MultiexpoProof {
-        //Create new transcript
-        prover.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
+        //Create new transcript and prover instance
+        let mut transcript = merlin::Transcript::new(b"MultiExponentialElgamalCommmitmentProof");
+        let mut prover = Prover::new(b"ShuffleProof", &mut transcript);
+        //prover.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
 
         let witness_as_rows = a_witness.as_rows();
         // transcriptRng using public transcript data + secret for proof + external source
@@ -185,7 +188,7 @@ impl MultiexpoProof {
     }
     //b' is the witness and trated as A in the arguent described in paper
     pub fn create_multiexponential_pubkey_proof(
-        prover: &mut Prover,
+       // prover: &mut Prover,
         pks: &[RistrettoPublicKey],
         a_witness: &Array2D<Scalar>,
         s_dash: &[Scalar],
@@ -193,8 +196,10 @@ impl MultiexpoProof {
         xpc_gens: &VectorPedersenGens,
         base_pk: &RistrettoPublicKey,
     ) -> MultiexpoProof {
-        //Create new transcript
-        prover.new_domain_sep(b"MultiExponentialPubKeyProof");
+        //Create new transcript and prover instance
+        let mut transcript = merlin::Transcript::new(b"MultiExponentialPubKeyProof");
+        let mut prover = Prover::new(b"ShuffleProof", &mut transcript);
+        //prover.new_domain_sep(b"MultiExponentialPubKeyProof");
         let witness_as_rows = a_witness.as_rows();
         // transcriptRng using public transcript data + secret for proof + external source
         let mut rng = prover.prove_rekey_witness_transcript_rng(&a_witness.as_row_major());
@@ -341,7 +346,7 @@ impl MultiexpoProof {
     }
     pub fn verify_multiexponential_elgamal_commit_proof(
         &self,
-        verifier: &mut Verifier,
+        //verifier: &mut Verifier,
         c_A: &[CompressedRistretto],
         updated_accounts: &[Account],
         accounts: &[Account],
@@ -378,8 +383,11 @@ impl MultiexpoProof {
             let C_d = RistrettoPoint::multiscalar_mul(exp_x.iter(), d_i.iter());
             //checking E_m == C
             if C_c.compress() == self.E_k_0[ROWS] && C_d.compress() == self.E_k_1[ROWS] {
-                //Create new transcript
-                verifier.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
+                //Create new transcript and verifier instance
+                let mut transcript =
+                    merlin::Transcript::new(b"MultiExponentialElgamalCommmitmentProof");
+                let mut verifier = Verifier::new(b"ShuffleProof", &mut transcript);
+                //verifier.new_domain_sep(b"MultiExponentialElgamalCommmitmentProof");
                 //recreate Challenge from Transcript
                 verifier.allocate_point(b"A0Commitment", &self.c_A_0);
                 for ((cbk, ek0), ek1) in self
@@ -458,7 +466,7 @@ impl MultiexpoProof {
     }
     pub fn verify_multiexponential_pubkey_proof(
         &self,
-        verifier: &mut Verifier,
+       // verifier: &mut Verifier,
         c_A: &[CompressedRistretto],
         updated_accounts: &[Account],
         pc_gens: &PedersenGens,
@@ -479,8 +487,10 @@ impl MultiexpoProof {
                 grsk: self.E_k_1[ROWS],
             };
             if *pk_GH == e_m {
-                //Create new transcript
-                verifier.new_domain_sep(b"MultiExponentialPubKeyProof");
+                //Create new transcript and verifier instance
+                let mut transcript = merlin::Transcript::new(b"MultiExponentialPubKeyProof");
+                let mut verifier = Verifier::new(b"ShuffleProof", &mut transcript);
+                //verifier.new_domain_sep(b"MultiExponentialPubKeyProof");
                 //recreate Challenge from Transcript
                 verifier.allocate_point(b"A0Commitment", &self.c_A_0);
                 for ((cbk, ek0), ek1) in self
@@ -838,8 +848,8 @@ mod test {
         let base_pk = RistrettoPublicKey::generate_base_pk();
 
         //create Prover and verifier
-        let mut transcript_p = Transcript::new(b"ShuffleProof");
-        let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
+        //let mut transcript_p = Transcript::new(b"ShuffleProof");
+        //let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
         //commit on b'
         let s_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
 
@@ -851,7 +861,7 @@ mod test {
             .map(|acc| acc.pk)
             .collect();
         let proof = MultiexpoProof::create_multiexponential_pubkey_proof(
-            &mut prover,
+          //  &mut prover,
             &rpk,
             &b_dash,
             &s_dash,
@@ -860,8 +870,8 @@ mod test {
             &base_pk,
         );
 
-        let mut transcript_v = Transcript::new(b"ShuffleProof");
-        let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
+        //let mut transcript_v = Transcript::new(b"ShuffleProof");
+       // let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
         //let v = multiexpo_arg.C.compare(pk_x.gr, pk_x.grsk);
         //println!("Verify C = pk^x_i = {:?}", v);
         //println!("Pk_x_g = {:?} && Pk_x_h = {:?}", pk_x.gr, pk_x.grsk);
@@ -877,7 +887,7 @@ mod test {
             comit_a_vec.push(xpc_gens.commit(&witness_as_rows[i], s_dash[i]).compress());
         }
         let verify = proof.verify_multiexponential_pubkey_proof(
-            &mut verifier,
+           // &mut verifier,
             &comit_a_vec,
             &shuffle.outputs.as_row_major(),
             &pc_gens,
@@ -940,8 +950,8 @@ mod test {
         //create rho = -rho . b
         //let rho_b = vectorutil::vector_multiply_scalar(&rho_vec, &b_mat.as_row_major());
         //create Prover and verifier
-        let mut transcript_p = Transcript::new(b"ShuffleProof");
-        let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
+       // let mut transcript_p = Transcript::new(b"ShuffleProof");
+       // let mut prover = Prover::new(b"Shuffle", &mut transcript_p);
         //commit on b'
         let s_dash: Vec<_> = (0..ROWS).map(|_| Scalar::random(&mut OsRng)).collect();
         let witness_as_rows = b_mat.as_rows();
@@ -959,7 +969,7 @@ mod test {
             .map(|acc| acc.comm)
             .collect();
         let proof = MultiexpoProof::create_multiexponential_elgamal_commit_proof(
-            &mut prover,
+            //&mut prover,
             &comm,
             &b_mat,
             &s_dash,
@@ -971,7 +981,7 @@ mod test {
         //testing Quisquis verification check
         //create DDH Proof
         let (_ddh_proof, _ddh_statement) = DDHProof::create_verify_update_ddh_prove(
-            &mut prover,
+            
             &g_i,
             &h_i,
             &exp_xx,
@@ -999,11 +1009,11 @@ mod test {
         } else {
             println!("false");
         }
-        let mut transcript_v = Transcript::new(b"ShuffleProof");
-        let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
+       // let mut transcript_v = Transcript::new(b"ShuffleProof");
+       // let mut verifier = Verifier::new(b"Shuffle", &mut transcript_v);
 
         let verify = proof.verify_multiexponential_elgamal_commit_proof(
-            &mut verifier,
+            //&mut verifier,
             &comit_a_vec,
             &shuffle.outputs.as_row_major(),
             &shuffle.inputs.as_row_major(),

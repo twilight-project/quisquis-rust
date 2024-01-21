@@ -9,7 +9,7 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-
+use merlin::Transcript;
 // use serde::{Deserialize, Serialize};
 use serde_derive::{Deserialize, Serialize};
 ///DDH Statement
@@ -32,7 +32,7 @@ impl DDHProof {
     /// proof that (G',H')  = (G^rho , H^rho)
     /// (G,H) ← prod of all i->N  pk_i ^ x_i
     pub fn create_verify_update_ddh_prove(
-        prover: &mut Prover,
+       // prover: &mut Prover,
         g_i: &[RistrettoPoint],
         h_i: &[RistrettoPoint],
         exp_x: &[Scalar],
@@ -40,8 +40,10 @@ impl DDHProof {
         H: RistrettoPoint,
         rho: Scalar,
     ) -> (DDHProof, DDHStatement) {
-        //Create new transcript
-        prover.new_domain_sep(b"DDHTupleProof");
+        //Create new transcript and Prover Instance
+        let mut transcript = Transcript::new(b"DDHTupleProof");
+        let mut prover = Prover::new(b"ShuffleProof", &mut transcript);
+        //prover.new_domain_sep(b"DDHTupleProof");
         // transcriptRng using public transcript data + secret for proof + external source
         let mut rng = prover.prove_rekey_witness_transcript_rng(&exp_x);
         // x^i * rho
@@ -72,25 +74,27 @@ impl DDHProof {
         let z = r_scalar - x_rho;
         (
             DDHProof {
-                challenge: challenge,
-                z: z,
+                challenge,
+                z,
             },
             DDHStatement {
-                G_dash: G_dash,
-                H_dash: H_dash,
+                G_dash,
+                H_dash,
             },
         )
     }
     /// Verify the ddh proof over (G, H , G', H') tuple
     pub fn verify_ddh_proof(
         &self,
-        verifier: &mut Verifier,
+        //verifier: &mut Verifier,
         statement: &DDHStatement,
         G: CompressedRistretto,
         H: CompressedRistretto,
     ) -> Result<(), &'static str> {
-        // Initiate the verification transcript
-        verifier.new_domain_sep(b"DDHTupleProof");
+        // Initiate the verification transcript and verifier instance
+        let mut transcript = Transcript::new(b"DDHTupleProof");
+        let mut verifier = Verifier::new(b"ShuffleProof", &mut transcript);
+        //verifier.new_domain_sep(b"DDHTupleProof");
         //allocates statement points to Transcript
         verifier.allocate_point(b"g", &G);
         verifier.allocate_point(b"g_dash", &statement.G_dash);
@@ -131,7 +135,7 @@ mod test {
         ristretto::{RistrettoPublicKey, RistrettoSecretKey},
         shuffle::vectorutil,
     };
-    use merlin::Transcript;
+    //use merlin::Transcript;
     use rand::rngs::OsRng;
 
     #[test]
@@ -149,8 +153,8 @@ mod test {
         let x = Scalar::random(&mut OsRng);
         let rho = Scalar::random(&mut OsRng);
         //create Prover and verifier
-        let mut transcript_p = Transcript::new(b"ShuffleProof");
-        let mut prover = Prover::new(b"DDHTuple", &mut transcript_p);
+       // let mut transcript_p = Transcript::new(b"ShuffleProof");
+       // let mut prover = Prover::new(b"DDHTuple", &mut transcript_p);
         // create x^i
         let exp_x: Vec<_> = vectorutil::exp_iter(x).skip(1).take(9).collect();
         // gather g, h from Public key
@@ -160,12 +164,12 @@ mod test {
         let G = RistrettoPoint::multiscalar_mul(exp_x.iter(), g_i.iter());
         let H = RistrettoPoint::multiscalar_mul(exp_x.iter(), h_i.iter());
         let (proof, statement) =
-            DDHProof::create_verify_update_ddh_prove(&mut prover, &g_i, &h_i, &exp_x, G, H, rho);
+            DDHProof::create_verify_update_ddh_prove(&g_i, &h_i, &exp_x, G, H, rho);
 
-        let mut transcript_v = Transcript::new(b"ShuffleProof");
-        let mut verifier = Verifier::new(b"DDHTuple", &mut transcript_v);
+        //let mut transcript_v = Transcript::new(b"ShuffleProof");
+        //let mut verifier = Verifier::new(b"DDHTuple", &mut transcript_v);
 
-        let verify = proof.verify_ddh_proof(&mut verifier, &statement, G.compress(), H.compress());
+        let verify = proof.verify_ddh_proof(&statement, G.compress(), H.compress());
         assert!(verify.is_ok());
     }
 }

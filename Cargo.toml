@@ -45,3 +45,10 @@ features = ["yoloproofs"]
 [dependencies.zkschnorr]
 git = "ssh://github.com/twilight-project/ZkSchnorr.git"
 #path = "../zk-schnorr"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "shuffle_bench"
+harness = false

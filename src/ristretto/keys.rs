@@ -17,7 +17,7 @@ const PUBLIC_KEY_LENGTH: usize = 32;
 
 // ------- SecretKey ------- //
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RistrettoSecretKey(pub(crate) Scalar);
 
 impl SecretKey for RistrettoSecretKey {

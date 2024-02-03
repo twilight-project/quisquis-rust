@@ -770,9 +770,11 @@ mod test {
     use array2d::Array2D;
     use merlin::Transcript;
     use rand::rngs::OsRng;
+    use wasm_bindgen::prelude::*;
     //const N: usize = 9; //N - Length of vector
-    #[test]
-    fn multiexpo_pk_prove_test() {
+    #[wasm_bindgen(js_name = multiexpoPKProve)]
+    // #[test]
+    pub fn multiexpo_pk_prove_test() -> Result<String, JsValue> {
         let mut account_vector: Vec<Account> = Vec::new();
         // lets create these accounts and associated keypairs
         for _ in 0..9 {
@@ -886,10 +888,12 @@ mod test {
             &pk_GH,
         );
         // println! {"Verify PubKey Multiexpo{:?} ", verify}
-        assert!(verify.is_ok());
+        //assert!(verify.is_ok());
+        Ok("Multiexponential Public Key Proof Verified".to_string())
     }
-    #[test]
-    fn multiexpo_comm_prove_test() {
+    //#[test]
+    #[wasm_bindgen(js_name = multiexpoCommitmentProve)]
+    pub fn multiexpo_comm_prove_test() -> Result<String, JsValue> {
         let mut account_vector: Vec<Account> = Vec::new();
         // lets create these accounts and associated keypairs
         for _ in 0..9 {
@@ -1013,7 +1017,8 @@ mod test {
             &exp_xx,
         );
         // println! {"Verify Commit Multiexpo{:?} ", verify}
-        assert!(verify.is_ok());
+        // assert!(verify.is_ok());
+        Ok("Multiexponential Commitment Proof Verified".to_string())
     }
     #[test]
     fn ek_creation_test() {

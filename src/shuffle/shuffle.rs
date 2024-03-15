@@ -51,7 +51,9 @@ impl Permutation {
         let perm_matrix = Array2D::from_row_major(&permutation, ROWS, COLUMNS);
         Self { perm_matrix }
     }
-
+    pub fn from_array2D(matrix: Array2D<usize>) -> Self {
+        Self { perm_matrix: matrix }
+    }
     //Set the permutation matrix explicitly
     pub fn set(&mut self, matrix: Array2D<usize>) {
         self.perm_matrix = matrix;
@@ -235,6 +237,30 @@ impl Shuffle {
     pub fn get_outputs_vector(&self) -> Vec<Account> {
         self.outputs.as_row_major()
     }
+
+    pub fn get_permutation_as_vector(&self) -> Vec<usize> {
+        self.pi.get_row_major().to_vec()
+    }
+
+    pub fn get_shuffled_tau_vector(&self) -> Vec<Scalar> {
+        self.shuffled_tau.as_row_major()
+    }
+    // pub fn to_hex(&self) -> String {
+    //     //convert inputs to row major order
+    //     let mut bytes = Vec::new();
+    //     let inputs = self.inputs. 
+    //     let bincode = bincode::serialize(self).unwrap();
+    //     //convert to hex
+    //     let hex = hex::encode(bincode);
+    //     hex
+    // }
+    // pub fn from_hex(hex: &str) -> Self {
+    //     //convert to bincode
+    //     let bincode = hex::decode(hex).unwrap();
+    //     //convert to struct
+    //     let shuffle: Self = bincode::deserialize(&bincode).unwrap();
+    //     shuffle
+    // }
     /// Prepares data for shuffle proof parallel implementation
     /// @ return (x, y, z, B Matrix, B' Matrix, exp(x), commitment_witness, commitment_tau, commitment_b, commitment_b_dash, s, s_dash, r, r_dash)
     /// prepares data for Hadamard and Product proof

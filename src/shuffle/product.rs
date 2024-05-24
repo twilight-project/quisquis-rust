@@ -189,13 +189,13 @@ impl MultiHadamardProof {
         let b2: Vec<_> = b1.iter().zip(a2.iter()).map(|(i, j)| i * j).collect();
 
         //bm = b
-        let bm = bvec.clone();
+        let bm = bvec;
 
         //Vector holding b1, b2 and bm
         let b_2d_vec = vec![
             perm_scalar_as_cols[0].clone(),
             b2.clone(),
-            bvec.clone().to_vec(),
+            bvec.to_vec(),
         ];
         // transcriptRng using public transcript data + secret for proof + external source
         let mut rng = prover.prove_rekey_witness_transcript_rng(&bm);

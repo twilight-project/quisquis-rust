@@ -43,5 +43,5 @@ branch = "develop"
 features = ["yoloproofs"]
 
 [dependencies.zkschnorr]
-git = "ssh://github.com/twilight-project/ZkSchnorr.git"
+git = "https://github.com/twilight-project/zk-schnorr.git"
 #path = "../zk-schnorr"

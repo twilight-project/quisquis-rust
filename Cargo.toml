@@ -16,7 +16,7 @@ path = "src/bin.rs"
 [dependencies]
 hex = "*"
 merlin = { version = "2", default-features = false }
-bincode = "*"
+bincode = "1.0"
 rand = "0.7"
 anyhow = "1.0"
 sha3 = "0.9.1"

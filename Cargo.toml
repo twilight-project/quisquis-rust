@@ -44,4 +44,4 @@ features = ["yoloproofs"]
 
 [dependencies.zkschnorr]
 git = "https://github.com/twilight-project/zk-schnorr.git"
-#path = "../zk-schnorr"
+tag = v0.1.0

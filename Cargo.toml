@@ -1,9 +1,21 @@
 [package]
 name = "quisquis-rust"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
+authors = ["Twilight Project <hello@twilight-project.org>"]
+description = "A Rust implementation of Quisquis, a privacy-preserving cryptocurrency protocol"
+homepage = "https://github.com/twilight-project/quisquis-rust"
+repository = "https://github.com/twilight-project/quisquis-rust"
+documentation = "https://docs.rs/quisquis-rust"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["cryptography", "privacy", "cryptocurrency", "zero-knowledge", "blockchain"]
+categories = ["cryptography", "algorithms", "no-std"]
+exclude = ["target/", ".git/", ".github/"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lib]
 name = "quisquislib"
@@ -44,4 +56,4 @@ features = ["yoloproofs"]
 
 [dependencies.zkschnorr]
 git = "https://github.com/twilight-project/zk-schnorr.git"
-#path = "../zk-schnorr"
+tag = "v0.1.0"

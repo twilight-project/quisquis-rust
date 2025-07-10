@@ -1,14 +1,18 @@
-#![allow(dead_code)]
-
-//! Utility functions to manipulate vectors and Matrices.
+//! Vector and scalar utilities for the Quisquis shuffle protocol.
 //!
-//! Vector multiplication and Matrix multiplication functions
-//!  
-//! Shared functions needed in shuffle proof implementation
+//! This module provides iterators, vector operations, and helper functions for
+//! exponentiation, vector multiplication, and Hadamard products used in shuffle arguments.
+//!
+//! ## Core Components
+//!
+//! - [`ScalarExp`] - Iterator for scalar exponentiation
+//! - Utility functions for vector and scalar operations
+
+#![allow(dead_code)]
 
 use curve25519_dalek::scalar::Scalar;
 //use std::num::Zero;
-/// Provides an iterator over the powers of a `Scalar`.
+/// Iterator for generating successive powers of a scalar (x, x^2, x^3, ...).
 ///
 /// This struct is created by the `exp_iter` function.
 ///
@@ -19,25 +23,50 @@ pub struct ScalarExp {
 
 impl Iterator for ScalarExp {
     type Item = Scalar;
-
+    /// Returns the next power of the scalar in the sequence.
+    ///
+    /// # Returns
+    /// The next power of the scalar in the sequence.
+    ///
     fn next(&mut self) -> Option<Scalar> {
         let exp_x = self.next_exp_x;
         self.next_exp_x *= self.x;
         Some(exp_x)
     }
-
+    /// Provides a size hint for the iterator.
+    ///
+    /// # Returns
+    /// A tuple containing the maximum size hint and an optional size hint.
+    ///
     fn size_hint(&self) -> (usize, Option<usize>) {
         (usize::max_value(), None)
     }
 }
 
-/// Return an iterator of the powers of `x`.
+/// Returns an iterator over successive powers of a scalar (x, x^2, x^3, ...).
+///
+/// # Arguments
+/// * `x` - The scalar to exponentiate.
+///
+/// # Returns
+/// An iterator over successive powers of the scalar.
+///
 pub fn exp_iter(x: Scalar) -> ScalarExp {
     let next_exp_x = Scalar::one();
     ScalarExp { x, next_exp_x }
 }
 
-/// Scalar product of a vector of usize elements with a vector of Scalars
+/// Computes the dot product of a vector of usize and a vector of Scalars.
+///
+/// This function calculates the dot product of a vector of integers and a vector of scalars.
+/// It panics if the lengths of the vectors do not match.
+///
+/// # Arguments
+/// * `row` - The row vector of integers.
+/// * `col` - The column vector of scalars.
+///
+/// # Returns
+/// A scalar that is the dot product of the two input vectors.
 ///
 pub fn vector_multiply(row: &[usize], col: &[Scalar]) -> Scalar {
     if row.len() != col.len() {
@@ -50,7 +79,17 @@ pub fn vector_multiply(row: &[usize], col: &[Scalar]) -> Scalar {
         })
 }
 
-/// Scalar product of 2 scalar vectors    
+/// Computes the dot product of two vectors of Scalars.
+///
+/// This function calculates the dot product of two vectors of scalars.
+/// It panics if the lengths of the vectors do not match.
+///
+/// # Arguments
+/// * `row` - The row vector of scalars.
+/// * `col` - The column vector of scalars.
+///
+/// # Returns
+/// A scalar that is the dot product of the two input vectors.
 ///
 pub fn vector_multiply_scalar(row: &[Scalar], col: &[Scalar]) -> Scalar {
     if row.len() != col.len() {
@@ -61,6 +100,18 @@ pub fn vector_multiply_scalar(row: &[Scalar], col: &[Scalar]) -> Scalar {
         .fold(Scalar::zero(), |sum, (i, j)| sum + i * j)
 }
 
+/// Computes the Hadamard (element-wise) product of two vectors of Scalars.
+///
+/// This function calculates the Hadamard product of two vectors of scalars.
+/// It panics if the lengths of the vectors do not match.
+///
+/// # Arguments
+/// * `a` - The first vector of scalars.
+/// * `b` - The second vector of scalars.
+///
+/// # Returns
+/// A vector of scalars that is the Hadamard product of the two input vectors.
+///
 pub fn hadamard_product(a: &[Scalar], b: &[Scalar]) -> Vec<Scalar> {
     if a.len() != b.len() {
         panic!("hadamard_product(a,b): lengths of vectors do not match");

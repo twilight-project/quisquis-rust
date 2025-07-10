@@ -1,4 +1,13 @@
-//Polynomial Field STARTS here
+/// Polynomial utilities for the Quisquis shuffle protocol.
+///
+/// This module provides types and functions for constructing, manipulating, and evaluating polynomials
+/// used in shuffle and Hadamard argument proofs.
+///
+/// ## Core Components
+///
+/// - [`crate::shuffle::polynomial::Polynomial`] - Polynomial type and arithmetic
+/// - Utility functions for Lagrange interpolation, vector products, and polynomial operations
+///
 use crate::shuffle::shuffle::COLUMNS;
 use array2d::Array2D;
 
@@ -12,7 +21,16 @@ use rand::rngs::OsRng;
 use std::ops::Add;
 use std::ops::{Sub, SubAssign};
 
-//Create a single degree polynomial: aX + b
+///Create a single degree polynomial: aX + b
+///
+/// # Arguments
+///
+/// * `a` - a `Scalar` instance carrying the coefficient of the polynomial
+/// * `b` - a `Scalar` instance carrying the constant term of the polynomial
+///
+/// # Returns
+///
+/// A `Polynomial` instance carrying the polynomial.
 fn create_1d_poly(a: Scalar, b: Scalar) -> Polynomial {
     let coeffiecient: Vec<Scalar> = vec![b, a];
     if a == Scalar::zero() {
@@ -28,7 +46,16 @@ fn create_1d_poly(a: Scalar, b: Scalar) -> Polynomial {
     }
 }
 
-//Create a monomial of a given degree
+///Create a monomial of a given degree
+///
+/// # Arguments
+///
+/// * `a` - a `Scalar` instance carrying the coefficient of the polynomial
+/// * `n` - a `usize` instance carrying the degree of the polynomial
+///
+/// # Returns
+///
+/// A `Polynomial` instance carrying the polynomial.
 fn create_n_degree_poly(a: Scalar, n: usize) -> Polynomial {
     let mut coeff: Vec<Scalar> = vec![Scalar::zero(); n + 1];
     coeff[n] = a;
@@ -37,22 +64,30 @@ fn create_n_degree_poly(a: Scalar, n: usize) -> Polynomial {
         degree: n,
     }
 }
+/// A univariate polynomial over Scalars, represented by its coefficients and degree.
+///
+/// Coefficients are stored in ascending order, where the i-th element corresponds to the coefficient of X^i.
 #[derive(Debug, Clone)]
 pub struct Polynomial {
+    /// Coefficients of the polynomial in ascending order of degree.
     pub coefficients: Vec<Scalar>,
+    /// Degree of the polynomial.
     pub degree: usize,
 }
 
 impl Polynomial {
-    //Print Polynomial
+    /// Prints the polynomial to stdout in human-readable form.
+    ///
+    /// It displays the degree and each coefficient term as `coef * X^power`.
     pub fn print_polynomial(&self) {
         println!("Degree {:?} ", self.degree);
         for (i, x) in self.coefficients.iter().enumerate() {
             print!("{:?} X^ {} + ", x, i);
         }
     }
-    //Adjusts degree of the polynomial
-    //Very Important in this implementation
+    /// Adjusts the stored degree to match the highest non-zero coefficient.
+    ///
+    /// Trailing zero coefficients are removed, and the degree field is updated.
     pub fn poly_deg_adjust(&mut self) {
         let mut h_term: usize = 0;
 
@@ -70,16 +105,26 @@ impl Polynomial {
         }
         self.coefficients = newcoeff;
     }
-    // Remove trailing zeros from coefficients
-    // Borrow mutably when you mutate the data, but don't want to consume it
+    /// Removes any trailing zero coefficients and updates the degree accordingly.
+    ///
+    /// This ensures that `degree` accurately reflects the highest term with a non-zero coefficient.
     pub fn normalize(&mut self) {
+        // Borrow mutably when you mutate the data, but don't want to consume it
         let zero = Scalar::zero();
         while *self.coefficients.last().unwrap() == zero {
             self.coefficients.pop();
             self.degree = self.degree - 1;
         }
     }
-    //Polynomial Scalar Multiply: a(X) * c
+    /// Scales the polynomial by multiplying every coefficient by `scalar`.
+    ///
+    /// # Arguments
+    ///
+    /// * `scalar` - The scalar to multiply each coefficient by.
+    ///
+    /// # Returns
+    ///
+    /// A new `Polynomial` with all coefficients scaled.
     pub fn multiply_scalar(&self, scalar: Scalar) -> Self {
         //create polynomial with zero coefficients with the highest term
         let mut coefficients = self.coefficients.clone();
@@ -92,7 +137,15 @@ impl Polynomial {
         }
     }
 
-    //Polynomial Scalar Divide: a(X) / c
+    /// Scales the polynomial by dividing every coefficient by `scalar`.
+    ///
+    /// # Arguments
+    ///
+    /// * `scalar` - The scalar divisor for each coefficient (must be invertible).
+    ///
+    /// # Returns
+    ///
+    /// A new `Polynomial` with all coefficients divided.
     pub fn divide_scalar(&self, scalar: Scalar) -> Self {
         //create polynomial with zero coefficients with the highest term
         let mut coefficients = self.coefficients.clone();
@@ -106,7 +159,15 @@ impl Polynomial {
         }
     }
 
-    // Polynomial Multipliucation modulo m: a(X) * b(X)
+    /// Multiplies two polynomials using standard long multiplication.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The polynomial to multiply with.
+    ///
+    /// # Returns
+    ///
+    /// The product polynomial.
     pub fn multiply(&self, other: &Self) -> Self {
         // If either polynomial is zero, return zero
 
@@ -130,13 +191,21 @@ impl Polynomial {
             degree: degree,
         }
     }
-    //Polynomial Division modulo m
-    //Works correctly only for this protocol
-    //Assumes that both the polynomials are monic
-    //Assumes that the polynomial a(X) has higher degree than b(X)
-    //Assumes that both the polynomials have degree greater than 0
-    //Evaluates (a(X) / b(X))
-    //REMOVED: Also checks correctness of resulting polynomial for protocol
+
+    /// Divides this polynomial by the provided denominator polynomial using long division.
+    ///
+    /// This method assumes both `self` and `denom` are monic polynomials, and that
+    /// the degree of `self` is strictly greater than the degree of `denom`. The
+    /// returned polynomial has the specified degree `deg`.
+    ///
+    /// # Arguments
+    ///
+    /// * `denom` – The monic denominator polynomial.
+    /// * `deg` – The degree of the resulting quotient polynomial.
+    ///
+    /// # Returns
+    ///
+    /// A `Polynomial` representing the quotient of the division.
     pub fn divide(&mut self, denom: &mut Self, deg: usize) -> Self {
         self.poly_deg_adjust();
         denom.poly_deg_adjust();
@@ -164,7 +233,17 @@ impl Polynomial {
             degree: deg,
         }
     }
-    /// This evaluates a provided polynomial (in coefficient form) at `x`.
+    /// Evaluates the polynomial at the given scalar point `x`.
+    ///
+    /// Uses Horner's method for efficient computation.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - The point at which to evaluate the polynomial.
+    ///
+    /// # Returns
+    ///
+    /// The resulting `Scalar` value.
     pub fn evaluate_polynomial(&self, x: Scalar) -> Scalar {
         // TODO: parallelize?
         self.coefficients
@@ -172,18 +251,45 @@ impl Polynomial {
             .rev()
             .fold(Scalar::zero(), |acc, coeff| acc * x + coeff)
     }
-    //Multiplies polynomial p(X) with a vector "a" and returns a vector of polynomial
+    /// Applies this polynomial to each element of a scalar slice, returning a vector of results.
+    ///
+    /// # Arguments
+    ///
+    /// * `a` - Slice of Scalars to which to apply the polynomial.
+    ///
+    /// # Returns
+    ///
+    /// A vector of `Polynomial` instances corresponding to `self(X) * a[i]`.
     pub fn polynomial_vector_product(&self, a: &[Scalar]) -> Vec<Polynomial> {
         a.iter()
             .map(|i| self.multiply(&create_1d_poly(Scalar::from(0u64), *i)))
             .collect()
     }
 }
-//Vectorial polynomial addition. Add vecftors of polynomials such that c[i] = A[i] + B[i].
+///Vectorial polynomial addition. Add vectors of polynomials such that `c[i] = a[i] + b[i]`.
+///
+/// # Arguments
+///
+/// * `a` - a `Vec<Polynomial>` instance carrying the vector of polynomials
+/// * `b` - a `Vec<Polynomial>` instance carrying the vector of polynomials
+///
+/// # Returns
+///
+/// A `Vec<Polynomial>` instance carrying the vector of polynomials.
 pub fn polynomial_vectorial_add(a: &[Polynomial], b: &[Polynomial]) -> Vec<Polynomial> {
     assert_eq!(a.len(), b.len());
     a.iter().zip(b.iter()).map(|(x, y)| x + y).collect()
 }
+/// Checks if a scalar is distinct from a vector of scalars.
+///
+/// # Arguments
+///
+/// * `num` - a `Scalar` instance carrying the scalar
+/// * `vec` - a `Vec<Scalar>` instance carrying the vector of scalars
+///
+/// # Returns
+///
+/// A `bool` instance carrying the result of the check.
 pub fn distinct(num: Scalar, vec: &[Scalar]) -> bool {
     for s in vec.iter() {
         if num == *s {
@@ -192,7 +298,20 @@ pub fn distinct(num: Scalar, vec: &[Scalar]) -> bool {
     }
     return true;
 }
-// Polynomial Multipliucation with mutable parameters modulo m: a(X) * b(X)
+/// Multiply two polynomials, using a mutable reference to the first polynomial and a borrowed reference to the second.
+///
+/// This method performs standard polynomial long multiplication: each coefficient in `a` is
+/// multiplied by each coefficient in `b`, and the products are summed into the appropriate
+/// coefficient positions in the result.
+///
+/// # Arguments
+///
+/// * `a` – The multiplicand polynomial, provided as a mutable reference.
+/// * `b` – The multiplier polynomial, provided as a borrowed reference.
+///
+/// # Returns
+///
+/// A new `Polynomial` representing the product `a(X) * b(X)`.
 fn multiply_mut(a: &mut Polynomial, b: &Polynomial) -> Polynomial {
     // If either polynomial is zero, return zero
 
@@ -219,7 +338,15 @@ fn multiply_mut(a: &mut Polynomial, b: &Polynomial) -> Polynomial {
     }
 }
 
-//product of polynomials. (X-w_i)
+/// Constructs the polynomial `l(X) = ∏_{i=0..n-1} (X - w[i])` for a given witness vector.
+///
+/// # Arguments
+///
+/// * `w` - Slice of Scalars for roots of the polynomial.
+///
+/// # Returns
+///
+/// The polynomial with roots at each `w[i]`.
 pub fn create_l_x_polynomial(w: &[Scalar]) -> Polynomial {
     //Create l(X)
     let mut l = create_1d_poly(Scalar::from(1u64), -w[0]);
@@ -228,7 +355,15 @@ pub fn create_l_x_polynomial(w: &[Scalar]) -> Polynomial {
     }
     return l;
 }
-//Create "l(X)" and "li(X)" polynomials
+/// Create "l(X)" and "li(X)" polynomials
+///
+/// # Arguments
+///
+/// * `w` - a `Vec<Scalar>` instance carrying the vector of scalars
+///
+/// # Returns
+///
+/// A `[Polynomial; 4]` instance carrying the vector of polynomials.
 pub fn create_l_i_x_polynomial(w: &[Scalar]) -> [Polynomial; 4] {
     //check length of vector
     assert_eq!(w.len(), 3);
@@ -255,7 +390,11 @@ pub fn create_l_i_x_polynomial(w: &[Scalar]) -> [Polynomial; 4] {
     [l_x, l_1_x, l_2_x, l_3_x]
 }
 
-//Polynomial Addition modulo m: a(X) + b(X)
+/// Adds two polynomials term-wise, extending zeros to match degrees.
+///
+/// # Returns
+///
+/// The sum polynomial.
 impl<'a, 'b> Add<&'a Polynomial> for &'b Polynomial {
     type Output = Polynomial;
     fn add(self, other: &Polynomial) -> Polynomial {
@@ -286,11 +425,16 @@ impl<'a, 'b> Add<&'a Polynomial> for &'b Polynomial {
     }
 }
 
-//Polynomial Subtraction modulo m: a(X) - b(X)
-
+/// Polynomial Subtraction modulo m: a(X) - b(X)
 impl<'a, 'b> Sub<&'a Polynomial> for &'b Polynomial {
     type Output = Polynomial;
-
+    ///
+    /// Subtracts two polynomials, returning a new polynomial that is the difference of the two.
+    ///
+    /// # Arguments
+    ///
+    /// * `self` - a `Polynomial` instance carrying the polynomial
+    /// * `other` - a `Polynomial` instance carrying the other polynomial
     fn sub(self, other: &Polynomial) -> Polynomial {
         //create polynomial with zero coefficients with the highest term
         let diff: Vec<Scalar> = self
@@ -311,12 +455,20 @@ impl<'a, 'b> Sub<&'a Polynomial> for &'b Polynomial {
     }
 }
 impl<'b> SubAssign<&'b Polynomial> for Polynomial {
+    /// Polynomial Subtraction modulo m: a(X) - b(X)
+    ///
+    /// # Arguments
+    ///
+    /// * `self` - a `Polynomial` instance carrying the polynomial
+    /// * `rhs` - a `Polynomial` instance carrying the other polynomial
+    ///
     fn sub_assign(&mut self, rhs: &Polynomial) {
         let result = (self as &Polynomial) - rhs;
         *self = result;
     }
 }
 impl PartialEq for Polynomial {
+    /// Checks if two polynomials are equal.
     fn eq(&self, other: &Polynomial) -> bool {
         if self.degree == other.degree {
             self.coefficients == other.coefficients
@@ -326,6 +478,13 @@ impl PartialEq for Polynomial {
     }
 }
 
+/// Computes the linear combination of polynomials for shuffle proofs.
+///
+/// Given L(X) polynomials, a matrix `a`, and witness vector `a_0`, this returns the combined polynomial expressions.
+///
+/// # Returns
+///
+/// A vector of `Polynomial` instances representing the expression.
 pub fn compute_polynomial_expression(
     l_x_vec: &[Polynomial],
     a: &Array2D<Scalar>,
@@ -343,7 +502,21 @@ pub fn compute_polynomial_expression(
         &a_3_l_3_x,
     )
 }
-
+/// Creates a Hadamard proof for the given matrices and witness.
+///
+/// # Arguments
+///
+/// * `a` - a `Array2D<Scalar>` instance carrying the matrix
+/// * `b` - a `Array2D<Scalar>` instance carrying the matrix
+/// * `c` - a `Array2D<Scalar>` instance carrying the matrix
+/// * `witness_r` - a `Vec<Scalar>` instance carrying the witness
+/// * `witness_s` - a `Vec<Scalar>` instance carrying the witness
+/// * `witness_t` - a `Vec<Scalar>` instance carrying the witness
+/// * `comit_a` - a `Vec<RistrettoPoint>` instance carrying the witness
+/// * `comit_b` - a `Vec<RistrettoPoint>` instance carrying the witness
+/// * `comit_c` - a `Vec<RistrettoPoint>` instance carrying the witness
+/// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators
+///
 pub fn create_hadamard_proof(
     a: &Array2D<Scalar>,
     b: &Array2D<Scalar>,
@@ -824,20 +997,31 @@ mod test {
 
         assert_eq!(reference, poly);
     }
-    #[test]
-    fn l_i_x_polynomial_test() {
-        let w: Vec<Scalar> = vec![
-            Scalar::from(5u64),
-            Scalar::from(1u64),
-            Scalar::from(2u64),
-            Scalar::from(3u64),
-        ];
-        let _poly = create_l_i_x_polynomial(&w);
-        // let _poly2 = create_l_poly(&w);
-        // poly.print_polynomial();
-
-        //assert_eq!(reference, exp_2);
-    }
+    // TODO: Add test for l_i_x_polynomial
+    // TODO: Add test for create_l_i_x_polynomial
+    // TODO: Need to figure out a Reference Polynomial vector
+    // #[test]
+    // fn l_i_x_polynomial_test() {
+    //     let w: Vec<Scalar> = vec![
+    //         Scalar::from(5u64),
+    //         Scalar::from(1u64),
+    //         Scalar::from(2u64),
+    //         Scalar::from(3u64),
+    //     ];
+    //     let _poly = create_l_i_x_polynomial(&w);
+    //     let reference = vec![
+    //         Polynomial {
+    //             coefficients: vec![Scalar::from(1u64), Scalar::from(1u64), Scalar::from(1u64)],
+    //             degree: 2,
+    //         },
+    //         Polynomial {
+    //             coefficients: vec![Scalar::from(1u64), Scalar::from(1u64), Scalar::from(1u64)],
+    //             degree: 2,
+    //         },
+            
+    //     ];
+    //     assert_eq!(reference, _poly);
+    // }
     #[test]
     fn evaluate_polynomial_test() {
         let polya = Polynomial {

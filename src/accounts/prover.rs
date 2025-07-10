@@ -1,3 +1,8 @@
+//! Prover logic for Quisquis protocol zero-knowledge proofs.
+//!
+//! This module provides the [`Prover`] struct and related proof-generation logic for
+//! account updates, range proofs, and various sigma protocols in the Quisquis protocol.
+
 #![allow(non_snake_case)]
 
 use crate::accounts::{RangeProofProver, TranscriptProtocol};
@@ -11,19 +16,26 @@ use merlin::Transcript;
 use rand::thread_rng;
 // use serde::{Deserialize, Serialize};
 use serde_derive::{Deserialize, Serialize};
+/// Enum for representing different types of sigma proofs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SigmaProof {
+    /// Discrete logarithm proof.
     Dlog(Vec<Scalar>, Scalar),
+    /// Discrete log equality proof.
     Dleq(Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar),
 }
 
 impl SigmaProof {
+    /// Extracts the DLOG proof components.
+    ///
     pub fn get_dlog(self) -> (Vec<Scalar>, Scalar) {
         match self {
             SigmaProof::Dlog(x, y) => (x, y),
             _ => panic!("Not a DLOG sigma proof"),
         }
     }
+    /// Extracts the DLEQ proof components.
+    ///     
     pub fn get_dleq(self) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
         match self {
             SigmaProof::Dleq(a, b, c, d) => (a, b, c, d),
@@ -31,54 +43,50 @@ impl SigmaProof {
         }
     }
 }
+/// Prover for Quisquis protocol zero-knowledge proofs.
+///
+/// This struct manages the transcript and witness data for proof generation.
 pub struct Prover<'a> {
     transcript: &'a mut Transcript,
     scalars: Vec<Scalar>,
 }
 
 impl<'a> Prover<'a> {
-    /// Construct a new prover.  The `proof_label` disambiguates proof
-    /// statements.
+    /// Construct a new prover.  The `proof_label` disambiguates proof statements.
+    ///     
     pub fn new(proof_label: &'static [u8], transcript: &'a mut Transcript) -> Self {
         transcript.domain_sep(proof_label);
-        // // Initialise the Prover `ConstraintSystem` instance representing a merge gadget
-        // let cs_prover = r1cs::Prover::new(&pc_gens, Transcript::new(b"Rangeproof.r1cs"));
         Prover {
             transcript,
-            //  range_proof_prover: cs_prover,
             scalars: Vec::default(),
         }
     }
 
-    /// The compact and batchable proofs differ only by which data they store.
+    /// Internal: Build a transcript RNG using the current witness scalars.
     fn prove_impl(&self) -> merlin::TranscriptRng {
-        // Construct a TranscriptRng
         let mut rng_builder = self.transcript.build_rng();
         for scalar in &self.scalars {
             rng_builder = rng_builder.rekey_with_witness_bytes(b"", scalar.as_bytes());
         }
-        let transcript_rng = rng_builder.finalize(&mut thread_rng());
-        return transcript_rng;
+        rng_builder.finalize(&mut thread_rng())
     }
 
-    /// The compact and batchable proofs differ only by which data they store.
+    /// Build a transcript RNG using a custom set of witness scalars.
     pub fn prove_rekey_witness_transcript_rng(&self, scalars: &[Scalar]) -> merlin::TranscriptRng {
-        // Construct a TranscriptRng
         let mut rng_builder = self.transcript.build_rng();
         for scalar in scalars {
             rng_builder = rng_builder.rekey_with_witness_bytes(b"", scalar.as_bytes());
         }
-        let transcript_rng = rng_builder.finalize(&mut thread_rng());
-        return transcript_rng;
+        rng_builder.finalize(&mut thread_rng())
     }
 
-    /// Allocate and assign a secret variable with the given `label`.
+    /// Allocate and assign a secret scalar variable with the given `label`.
     pub fn allocate_scalar(&mut self, label: &'static [u8], assignment: &Scalar) {
         self.transcript.append_scalar_var(label, assignment);
         self.scalars.push(*assignment);
     }
 
-    /// Allocate and assign a public variable with the given `label`.
+    /// Allocate and assign a public point variable with the given `label`.
     pub fn allocate_point(&mut self, label: &'static [u8], assignment: &CompressedRistretto) {
         self.transcript.append_point_var(label, assignment);
     }
@@ -92,13 +100,23 @@ impl<'a> Prover<'a> {
     pub fn new_domain_sep(&mut self, label: &'static [u8]) {
         self.transcript.domain_sep(label);
     }
-    /// Wrapper for getting a challenge in Other modules.
+
+    /// Wrapper for getting a challenge in other modules.
     pub fn get_challenge(&mut self, label: &'static [u8]) -> Scalar {
         self.transcript.get_challenge(label)
     }
 
-    // verify_delta_compact_prover generates proves values committed in delta_accounts and epsilon_accounts are the same
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.1
+    /// verify_delta_compact_prover generates proves values committed in delta_accounts and epsilon_accounts are the same
+    /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.1>
+    ///
+    /// # Arguments
+    /// * `delta_accounts` - The delta accounts.
+    /// * `epsilon_accounts` - The epsilon accounts.
+    /// * `rscalar` - The rscalars used for the delta accounts.
+    /// * `value_vector` - The values committed in the delta accounts.
+    /// * `prover` - The prover.
+    /// # Returns
+    /// A SigmaProof containing the proof components.
     pub fn verify_delta_compact_prover(
         delta_accounts: &[Account],
         epsilon_accounts: &[Account],
@@ -234,7 +252,15 @@ impl<'a> Prover<'a> {
         return SigmaProof::Dleq(zv_vector, zr1_vector, zr2_vector, x);
     }
 
-    // verify_update_account_prover confirms if anonymity set in delta accounts was updated correctly
+    /// verify_update_account_prover confirms if anonymity set in delta accounts was updated correctly
+    ///
+    /// # Arguments
+    /// * `updated_input_accounts` - The updated input accounts.
+    /// * `updated_delta_accounts` - The updated delta accounts.
+    /// * `delta_rscalar` - The rscalars used for the delta accounts.
+    /// * `prover` - The prover.
+    /// # Returns
+    /// A SigmaProof containing the proof components.
     pub fn verify_update_account_prover(
         updated_input_accounts: &[Account],
         updated_delta_accounts: &[Account],
@@ -315,8 +341,17 @@ impl<'a> Prover<'a> {
         return SigmaProof::Dlog(z_vector, x);
     }
 
-    // verify_account_prover creates a signature for the sender account
-    // it proves the sender has secretkey and enough balance after updation to make the transfer using rangeproof
+    /// verify_account_prover creates a signature for the sender account
+    /// it proves the sender has secretkey and enough balance after updation to make the transfer using rangeproof
+    ///
+    /// # Arguments
+    /// * `updated_delta_account_sender` - The updated delta accounts for the sender.
+    /// * `bl_updated_sender` - The balances for the sender.
+    /// * `sk` - The secret keys for the sender.
+    /// * `prover` - The prover.
+    /// * `base_pk` - The base public key.
+    /// # Returns
+    /// A tuple containing the epsilon accounts, the rscalars used for creating the epsilon accounts, and the sigma proof.
     pub fn verify_account_prover(
         updated_delta_account_sender: &[Account],
         bl_updated_sender: &[u64],
@@ -468,7 +503,14 @@ impl<'a> Prover<'a> {
             SigmaProof::Dleq(zv_vector, zsk_vector, zr_vector, x),
         );
     }
-    //verify_non_negative_prover creates range proof on Receiver accounts with zero balance
+    /// verify_non_negative_prover creates range proof on Receiver accounts with zero balance
+    ///
+    /// # Arguments
+    /// * `bl` - The balances.
+    /// * `rscalar` - The scalars used for commitment.
+    /// * `rp_prover` - The range proof prover.
+    /// # Returns
+    /// A vector of RangeProofs.
     pub fn verify_non_negative_prover(
         /*epsilon_account: &Vec<Account>,*/
         bl: &[i64],
@@ -491,7 +533,14 @@ impl<'a> Prover<'a> {
         }
     }
 
-    //verify_non_negative_sender_receiver_prover creates range proof on sender accounts and Receiver accounts with +ve balance
+    /// verify_non_negative_sender_receiver_prover creates range proof on sender accounts and Receiver accounts with +ve balance
+    ///
+    /// # Arguments
+    /// * `bl` - The balances.
+    /// * `rscalar` - The scalars used for commitment.
+    /// * `prover` - The prover.
+    /// # Returns
+    /// A vector of RangeProofs.
     pub fn verify_non_negative_sender_receiver_prover(
         &mut self,
         bl: &[u64],
@@ -541,8 +590,15 @@ impl<'a> Prover<'a> {
         return proof_vector;
     }
 
-    // zero_balance_account_prover creates a sigma proof for zero
-    // balance commitment of all the random anonymity account
+    /// zero_balance_account_vector_prover creates a sigma proof for zero
+    /// balance commitment of all the random anonymity account
+    ///
+    /// # Arguments
+    /// * `anonymity_accounts` - The anonymity accounts.
+    /// * `comm_rscalar` - The scalar used for commitment.
+    /// * `prover` - The prover.
+    /// # Returns
+    /// A SigmaProof containing the proof components.
     pub fn zero_balance_account_vector_prover(
         anonymity_accounts: &[Account],
         comm_rscalar: &[Scalar],
@@ -601,8 +657,16 @@ impl<'a> Prover<'a> {
 
         return SigmaProof::Dlog(z_vector, x);
     }
-    // zero_balance_account_prover creates a sigma proof for zero
-    // balance commitment of all the random anonymity account
+
+    /// zero_balance_account_prover creates a sigma proof for zero
+    /// balance commitment of all the random anonymity account
+    ///
+    /// # Arguments
+    /// * `account` - The account.
+    /// * `comm_rscalar` - The scalar used for commitment.
+    /// * `prover` - The prover.
+    /// # Returns
+    /// A SigmaProof containing the proof components.
     pub fn zero_balance_account_prover(
         account: Account,
         comm_rscalar: Scalar,
@@ -638,8 +702,16 @@ impl<'a> Prover<'a> {
 
         return SigmaProof::Dlog(vec![z], x);
     }
-    // destroy_account_prover creates a sigma proof for zero
-    // balance commitment and the knowledge of sk of all the accounts
+    /// destroy_account_prover generates a sigma proof for the zero balance commitment
+    /// and demonstrates knowledge of the secret keys for all accounts
+    ///
+    /// # Arguments
+    /// * `accounts` - The accounts.
+    /// * `sk` - The secret keys.
+    /// * `prover` - The prover.
+    ///
+    /// # Returns
+    /// A SigmaProof containing the proof components.
     pub fn destroy_account_prover(
         accounts: &[Account],
         sk: &[RistrettoSecretKey],
@@ -698,9 +770,17 @@ impl<'a> Prover<'a> {
 
         return SigmaProof::Dlog(z_vector, x);
     }
-    ///Same Value Sigma proof protocol
-    /// Value and scalar used for commitment should be same for encryption and pedersen
-    ///  
+    /// Implements the Same Value Sigma proof protocol.
+    /// Ensures the value and scalar used for commitment are identical for both encryption and Pedersen commitment.
+    ///
+    /// # Arguments
+    /// * `enc_account` - The encrypted account.
+    /// * `rscalar` - The scalar used for commitment.
+    /// * `value` - The value used for commitment.
+    /// * `pedersen_commitment` - The pedersen commitment.
+    ///
+    /// # Returns
+    /// A SigmaProof containing the proof components.
     pub fn same_value_compact_prover(
         enc_account: Account,
         rscalar: Scalar,
@@ -771,6 +851,16 @@ impl<'a> Prover<'a> {
     /// pk' = pk * pk_rscalar
     /// comm' = comm + pk * comm_rscalar
     /// comm is updated with 0 balance
+    ///
+    /// # Arguments
+    /// * `delta_updated_accounts` - The updated delta accounts.
+    /// * `output_accounts` - The output accounts.
+    /// * `pk_rscalar` - The scalar used to update the public keys.
+    /// * `comm_rscalar` - The scalar used to update the commitments.
+    /// * `prover` - The prover.
+    ///
+    /// # Returns
+    /// A SigmaProof containing the proof components.
     pub fn verify_update_account_dark_tx_prover(
         delta_updated_accounts: &[Account],
         output_accounts: &[Account],

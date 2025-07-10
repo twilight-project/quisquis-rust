@@ -1,5 +1,21 @@
-//! The `vectorpedersen` module contains API for producing a
-//! vector commitment.
+//! Shuffle proof implementation for the Quisquis protocol.
+//!
+//! This module provides the main shuffle argument, permutation matrix logic, shuffle proof construction and verification,
+//! and supporting types for privacy-preserving account shuffling. It includes the main shuffle protocol implementation, and integrates all other submodules like
+//! product, hadamard, ddh, polynomial, singlevalueproduct, multiexponential, etc.
+//!
+//! ## Core Components
+//!
+//! - [Shuffle`] - Main shuffle protocol structure
+//! - [`Permutation`] - Permutation matrix logic
+//! - [`ShuffleProof`] / [`ShuffleStatement`] - Shuffle argument proof and statement
+//!
+//! ## Example
+//!
+//! ```rust
+//! use quisquislib::shuffle::Shuffle;
+//! // ...
+//! ```
 
 #![allow(non_snake_case)]
 
@@ -29,16 +45,28 @@ use rand::{CryptoRng, Rng};
 // use serde::{Deserialize, Serialize};
 use serde_derive::{Deserialize, Serialize};
 
+/// Represents a permutation matrix for shuffling accounts in the protocol.
 #[derive(Debug, Clone)]
 pub struct Permutation {
+    /// The permutation matrix as a 2D array (row-major order).
     perm_matrix: Array2D<usize>,
 }
-//Matrix Size
-pub const N: usize = 9; //N - Length of vector
-pub const ROWS: usize = 3; //m
-pub const COLUMNS: usize = 3; //n
+/// Number of accounts to shuffle (vector length).
+pub const N: usize = 9;
+/// Number of rows in the permutation/account matrix.
+pub const ROWS: usize = 3;
+/// Number of columns in the permutation/account matrix.
+pub const COLUMNS: usize = 3;
 
 impl Permutation {
+    /// Creates a new random permutation matrix of size `n` using the provided RNG.
+    ///
+    /// # Arguments
+    /// * `rng` - a mutable `Rng` instance carrying the random number generator
+    /// * `n` - the size of the permutation matrix
+    ///
+    /// # Returns
+    /// A `Permutation` instance.
     pub fn new<R: Rng + CryptoRng>(rng: &mut R, n: usize) -> Self {
         let mut permutation: Vec<usize> = (1..n + 1).collect();
         for i in (1..permutation.len()).rev() {
@@ -50,12 +78,21 @@ impl Permutation {
         Self { perm_matrix }
     }
 
-    //Set the permutation matrix explicitly
+    /// Sets the permutation matrix explicitly.
+    ///
+    /// # Arguments
+    /// * `matrix` - a `Array2D<usize>` instance carrying the permutation matrix
+    ///
+    /// # Returns
+    /// A `Permutation` instance.
     pub fn set(&mut self, matrix: Array2D<usize>) {
         self.perm_matrix = matrix;
     }
 
-    //Get the permutation matrix arranged as row major 1D array
+    /// Returns the permutation matrix as a row-major 1D array.
+    ///
+    /// # Returns
+    /// A `[usize; 9]` instance carrying the permutation matrix.
     pub fn get_row_major(&self) -> [usize; 9] {
         self.perm_matrix
             .as_row_major()
@@ -63,7 +100,10 @@ impl Permutation {
             .unwrap_or_else(|_v: Vec<usize>| panic!("Expected a Vec of length {}", 9))
     }
 
-    //Inverse the permutation matrix for use in Input shuffle
+    /// Returns the inverse of the permutation matrix (for input shuffle).
+    ///
+    /// # Returns
+    /// A `Array2D<usize>` instance carrying the inverse permutation matrix.
     pub fn invert_permutation(&self) -> Array2D<usize> {
         let mut inverse = vec![0; self.perm_matrix.num_elements()];
         let permutation = self.perm_matrix.as_row_major();
@@ -73,6 +113,10 @@ impl Permutation {
         let perm_matrix = Array2D::from_row_major(&inverse, ROWS, COLUMNS);
         perm_matrix
     }
+    /// Returns the permutation matrix as a matrix of Scalars (for proof input).
+    ///
+    /// # Returns
+    /// A `Array2D<Scalar>` instance carrying the permutation matrix.
     pub fn get_permutation_as_scalar_matrix(&self) -> Array2D<Scalar> {
         Array2D::from_row_major(
             &self
@@ -88,39 +132,65 @@ impl Permutation {
     // fn commit(&self ) -> Result<()>
 }
 
+/// Represents a shuffle operation and its associated data.
 #[derive(Debug, Clone)]
 pub struct Shuffle {
-    pub inputs: Array2D<Account>,      //Before shuffle     mxn
-    pub outputs: Array2D<Account>,     //After shuffle and update    mxn
+    /// Accounts before shuffling (m x n matrix).
+    pub inputs: Array2D<Account>, //Before shuffle     mxn
+    /// Accounts after shuffling and update (m x n matrix).
+    pub outputs: Array2D<Account>, //After shuffle and update    mxn
+    /// Scalars after shuffle for PK update (m x n matrix).
     pub shuffled_tau: Array2D<Scalar>, //Scalars after shuffle for PK update   mxn
-    pub rho: Scalar,                   //Scalar for Commitment Update
-    pub pi: Permutation,               //Permutaion matrix in the form m x n
+    /// Scalar for commitment update.
+    pub rho: Scalar, //Scalar for Commitment Update
+    /// Permutation matrix in m x n form.
+    pub pi: Permutation, //Permutaion matrix in the form m x n
 }
 ///Shuffle argument proof
 ///
 
+/// Shuffle argument statement for proof verification.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ShuffleStatement {
+    /// Hadamard argument statement.
     pub hadamard_statement: HadamardStatement,
+    /// Product argument statement.
     pub product_statement: ProductStatement,
+    /// DDH argument statement.
     pub ddh_statement: DDHStatement,
 }
 
+/// Shuffle argument proof.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ShuffleProof {
+    /// Commitments to permutation matrix rows.
     pub c_A: Vec<CompressedRistretto>,
+    /// Commitments to tau vectors.
     pub c_tau: Vec<CompressedRistretto>,
+    /// Commitments to b vectors.
     pub c_B: Vec<CompressedRistretto>,
+    /// Commitments to b' vectors.
     pub c_B_dash: Vec<CompressedRistretto>,
+    /// Hadamard argument proof.
     pub hadmard_proof: HadamardProof,
+    /// Product argument proof.
     pub product_proof: ProductProof,
+    /// Multiexponential proof for public key update.
     pub multi_exponen_pk: MultiexpoProof,
+    /// Multiexponential proof for commitment update.
     pub multi_exponen_commit: MultiexpoProof,
+    /// DDH argument proof.
     pub ddh_proof: DDHProof,
 }
 
 impl Shuffle {
-    // generate random values for Permutation and Scalars
+    /// Generates random values for permutation and scalars for shuffle initialization.
+    ///
+    /// # Arguments
+    /// * `len` - the size of the shuffle
+    ///
+    /// # Returns
+    /// A tuple containing a `Permutation`, a vector of `Scalar`s, and a `Scalar`.
     fn random_initialization(len: usize) -> (Permutation, Vec<Scalar>, Scalar) {
         //Create a new random permutation Matrix
         let pi = { Permutation::new(&mut OsRng, len) };
@@ -131,6 +201,13 @@ impl Shuffle {
         (pi, tau, rho)
     }
 
+    /// Performs an input shuffle on the provided accounts, updating them with random tau and rho.
+    ///
+    /// # Arguments
+    /// * `inputs` - a `Vec<Account>` instance carrying the accounts to be shuffled
+    ///
+    /// # Returns
+    /// A `Shuffle` instance.
     pub fn input_shuffle(
         inputs: &[Account], //Accounts to be shuffled
     ) -> Result<Self, &'static str> {
@@ -170,6 +247,13 @@ impl Shuffle {
         });
     }
 
+    /// Performs an output shuffle on the provided accounts, updating them with random tau and rho.
+    ///
+    /// # Arguments
+    /// * `inputs` - a `Vec<Account>` instance carrying the accounts to be shuffled
+    ///
+    /// # Returns
+    /// A `Shuffle` instance.
     pub fn output_shuffle(
         inputs: &Vec<Account>, //Accounts to be shuffled
     ) -> Result<Self, &'static str> {
@@ -206,36 +290,74 @@ impl Shuffle {
         });
     }
 
+    /// Returns a reference to the input accounts matrix.
+    ///
+    /// # Returns
+    /// A `Array2D<Account>` instance carrying the input accounts matrix.
     pub fn get_inputs(&self) -> &Array2D<Account> {
         &self.inputs
     }
 
+    /// Returns a reference to the output accounts matrix.
+    ///
+    /// # Returns
+    /// A `Array2D<Account>` instance carrying the output accounts matrix.
     pub fn get_outputs(&self) -> &Array2D<Account> {
         &self.outputs
     }
 
+    /// Returns a reference to the permutation matrix.
+    ///
+    /// # Returns
+    /// A `Permutation` instance carrying the permutation matrix.
     pub fn get_permutation(&self) -> &Permutation {
         &self.pi
     }
 
+    /// Returns a reference to the rho scalar.
+    ///
+    /// # Returns
+    /// A `Scalar` instance carrying the rho scalar.
     pub fn get_rho(&self) -> &Scalar {
         &self.rho
     }
 
+    /// Returns a reference to the tau matrix.
+    ///
+    /// # Returns
+    /// A `Array2D<Scalar>` instance carrying the tau matrix.
     pub fn get_tau(&self) -> &Array2D<Scalar> {
         &self.shuffled_tau
     }
 
+    /// Returns the input accounts as a row-major vector.
+    ///
+    /// # Returns
+    /// A `Vec<Account>` instance carrying the input accounts vector.
     pub fn get_inputs_vector(&self) -> Vec<Account> {
         self.inputs.as_row_major()
     }
 
+    /// Returns the output accounts as a row-major vector.
+    ///
+    /// # Returns
+    /// A `Vec<Account>` instance carrying the output accounts vector.
     pub fn get_outputs_vector(&self) -> Vec<Account> {
         self.outputs.as_row_major()
     }
 }
 
 impl ShuffleProof {
+    /// Creates a shuffle proof and its statement for the given shuffle instance.
+    ///
+    /// # Arguments
+    /// * `prover` - a mutable `Prover` instance carrying the transcript
+    /// * `shuffle` - a `Shuffle` instance carrying the shuffle argument
+    /// * `pc_gens` - a `PedersenGens` instance carrying the pedersen generators
+    /// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators  
+    ///
+    /// # Returns
+    /// A tuple containing a `ShuffleProof` and a `ShuffleStatement`.
     pub fn create_shuffle_proof(
         prover: &mut Prover,
         shuffle: &Shuffle,
@@ -409,8 +531,19 @@ impl ShuffleProof {
         )
     }
 
-    ///!Shuffle Proof Verification
+    /// Verifies the shuffle proof against the provided statement and account vectors.
     ///
+    /// # Arguments
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    /// * `statement` - a `ShuffleStatement` instance carrying the statement
+    /// * `shuffle_input` - a `Vec<Account>` instance carrying the input accounts
+    /// * `shuffle_output` - a `Vec<Account>` instance carrying the output accounts
+    /// * `pc_gens` - a `PedersenGens` instance carrying the pedersen generators
+    /// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify(
         &self,
         verifier: &mut Verifier,
@@ -578,8 +711,15 @@ impl ShuffleProof {
         }
     }
 }
-/// Prepare b and b' vector to be passed as witness to multiexponentiation proof
+/// Prepares b and b' vectors to be passed as witness to multiexponentiation proof
 ///
+/// # Arguments
+/// * `exp_x` - Exponent vector (x^i)
+/// * `tau` - Tau vector
+/// * `p` - Permutation
+///
+/// # Returns
+/// Tuple of `(b_matrix, b_dash_matrix)` as `Array2D<Scalar>`.
 pub fn create_b_b_dash(
     exp_x: &[Scalar],
     tau: &[Scalar],

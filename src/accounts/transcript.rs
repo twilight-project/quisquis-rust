@@ -1,24 +1,54 @@
+//! Transcript extension utilities for the Quisquis protocol.
+//!
+//! This module provides the [`TranscriptProtocol`] trait, which extends the Merlin transcript API
+//! with methods for committing scalars, points, and accounts, and for generating Fiat-Shamir
+//! challenges as scalars.
+
+use crate::accounts::Account;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
-use crate::accounts::Account;
 use merlin::Transcript;
 
-/// Extension trait to the Merlin transcript API that allows committing scalars and points and
-/// generating challenges as scalars.
+/// Extension trait to the Merlin transcript API for Quisquis-specific operations.
+///
+/// This trait allows committing scalars, points, and account structures to the transcript,
+/// and generating Fiat-Shamir challenges as scalars.
 pub trait TranscriptProtocol {
     /// Appends `label` to the transcript as a domain separator.
+    ///
+    /// This is used to separate different protocol domains and prevent transcript collisions.
     fn domain_sep(&mut self, label: &'static [u8]);
 
-    /// Append the `label` for a scalar variable to the transcript.
+    /// Appends a scalar variable to the transcript with the given `label`.
+    ///
+    /// # Arguments
+    /// * `label` - The label for the scalar variable.
+    /// * `scalar` - The scalar value to append.
     fn append_scalar_var(&mut self, label: &'static [u8], scalar: &Scalar);
 
-    /// Append a point variable to the transcript, for use by a prover.
+    /// Appends a compressed Ristretto point variable to the transcript with the given `label`.
+    ///
+    /// # Arguments
+    /// * `label` - The label for the point variable.
+    /// * `point` - The compressed Ristretto point to append.
     fn append_point_var(&mut self, label: &'static [u8], point: &CompressedRistretto);
 
-    /// Append a point variable to the transcript, for use by a prover, this is QuisQuis specific.
+    /// Appends an account variable to the transcript with the given `label`.
+    ///
+    /// This is Quisquis-specific and commits all components of the account (public key and commitment).
+    ///
+    /// # Arguments
+    /// * `label` - The label for the account variable.
+    /// * `account` - The account to append.
     fn append_account_var(&mut self, label: &'static [u8], account: &Account);
 
-    /// Get a scalar challenge from the transcript.
+    /// Generates a scalar challenge from the transcript using the given `label`.
+    ///
+    /// # Arguments
+    /// * `label` - The label for the challenge.
+    ///
+    /// # Returns
+    /// A scalar derived from the transcript state.
     fn get_challenge(&mut self, label: &'static [u8]) -> Scalar;
 }
 
@@ -36,7 +66,7 @@ impl TranscriptProtocol for Transcript {
         self.append_message(b"val", point.as_bytes());
     }
 
-    fn append_account_var(&mut self, label: &'static [u8], account: &Account){
+    fn append_account_var(&mut self, label: &'static [u8], account: &Account) {
         self.append_message(b"acvar", label);
         self.append_message(b"gr", account.pk.gr.as_bytes());
         self.append_message(b"grsk", account.pk.grsk.as_bytes());

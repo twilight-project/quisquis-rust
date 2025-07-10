@@ -1,3 +1,8 @@
+//! Range proof gadgets and helpers for the Quisquis protocol.
+//!
+//! This module provides types and functions for constructing and verifying
+//! Bulletproofs-based range proofs using the R1CS (Rank-1 Constraint System) API.
+
 use bulletproofs::r1cs::*;
 use bulletproofs::{BulletproofGens, PedersenGens};
 use core::borrow::BorrowMut;
@@ -5,16 +10,24 @@ use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 
-/// Range Proof gadget
-/// RangeProof struct to hold the R1CS range proof
-
+/// Prover for Bulletproofs range proofs using R1CS.
+///
+/// This struct wraps a Bulletproofs R1CS prover and provides methods for
+/// committing values and building range proofs.
 pub struct RangeProofProver<'g, T: BorrowMut<Transcript>> {
-    /// Common R1CS Prover for multiple rangeproofs
+    /// Common R1CS Prover for multiple rangeproofs.
     pub(crate) prover: bulletproofs::r1cs::Prover<'g, T>,
 }
 
 impl<'g, T: BorrowMut<Transcript>> RangeProofProver<'g, T> {
-    // R1CS constraint system building
+    /// Commits a value and adds a range proof constraint to the R1CS system.
+    ///
+    /// # Arguments
+    /// * `val` - The value to commit and prove in range.
+    /// * `epsilon_blinding` - The blinding factor for the Pedersen commitment.
+    ///
+    /// # Returns
+    /// The Pedersen commitment as a compressed Ristretto point.
     pub fn range_proof_prover(
         &mut self,
         val: u64,
@@ -22,39 +35,63 @@ impl<'g, T: BorrowMut<Transcript>> RangeProofProver<'g, T> {
     ) -> Result<CompressedRistretto, R1CSError> {
         // Commit to the val as variable
         let (com, var) = self.prover.commit(val.into(), epsilon_blinding);
-        //Update range proof R1CS constraint system
+        // Update range proof R1CS constraint system
         range_proof(&mut self.prover, var.into(), Some(val), 64 as usize)?;
         Ok(com)
     }
+
+    /// Builds the final R1CS proof.
+    ///
+    /// # Returns
+    /// The R1CS proof.
     pub fn build_proof(self) -> Result<R1CSProof, R1CSError> {
         let bp_gens = BulletproofGens::new(512, 1);
         self.prover.prove(&bp_gens)
     }
-
-    // pub fn hadamard_product_prover(&mut self, val: u64, epsilon_blinding: Scalar) -> Result<CompressedRistretto, R1CSError>{
-
-    // }
 }
 
+/// Verifier for Bulletproofs range proofs using R1CS.
+///
+/// This struct wraps a Bulletproofs R1CS verifier and provides methods for
+/// verifying commitments and range proofs.
 pub struct RangeProofVerifier<T: BorrowMut<Transcript>> {
-    /// Common R1CS Verifier for multiple rangeproofs
+    /// Common R1CS Verifier for multiple rangeproofs.
     pub(crate) verifier: bulletproofs::r1cs::Verifier<T>,
 }
 
 impl<T: BorrowMut<Transcript>> RangeProofVerifier<T> {
-    // R1CS constraint system building
+    /// Adds a range proof constraint for a committed value to the R1CS system.
+    ///
+    /// # Arguments
+    /// * `com` - The Pedersen commitment to verify.
     pub fn range_proof_verifier(&mut self, com: CompressedRistretto) -> Result<(), R1CSError> {
         // Commit to the val as variable
         let var = self.verifier.commit(com);
-        //Update range proof R1CS constraint system
+        // Update range proof R1CS constraint system
         range_proof(&mut self.verifier, var.into(), None, 64 as usize)
     }
+
+    /// Verifies the final R1CS proof.
+    ///
+    /// # Arguments
+    /// * `proof` - The R1CS proof to verify.
+    /// * `pc_gens` - The Pedersen generators used for commitments.
     pub fn verify_proof(self, proof: &R1CSProof, pc_gens: &PedersenGens) -> Result<(), R1CSError> {
         let bp_gens = BulletproofGens::new(512, 1);
         self.verifier.verify(proof, pc_gens, &bp_gens)
     }
 }
-/// Enforces that the quantity of v is in the range [0, 2^n).
+
+/// Enforces that the quantity of `v` is in the range [0, 2^n).
+///
+/// # Arguments
+/// * `cs` - The constraint system.
+/// * `v` - The linear combination representing the value.
+/// * `v_assignment` - The optional value assignment (for the prover).
+/// * `n` - The number of bits for the range.
+///
+/// # Returns
+/// Ok(()) if the constraint is satisfied, or an R1CSError otherwise.
 pub fn range_proof<CS: ConstraintSystem>(
     cs: &mut CS,
     mut v: LinearCombination,

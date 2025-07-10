@@ -1,5 +1,13 @@
-//! The `product` module contains API for producing a
-//! product argument proof and verify it.
+//! Product argument proofs for the Quisquis shuffle protocol.
+//!
+//! This module provides types and functions for constructing and verifying product proofs,
+//! including multi-hadamard and zero-argument proofs, as part of the shuffle argument.
+//!
+//! ## Core Components
+//!
+//! - [`ProductProof`] / [`ProductStatement`] - Product argument proof and statement
+//! - [`MultiHadamardProof`] / [`MultiHadamardStatement`] - Multi-hadamard argument
+//! - [`ZeroProof`] / [`ZeroStatement`] - Zero argument proof
 
 #![allow(non_snake_case)]
 
@@ -20,57 +28,85 @@ use curve25519_dalek::{
 };
 use serde::{Deserialize, Serialize};
 use std::iter;
-///Zero argument
-///
+/// Statement for a zero argument proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroStatement {
+    /// Commitments to A vector.
     pub c_A: Vec<CompressedRistretto>,
 }
-///Zero argument proof
-///
+/// Zero argument proof for committed values.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroProof {
+    /// Commitment to a_0 vector.
     pub c_A_0: CompressedRistretto,
+    /// Commitment to b_m vector.
     pub c_B_m: CompressedRistretto,
+    /// Commitments to D vector.
     pub c_D: Vec<CompressedRistretto>,
+    /// Evaluated a_vec at challenge x.
     pub a_vec: Vec<Scalar>,
+    /// Evaluated b_vec at challenge x.
     pub b_vec: Vec<Scalar>,
+    /// Opening for a_vec commitment.
     pub r: Scalar,
+    /// Opening for b_vec commitment.
     pub s: Scalar,
+    /// Opening for t commitment.
     pub t: Scalar,
 }
 
-///MultiHadamard argument
-///
+/// Statement for a multi-hadamard argument proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiHadamardStatement {
+    /// Commitment to b vector.
     pub c_b: CompressedRistretto,
+    /// Zero argument statement.
     pub zero_statement: ZeroStatement,
 }
-///MultiHadamard argument proof
-///
+
+/// Multi-hadamard argument proof for committed values.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiHadamardProof {
+    /// Commitments to B vector.
     pub c_B: Vec<CompressedRistretto>,
+    /// Zero argument proof.
     pub zero_proof: ZeroProof,
 }
 
-///Product Proof argument
-/// an argument that a set of committed values have a particular product
-///
+/// Statement for a product argument proof.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProductStatement {
+    /// Multi-hadamard argument statement.
     pub multi_hadamard_statement: MultiHadamardStatement,
+    /// Single value product argument statement.
     pub svp_statement: SVPStatement,
 }
-///Product argument proof
-///
+
+/// Product argument proof for a set of committed values.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProductProof {
+    /// Multi-hadamard argument proof.
     pub multi_hadamard_proof: MultiHadamardProof,
+    /// Single value product argument proof.
     pub svp_proof: SVPProof,
 }
 impl ProductProof {
+    /// Creates a product argument proof for a set of committed values.
+    ///
+    /// This function constructs a product proof by combining a multi-hadamard proof and a single value product proof.
+    /// It takes a witness matrix, a random scalar vector, and Pedersen generators.
+    ///
+    /// # Arguments
+    ///
+    /// * `prover` - a mutable `Prover` instance carrying the transcript
+    /// * `witness_matrix` - a `Array2D<Scalar>` instance carrying the witness values in column major order.
+    /// * `witness_r` - a `Vec<Scalar>` instance carrying the random scalars corresponding to the witness values.
+    /// * `pc_gens` - a `PedersenGens` instance carrying the pedersen generators
+    /// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the constructed `ProductProof` and `ProductStatement`.
     pub fn create_product_argument_proof(
         prover: &mut Prover,
         witness_matrix: &Array2D<Scalar>, //witness in column major order
@@ -139,8 +175,22 @@ impl ProductProof {
             },
         )
     }
-    ///Product Argument proof verification
+    /// Verifies a product argument proof.
     ///
+    /// This function checks if the provided `ProductProof` is valid for the given `ProductStatement`
+    /// and commitments. It verifies both the multi-hadamard and single value product proofs.
+    ///
+    /// # Arguments
+    ///
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    /// * `prod_statement` - a `ProductStatement` instance carrying the statement
+    /// * `c_prod_A` - a `Vec<RistrettoPoint>` instance carrying the commitments to the A vector.
+    /// * `pc_gens` - a `PedersenGens` instance carrying the pedersen generators
+    /// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if the proof is valid, otherwise an error message.
     pub fn verify(
         &self,
         verifier: &mut Verifier,
@@ -167,6 +217,27 @@ impl ProductProof {
 }
 
 impl MultiHadamardProof {
+    /// Creates a multi-hadamard product argument proof.
+    ///
+    /// This function constructs a proof for the multi-hadamard argument, which is a product of
+    /// committed values from a matrix A. It takes a matrix A, Pedersen generators, and a vector of
+    /// commitments to A.
+    ///
+    /// # Arguments
+    ///
+    /// * `prover` - a mutable `Prover` instance carrying the transcript
+    /// * `pi_2d` - a `Array2D<Scalar>` instance carrying the Permutation matrix A
+    /// * `pc_gens` - a `PedersenGens` instance carrying the pedersen generators
+    /// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators
+    /// * `bvec` - a `Vec<Scalar>` instance carrying the product of rows of A.
+    /// * `comit_a` - a `Vec<RistrettoPoint>` instance carrying the commitments to the rows of A.
+    /// * `cb` - a `RistrettoPoint` instance carrying the commitment to the product of rows of A.
+    /// * `r` - a `Vec<Scalar>` instance carrying the random scalars.
+    /// * `s_3` - a `Scalar` instance carrying the challenge.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the constructed `MultiHadamardProof` and `MultiHadamardStatement`.
     pub fn create_multi_hadamard_product_arg(
         prover: &mut Prover,
         pi_2d: &Array2D<Scalar>,
@@ -192,11 +263,7 @@ impl MultiHadamardProof {
         let bm = bvec;
 
         //Vector holding b1, b2 and bm
-        let b_2d_vec = vec![
-            perm_scalar_as_cols[0].clone(),
-            b2.clone(),
-            bvec.to_vec(),
-        ];
+        let b_2d_vec = vec![perm_scalar_as_cols[0].clone(), b2.clone(), bvec.to_vec()];
         // transcriptRng using public transcript data + secret for proof + external source
         let mut rng = prover.prove_rekey_witness_transcript_rng(&bm);
         //creating s vector before challenge.
@@ -297,6 +364,24 @@ impl MultiHadamardProof {
         )
     }
 
+    /// Verifies a multi-hadamard product argument proof.
+    ///
+    /// This function checks if the provided `MultiHadamardProof` is valid for the given
+    /// `MultiHadamardStatement` and commitments. It verifies the zero argument proof and
+    /// the multi-hadamard product itself.
+    ///
+    /// # Arguments
+    ///
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    /// * `statement` - a `MultiHadamardStatement` instance carrying the statement
+    /// * `c_A` - a `Vec<RistrettoPoint>` instance carrying the commitments to the A vector.
+    /// * `pc_gens` - a `PedersenGens` instance carrying the pedersen generators
+    /// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())` if the proof is valid
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify(
         &self,
         verifier: &mut Verifier,
@@ -373,8 +458,25 @@ impl MultiHadamardProof {
     }
 }
 impl ZeroProof {
-    ///Create Zero Argument proof
+    /// Creates a zero argument proof.
     ///
+    /// This function constructs a proof for the zero argument, which is a product of committed values
+    /// that should sum to zero. It takes matrices A and B, Pedersen generators, and random scalars.
+    ///
+    /// # Arguments
+    ///
+    /// * `prover` - a mutable `Prover` instance carrying the transcript
+    /// * `a_2d` - a `Array2D<Scalar>` instance carrying the matrix A
+    /// * `b_2d` - a `Array2D<Scalar>` instance carrying the matrix B
+    /// * `pc_gens` - a `PedersenGens` instance carrying the pedersen generators
+    /// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators
+    /// * `r_vec` - a `Vec<Scalar>` instance carrying the random scalars
+    /// * `s_vec` - a `Vec<Scalar>` instance carrying the random scalars
+    /// * `y` - a `Scalar` instance carrying the challenge
+    ///
+    /// # Returns
+    ///
+    /// The constructed `ZeroProof`.
     pub fn create_zero_argument_proof(
         prover: &mut Prover,
         a_2d: &Array2D<Scalar>,
@@ -513,6 +615,23 @@ impl ZeroProof {
         }
     }
 
+    /// Verifies a zero argument proof.
+    ///
+    /// This function checks if the provided `ZeroProof` is valid for the given commitments.
+    /// It verifies the zero argument itself and the multi-hadamard product proof.
+    ///
+    /// # Arguments
+    ///
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    /// * `c_A` - a `Vec<CompressedRistretto>` instance carrying the commitments to the A vector.
+    /// * `xpc_gens` - a `VectorPedersenGens` instance carrying the vector pedersen generators
+    /// * `pc_gens` - a `PedersenGens` instance carrying the pedersen generators
+    /// * `c_B` - a `Vec<RistrettoPoint>` instance carrying the commitments to the B vector.
+    /// * `chal_y` - a `Scalar` instance carrying the challenge
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if the proof is valid, otherwise an error message.
     pub fn verify(
         &self,
         verifier: &mut Verifier,
@@ -605,6 +724,20 @@ impl ZeroProof {
     }
 }
 
+/// Computes the bilinear map for a given matrix A and B.
+///
+/// This function implements the bilinear map H(A, B) = sum_{i=0}^{2m} sum_{j=0}^{2m} a_i^j * b_j^i.
+/// It takes matrices A and B and a scalar challenge y.
+///
+/// # Arguments
+///
+/// * `a` - a `Array2D<Scalar>` instance carrying the matrix A
+/// * `b` - a `Array2D<Scalar>` instance carrying the matrix B
+/// * `y_chal` - a `Scalar` instance carrying the challenge
+///
+/// # Returns
+///
+/// A vector of scalars representing the result of the bilinear map.
 pub fn bilinearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal: Scalar) -> Vec<Scalar> {
     //complete bilinear map for Matrix A and B. A and B are constructed in the calling function
 
@@ -635,6 +768,19 @@ pub fn bilinearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal: Scalar) -> 
     dvec
 }
 
+
+/// This function implements the single bilinear map H(a_i, b_j) = sum_{k=0}^{m-1} a_i^k * b_j^k * y_i^k.
+/// It takes a row of A, a row of B, and a vector of scalar challenges y.
+///
+/// # Arguments
+///
+/// * `ai` - a `Vec<Scalar>` instance carrying a row of A
+/// * `bj` - a `Vec<Scalar>` instance carrying a row of B
+/// * `yi` - a `Vec<Scalar>` instance carrying a vector of scalar challenges
+///
+/// # Returns
+///
+/// A scalar representing the result of the single bilinear map.
 pub fn single_bilinearmap(ai: &[Scalar], bj: &[Scalar], yi: &[Scalar]) -> Scalar {
     assert_eq!(ai.len(), bj.len());
     assert_eq!(ai.len(), yi.len());
@@ -783,7 +929,7 @@ mod test {
         let bj: Vec<_> = vec![Scalar::from(5u64), Scalar::from(3u64), Scalar::from(4u64)];
         let y = Scalar::from(5u64);
         //create y^i
-        let y_i: Vec<_> = vectorutil::exp_iter(y).skip(1).take(4).collect();
+        let y_i: Vec<_> = vectorutil::exp_iter(y).skip(1).take(3).collect();
         let reference = Scalar::from(1125u64);
         //test vector lengths before passing it to the function
         let result = single_bilinearmap(&ai, &bj, &y_i);

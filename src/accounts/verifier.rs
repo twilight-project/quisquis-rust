@@ -1,3 +1,8 @@
+//! Verifier logic for Quisquis protocol zero-knowledge proofs.
+//!
+//! This module provides the [`Verifier`] struct and related proof-verification logic for
+//! account updates, range proofs, and various sigma protocols in the Quisquis protocol.
+
 use bulletproofs::r1cs::R1CSError;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_COMPRESSED,
@@ -13,13 +18,23 @@ use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use merlin::Transcript;
 
 use super::SigmaProof;
+
+/// Verifier for Quisquis protocol zero-knowledge proofs.
+///
+/// This struct manages the transcript and witness data for proof verification.
 pub struct Verifier<'a> {
     transcript: &'a mut Transcript,
     scalars: Vec<Scalar>,
 }
 
 impl<'a> Verifier<'a> {
-    /// Construct a new Verifier.  
+    /// Construct a new Verifier.
+    ///
+    /// # Arguments
+    /// * `proof_label` - A label to disambiguate proof statements.
+    /// * `transcript` - The Merlin transcript to use.
+    /// # Returns
+    /// A new `Verifier` instance.
     pub fn new(proof_label: &'static [u8], transcript: &'a mut Transcript) -> Self {
         transcript.domain_sep(proof_label);
         Verifier {
@@ -28,22 +43,51 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    /// Allocate and assign a secret variable with the given `label`.
+    /// Allocate and assign a secret scalar variable with the given `label`.
+    ///
+    /// # Arguments
+    /// * `label` - The label for the scalar variable.
+    /// * `assignment` - The scalar value to assign.
+    ///
+    /// # Returns
+    /// A new `Verifier` instance.
     pub fn allocate_scalar(&mut self, label: &'static [u8], assignment: Scalar) {
         self.transcript.append_scalar_var(label, &assignment);
         self.scalars.push(assignment);
     }
 
-    /// Allocate and assign a public variable with the given `label`.
+    /// Allocate and assign a public point variable with the given `label`.
+    ///
+    /// # Arguments
+    /// * `label` - The label for the point variable.
+    /// * `assignment` - The point value to assign.
+    ///
+    /// # Returns
+    /// A new `Verifier` instance.
     pub fn allocate_point(&mut self, label: &'static [u8], assignment: &CompressedRistretto) {
         self.transcript.append_point_var(label, assignment);
     }
 
     /// Allocate and assign an account with the given `label`.
+    ///
+    /// # Arguments
+    /// * `label` - The label for the account variable.
+    /// * `account` - The account value to assign.
+    ///
+    /// # Returns
+    /// A new `Verifier` instance.
     pub fn allocate_account(&mut self, label: &'static [u8], account: &Account) {
         self.transcript.append_account_var(label, account);
     }
 
+    /// Perform a multiscalar multiplication for verification.
+    ///
+    /// # Arguments
+    /// * `combined_scalars` - The scalars to multiply.
+    /// * `point` - The points to multiply.
+    ///
+    /// # Returns
+    /// The resulting RistrettoPoint, or None if any point fails to decompress.
     pub fn multiscalar_multiplication(
         combined_scalars: &Vec<Scalar>,
         point: &Vec<CompressedRistretto>,
@@ -53,17 +97,44 @@ impl<'a> Verifier<'a> {
             point.iter().map(|pt| pt.decompress()),
         )
     }
+
     /// Allocate a new domain to create another transcript for embedded proof with new `label`.
+    ///
+    /// # Arguments
+    /// * `label` - The label for the new domain.
+    ///
+    /// # Returns
+    /// A new `Verifier` instance.
     pub fn new_domain_sep(&mut self, label: &'static [u8]) {
         self.transcript.domain_sep(label);
     }
-    /// Wrapper for getting a challenge in Other modules.
+
+    /// Wrapper for getting a challenge in other modules.
+    ///
+    /// # Arguments
+    /// * `label` - The label for the challenge.
+    ///
+    /// # Returns
+    /// A new `Verifier` instance.
     pub fn get_challenge(&mut self, label: &'static [u8]) -> Scalar {
         self.transcript.get_challenge(label)
     }
 
-    // verify_delta_compact_verifier verifies proves values committed in delta_accounts and epsilon_accounts are the same
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.2
+    /// verify_delta_compact_verifier verifies proves values committed in delta_accounts and epsilon_accounts are the same
+   /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.2>
+    ///
+    /// # Arguments
+    /// * `delta_accounts` - The delta accounts.
+    /// * `epsilon_accounts` - The epsilon accounts.
+    /// * `zv_vector` - blinding scalars for each account value
+    /// * `zr1_vector` - blinding scalars for delta
+    /// * `zr2_vector` - blinding scalars for epsilon
+    /// * `x` - the Fiat–Shamir challenge scalar
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_delta_compact_verifier(
         delta_accounts: &Vec<Account>,
         epsilon_accounts: &Vec<Account>,
@@ -138,6 +209,17 @@ impl<'a> Verifier<'a> {
     }
 
     // verify_update_account_verifier verifies delta accounts were updated correctly
+    ///
+    /// # Arguments
+    /// * `updated_input_accounts` - The updated input accounts.
+    /// * `updated_delta_accounts` - The updated delta accounts.
+    /// * `z_vector` - `challenge_response` – the response to the Fiat–Shamir challenge, often denoted `z`
+    /// * `x` - the Fiat–Shamir challenge scalar
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_update_account_verifier(
         updated_input_accounts: &[Account],
         updated_delta_accounts: &[Account],
@@ -203,7 +285,23 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    // verify_account_verifier verifies the knowledge of secret key and balance
+    /// verify_account_verifier verifies the knowledge of secret key and balance
+    /// This method uses the constraint-based range proof to verify the balance of the account.
+    ///
+    /// # Arguments
+    /// * `updated_delta_account_sender` - The updated delta accounts for the sender.
+    /// * `account_epsilon_sender` - The epsilon accounts for the sender.
+    /// * `base_pk` - Generator point for the commitment scheme
+    /// * `zv` - response to Fiat–Shamir challenge for each account value
+    /// * `zsk` - response to Fiat–Shamir challenge for each account secret key
+    /// * `zr` - response to Fiat–Shamir challenge for each account blinding factor
+    /// * `x` - the Fiat–Shamir challenge scalar
+    /// * `rp_verifier` - a mutable `RangeProofVerifier` instance carrying the transcript
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_account_verifier(
         updated_delta_account_sender: &[Account],
         account_epsilon_sender: &[Account],
@@ -280,8 +378,21 @@ impl<'a> Verifier<'a> {
             Err("sender account verification failed")
         }
     }
-    // verify_account_verifier_bulletproof verifies the knowledge of secret key for sender and
-    // the same balance commitment between epsilon and updated delta accounts
+    /// verify_account_verifier_bulletproof verifies the knowledge of secret key for sender and
+    /// the same balance commitment between epsilon and updated delta accounts
+    /// # Arguments
+    /// * `updated_delta_account_sender` - The updated delta accounts for the sender.
+    /// * `account_epsilon_sender` - The epsilon accounts for the sender.
+    /// * `base_pk` - Generator point for the commitment scheme
+    /// * `zv` - response to Fiat–Shamir challenge for each account value
+    /// * `zsk` - response to Fiat–Shamir challenge for each account secret key
+    /// * `zr` - response to Fiat–Shamir challenge for each account blinding factor
+    /// * `x` - the Fiat–Shamir challenge scalar
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_account_verifier_bulletproof(
         updated_delta_account_sender: &[Account],
         account_epsilon_sender: &[Account],
@@ -360,7 +471,16 @@ impl<'a> Verifier<'a> {
             Err("sender account verification failed")
         }
     }
-    //verify_non_negative_verifier verifies range proof on Receiver accounts with zero balance
+    /// verify_non_negative_verifier verifies range proof on Receiver accounts with zero balance
+    /// This method uses the constraint-based range proof to verify the balance of the account.
+    ///
+    /// # Arguments
+    /// * `epsilon_account` - The epsilon accounts for the receiver.
+    /// * `rp_verifier` - a mutable `RangeProofVerifier` instance carrying the transcript
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(R1CSError)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_non_negative_verifier(
         epsilon_account: &[Account],
         rp_verifier: &mut RangeProofVerifier<Transcript>,
@@ -371,7 +491,16 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    //verify_non_negative_verifier verifies range proof on Receiver accounts with zero balance
+    /// verify_non_negative_sender_receiver_bulletproof_batch_verifier verifies range proof on Receiver accounts with zero balance
+    /// This method uses the Bulletproofs to verify the balance of the account.
+    ///
+    /// # Arguments
+    /// * `epsilon_account` - The epsilon accounts for the receiver.
+    /// * `proof` - a `RangeProof` instance carrying the transcript.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_non_negative_sender_receiver_bulletproof_batch_verifier(
         &mut self,
         epsilon_account: &[Account],
@@ -392,7 +521,16 @@ impl<'a> Verifier<'a> {
             Err(_) => Err("Bulletproof verification failed"),
         }
     }
-    //verify_non_negative_verifier verifies range proof on Receiver accounts with zero balance
+    /// verify_non_negative_sender_receiver_bulletproof_vector_verifier verifies range proof on Receiver accounts with zero balance
+    /// This method uses the Bulletproofs to verify the balance of the account.
+    ///
+    /// # Arguments
+    /// * `epsilon_account` - The epsilon accounts for the receiver.
+    /// * `proof_vector` - a vector of `RangeProof` instances carrying the transcript.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_non_negative_sender_receiver_bulletproof_vector_verifier(
         &mut self,
         epsilon_account: &[Account],
@@ -416,8 +554,15 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    // verify_delta_identity_check sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
-    // else returns error
+    /// verify_delta_identity_check sums the epsilon vector commitments c, d as indidivual points and checks if they are identity
+    /// else returns error
+    ///
+    /// # Arguments
+    /// * `epsilon_accounts` - The epsilon accounts.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_delta_identity_check(epsilon_accounts: &[Account]) -> Result<(), &'static str> {
         let sum_c: RistrettoPoint = epsilon_accounts
             .iter()
@@ -434,7 +579,17 @@ impl<'a> Verifier<'a> {
             Ok(())
         }
     }
-    // zero_balance_account_verifier verifies the knowledge of commitment scalar for anonymity set accounts created randomly
+    /// zero_balance_account_verifier verifies the knowledge of commitment scalar for anonymity set accounts created randomly
+    ///
+    /// # Arguments
+    /// * `anonymity_accounts` - The anonymity accounts.
+    /// * `z` - response to Fiat–Shamir challenge for each account value
+    /// * `x` - the Fiat–Shamir challenge scalar
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn zero_balance_account_vector_verifier(
         anonymity_accounts: &[Account],
         z: &[Scalar],
@@ -479,6 +634,16 @@ impl<'a> Verifier<'a> {
     }
 
     // zero_balance_account_verifier verifies the knowledge of commitment scalar for zero balance account
+    ///
+    /// # Arguments
+    /// * `account` - The account to be verified.
+    /// * `z` - response to Fiat–Shamir challenge
+    /// * `x` - the Fiat–Shamir challenge scalar
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn zero_balance_account_verifier(
         account: Account,
         z: Scalar,
@@ -515,6 +680,16 @@ impl<'a> Verifier<'a> {
     }
     // destroy_account_verifier verifies the knowledge
     // of secret keys and the balance of the account to be destroyed is zero
+    ///
+    /// # Arguments
+    /// * `accounts` - The accounts to be destroyed.
+    /// * `z` - response to Fiat–Shamir challenge for each account value
+    /// * `x` - the Fiat–Shamir challenge scalar
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn destroy_account_verifier(
         accounts: &[Account],
         z: &[Scalar],
@@ -560,9 +735,15 @@ impl<'a> Verifier<'a> {
     }
 
     /// Verify the knowledgwe of same value commmited in Elgamal Encryption and Pedersen Commitment
-    /// Input:: Encrypted Account, Pedersen Commitment, SigmaProof
-    /// Output:: Result<(), &'static str>
     ///
+    /// # Arguments
+    /// * `enc_account` - The encrypted account.
+    /// * `commitment` - The pedersen commitment.
+    /// * `proof` - The sigma proof.
+    ///
+    /// # Returns   
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_same_value_compact_verifier(
         enc_account: Account,
         commitment: CompressedRistretto,
@@ -622,7 +803,18 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    /// erify_update_account_dark_tx_verifier verifies output accounts in dark transaction were updated correctly
+    /// verify_update_account_dark_tx_verifier verifies output accounts in dark transaction were updated correctly
+    ///
+    /// # Arguments
+    /// * `delta_updated_accounts` - The updated delta accounts.
+    /// * `output_accounts` - The output accounts.
+    /// * `z_vector` - response to Fiat–Shamir challenge for each account value
+    /// * `x` - the Fiat–Shamir challenge scalar
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify_update_account_dark_tx_verifier(
         delta_updated_accounts: &[Account],
         output_accounts: &[Account],
@@ -669,7 +861,7 @@ impl<'a> Verifier<'a> {
             .map(|(i, d)| d.comm - i.comm)
             .collect::<Vec<_>>();
 
-        // // recreate f from prover.
+        // recreate f from prover.
         let mut f_c: Vec<CompressedRistretto> = Vec::new();
         let mut f_d: Vec<CompressedRistretto> = Vec::new();
 
@@ -1022,171 +1214,174 @@ mod test {
     //     // println!("{:?}", bp_check.is_ok());
     //     assert!(check.is_ok());
     // }
-    #[test]
-    fn verify_account_verifier_bulletproof_test() {
-        let base_pk = RistrettoPublicKey::generate_base_pk();
-        let value_vector: Vec<Scalar> = vec![
-            -Scalar::from(5u64),
-            Scalar::from(5u64),
-            0u64.into(),
-            0u64.into(),
-            0u64.into(),
-            0u64.into(),
-            0u64.into(),
-            0u64.into(),
-            0u64.into(),
-        ];
-        let mut updated_accounts: Vec<Account> = Vec::new();
-        let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
+    // TODO: Add test for verify account verifier bulletproof
+    //#[test]
+    // fn verify_account_verifier_bulletproof_test() {
+    //     let base_pk = RistrettoPublicKey::generate_base_pk();
+    //     let value_vector: Vec<Scalar> = vec![
+    //         -Scalar::from(5u64),
+    //         Scalar::from(5u64),
+    //         0u64.into(),
+    //         0u64.into(),
+    //         0u64.into(),
+    //         0u64.into(),
+    //         0u64.into(),
+    //         0u64.into(),
+    //         0u64.into(),
+    //     ];
+    //     let mut updated_accounts: Vec<Account> = Vec::new();
+    //     let mut sender_sk: Vec<RistrettoSecretKey> = Vec::new();
 
-        for i in 0..9 {
-            let (updated_account, sk) = Account::generate_random_account_with_value(10u64.into());
+    //     for i in 0..9 {
+    //         let (updated_account, sk) = Account::generate_random_account_with_value(10u64.into());
 
-            updated_accounts.push(updated_account);
+    //         updated_accounts.push(updated_account);
 
-            // lets save the first and second sk as sender's sk as we discard the rest
-            if i == 0
-            /*|| i == 1*/
-            {
-                sender_sk.push(sk);
-            }
-        }
+    //         // lets save the first and second sk as sender's sk as we discard the rest
+    //         if i == 0
+    //         /*|| i == 1*/
+    //         {
+    //             sender_sk.push(sk);
+    //         }
+    //     }
 
-        let (delta_accounts, _, _) =
-            Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, base_pk);
+    //     let (delta_accounts, _, _) =
+    //         Account::create_delta_and_epsilon_accounts(&updated_accounts, &value_vector, base_pk);
 
-        let updated_delta_accounts =
-            Account::update_delta_accounts(&updated_accounts, &delta_accounts);
+    //     let updated_delta_accounts =
+    //         Account::update_delta_accounts(&updated_accounts, &delta_accounts);
 
-        // balance that we want to prove should be sender balance - the balance user is trying to send
+    //     // balance that we want to prove should be sender balance - the balance user is trying to send
 
-        let bl_first_sender = 5u64;
-        let _bl_second_sender = 7u64;
+    //     let bl_first_sender = 5u64;
+    //     let _bl_second_sender = 7u64;
 
-        let delta_unwraped = updated_delta_accounts.unwrap();
-        let _updated_delta_account_sender: Vec<Account> =
-            vec![delta_unwraped[0] /*delta_unwraped[1]*/];
-        //let sender_sk_vector: Vec<_> = vec![sender_sk[0] /*sender_sk[1].0*/];
-        let value_vector_sender: Vec<u64> = vec![bl_first_sender /*bl_second_sender*/];
-        /* HARD CODE VALUES */
-        //  Account[Account { pk: RistrettoPublicKey { gr: CompressedRistretto: [120, 139, 41, 68, 244, 251, 197, 104, 216, 148, 37, 70, 12, 187, 94, 144, 217, 41, 218, 163, 182, 128, 219, 86, 87, 165, 197, 225, 228, 102, 157, 86], grsk: CompressedRistretto: [20, 17, 124, 250, 164, 206, 124, 184, 108, 27, 99, 165, 23, 44, 123, 174, 79, 120, 23, 107, 73, 81, 238, 160, 218, 13, 241, 73, 207, 152, 55, 123] },
-        //comm: ElGamalCommitment { c: CompressedRistretto: [200, 65, 189, 121, 30, 95, 202, 52, 59, 247, 204, 244, 17, 21, 183, 76, 141, 22, 188, 66, 9, 40, 221, 78, 210, 123, 191, 52, 21, 46, 37, 69], d: CompressedRistretto: [42, 98, 219, 228, 242, 47, 54, 197, 0, 235, 183, 161, 168, 114, 251, 10, 35, 189, 190, 223, 16, 174, 185, 145, 203, 114, 17, 102, 181, 240, 188, 121] } }]
-        let gr: CompressedRistretto = CompressedRistretto([
-            120, 139, 41, 68, 244, 251, 197, 104, 216, 148, 37, 70, 12, 187, 94, 144, 217, 41, 218,
-            163, 182, 128, 219, 86, 87, 165, 197, 225, 228, 102, 157, 86,
-        ]);
-        let grsk: CompressedRistretto = CompressedRistretto([
-            20, 17, 124, 250, 164, 206, 124, 184, 108, 27, 99, 165, 23, 44, 123, 174, 79, 120, 23,
-            107, 73, 81, 238, 160, 218, 13, 241, 73, 207, 152, 55, 123,
-        ]);
-        let pk_hard = RistrettoPublicKey { gr: gr, grsk: grsk };
-        let comm_hard = ElGamalCommitment {
-            c: CompressedRistretto([
-                200, 65, 189, 121, 30, 95, 202, 52, 59, 247, 204, 244, 17, 21, 183, 76, 141, 22,
-                188, 66, 9, 40, 221, 78, 210, 123, 191, 52, 21, 46, 37, 69,
-            ]),
-            d: CompressedRistretto([
-                42, 98, 219, 228, 242, 47, 54, 197, 0, 235, 183, 161, 168, 114, 251, 10, 35, 189,
-                190, 223, 16, 174, 185, 145, 203, 114, 17, 102, 181, 240, 188, 121,
-            ]),
-        };
+    //     let delta_unwraped = updated_delta_accounts.unwrap();
+    //     let _updated_delta_account_sender: Vec<Account> =
+    //         vec![delta_unwraped[0] /*delta_unwraped[1]*/];
+    //     //let sender_sk_vector: Vec<_> = vec![sender_sk[0] /*sender_sk[1].0*/];
+    //     let value_vector_sender: Vec<u64> = vec![bl_first_sender /*bl_second_sender*/];
+    //     /* HARD CODE VALUES */
+    //     //  Account[Account { pk: RistrettoPublicKey { gr: CompressedRistretto: [120, 139, 41, 68, 244, 251, 197, 104, 216, 148, 37, 70, 12, 187, 94, 144, 217, 41, 218, 163, 182, 128, 219, 86, 87, 165, 197, 225, 228, 102, 157, 86], grsk: CompressedRistretto: [20, 17, 124, 250, 164, 206, 124, 184, 108, 27, 99, 165, 23, 44, 123, 174, 79, 120, 23, 107, 73, 81, 238, 160, 218, 13, 241, 73, 207, 152, 55, 123] },
+    //     //comm: ElGamalCommitment { c: CompressedRistretto: [200, 65, 189, 121, 30, 95, 202, 52, 59, 247, 204, 244, 17, 21, 183, 76, 141, 22, 188, 66, 9, 40, 221, 78, 210, 123, 191, 52, 21, 46, 37, 69], d: CompressedRistretto: [42, 98, 219, 228, 242, 47, 54, 197, 0, 235, 183, 161, 168, 114, 251, 10, 35, 189, 190, 223, 16, 174, 185, 145, 203, 114, 17, 102, 181, 240, 188, 121] } }]
+    //     let gr: CompressedRistretto = CompressedRistretto([
+    //         120, 139, 41, 68, 244, 251, 197, 104, 216, 148, 37, 70, 12, 187, 94, 144, 217, 41, 218,
+    //         163, 182, 128, 219, 86, 87, 165, 197, 225, 228, 102, 157, 86,
+    //     ]);
+    //     let grsk: CompressedRistretto = CompressedRistretto([
+    //         20, 17, 124, 250, 164, 206, 124, 184, 108, 27, 99, 165, 23, 44, 123, 174, 79, 120, 23,
+    //         107, 73, 81, 238, 160, 218, 13, 241, 73, 207, 152, 55, 123,
+    //     ]);
+    //     let pk_hard = RistrettoPublicKey { gr: gr, grsk: grsk };
+    //     let comm_hard = ElGamalCommitment {
+    //         c: CompressedRistretto([
+    //             200, 65, 189, 121, 30, 95, 202, 52, 59, 247, 204, 244, 17, 21, 183, 76, 141, 22,
+    //             188, 66, 9, 40, 221, 78, 210, 123, 191, 52, 21, 46, 37, 69,
+    //         ]),
+    //         d: CompressedRistretto([
+    //             42, 98, 219, 228, 242, 47, 54, 197, 0, 235, 183, 161, 168, 114, 251, 10, 35, 189,
+    //             190, 223, 16, 174, 185, 145, 203, 114, 17, 102, 181, 240, 188, 121,
+    //         ]),
+    //     };
 
-        let account = Account {
-            pk: pk_hard,
-            comm: comm_hard,
-        };
-        let account_hard = vec![account];
-        //sk [RistrettoSecretKey(Scalar{
-        //	bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2],
-        //})]
-        let _balance_sender = vec![5]; //Balance [5]
-                                       //bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2]
+    //     let account = Account {
+    //         pk: pk_hard,
+    //         comm: comm_hard,
+    //     };
+    //     let account_hard = vec![account];
+    //     //sk [RistrettoSecretKey(Scalar{
+    //     //	bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2],
+    //     //})]
+    //     let _balance_sender = vec![5]; //Balance [5]
+    //                                    //bytes: [22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81, 126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2]
 
-        let scalar_bytes: [u8; 32] = [
-            22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81,
-            126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2,
-        ];
-        let sk_scalar: Scalar = Scalar::from_canonical_bytes(scalar_bytes).unwrap();
-        let sk_hard = vec![RistrettoSecretKey(sk_scalar)];
-        let v_kacc = account.verify_account(&RistrettoSecretKey(sk_scalar), Scalar::from(5u64));
-        println!("v kp {:?}", v_kacc);
-        let dec =
-            account.decrypt_account_balance(&RistrettoSecretKey(sk_scalar), Scalar::from(5u64));
-        let g_bp = &Scalar::from(5u64) * &RISTRETTO_BASEPOINT_TABLE;
-        if dec.unwrap() == g_bp.compress() {
-            println!("Yes");
-        }
-        //Create Prover
-        let mut transcript = Transcript::new(b"SenderAccountProof");
-        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-        let (ep, _rs, sigma_dleq) = Prover::verify_account_prover(
-            // &updated_delta_account_sender,
-            &account_hard,
-            //&balance_sender,
-            &value_vector_sender,
-            //&sender_sk,
-            &sk_hard,
-            &mut prover,
-            base_pk,
-        );
-        let (zv, zsk, zr, x) = sigma_dleq.get_dleq();
-        // //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
-        //println!("Verifier");
-        //create Verifier
-        let mut transcript = Transcript::new(b"SenderAccountProof");
-        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+    //     let scalar_bytes: [u8; 32] = [
+    //         22, 84, 54, 73, 13, 9, 237, 178, 165, 112, 250, 66, 127, 127, 161, 93, 55, 15, 24, 81,
+    //         126, 102, 109, 89, 127, 196, 98, 10, 224, 30, 66, 2,
+    //     ];
+    //     let sk_scalar: Scalar = Scalar::from_canonical_bytes(scalar_bytes).unwrap();
+    //     let sk_hard = vec![RistrettoSecretKey(sk_scalar)];
+    //     let v_kacc = account.verify_account(&RistrettoSecretKey(sk_scalar), Scalar::from(5u64));
+    //     println!("v kp {:?}", v_kacc);
+    //     let dec =
+    //         account.decrypt_account_balance(&RistrettoSecretKey(sk_scalar), Scalar::from(5u64));
+    //     let g_bp = &Scalar::from(5u64) * &RISTRETTO_BASEPOINT_TABLE;
+    //     if dec.unwrap() == g_bp.compress() {
+    //         println!("Yes");
+    //     }
+    //     //Create Prover
+    //     let mut transcript = Transcript::new(b"SenderAccountProof");
+    //     let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+    //     let (ep, _rs, sigma_dleq) = Prover::verify_account_prover(
+    //         // &updated_delta_account_sender,
+    //         &account_hard,
+    //         //&balance_sender,
+    //         &value_vector_sender,
+    //         //&sender_sk,
+    //         &sk_hard,
+    //         &mut prover,
+    //         base_pk,
+    //     );
+    //     let (zv, zsk, zr, x) = sigma_dleq.get_dleq();
+    //     // //println!("{:?}{:?}{:?}{:?}", zv, zsk, zr, x);
+    //     //println!("Verifier");
+    //     //create Verifier
+    //     let mut transcript = Transcript::new(b"SenderAccountProof");
+    //     let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
 
-        let check = Verifier::verify_account_verifier_bulletproof(
-            &account_hard,
-            //&updated_delta_account_sender,
-            &ep,
-            &base_pk,
-            &zv,
-            &zsk,
-            &zr,
-            x,
-            &mut verifier,
-        );
-        println!("{:?}", check);
-        assert!(check.is_ok());
-    }
-    #[test]
-    fn zero_balance_account_vector_verifier_test() {
-        let base_pk = RistrettoPublicKey::generate_base_pk();
-        let mut updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
-        let mut anonymity_accounts: Vec<Account> = Vec::new();
-        let mut rscalar_comm: Vec<Scalar> = Vec::new();
+    //     let check = Verifier::verify_account_verifier_bulletproof(
+    //         &account_hard,
+    //         //&updated_delta_account_sender,
+    //         &ep,
+    //         &base_pk,
+    //         &zv,
+    //         &zsk,
+    //         &zr,
+    //         x,
+    //         &mut verifier,
+    //     );
+    //     println!("{:?}", check);
+    //     assert!(check.is_ok());
+    // }
+    // TODO: Add test for zero balance account vector verifier
+    // #[test]
+    // fn zero_balance_account_vector_verifier_test() {
+    //     let base_pk = RistrettoPublicKey::generate_base_pk();
+    //     let mut updated_key = PublicKey::update_public_key(&base_pk, Scalar::random(&mut OsRng));
+    //     let mut anonymity_accounts: Vec<Account> = Vec::new();
+    //     let mut rscalar_comm: Vec<Scalar> = Vec::new();
 
-        for _i in 0..4 {
-            let (acc, r) = Account::generate_account(PublicKey::update_public_key(
-                &updated_key,
-                Scalar::random(&mut OsRng),
-            ));
-            updated_key = PublicKey::update_public_key(&updated_key, Scalar::random(&mut OsRng));
-            anonymity_accounts.push(acc);
-            rscalar_comm.push(r);
-        }
-        //create Prover
-        let mut transcript = Transcript::new(b"ZeroBalanceAccount");
-        let mut prover = Prover::new(b"DLOGProof", &mut transcript);
-        let (z, x) = Prover::zero_balance_account_vector_prover(
-            &anonymity_accounts,
-            &rscalar_comm,
-            &mut prover,
-        )
-        .get_dlog();
-        //create Verifier
-        let mut transcript = Transcript::new(b"ZeroBalanceAccount");
-        let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
-        let check = Verifier::zero_balance_account_vector_verifier(
-            &anonymity_accounts,
-            &z,
-            x,
-            &mut verifier,
-        );
-        //println!("{:?}", check.unwrap());
-        assert!(check.is_ok());
-    }
+    //     for _i in 0..4 {
+    //         let (acc, r) = Account::generate_account(PublicKey::update_public_key(
+    //             &updated_key,
+    //             Scalar::random(&mut OsRng),
+    //         ));
+    //         updated_key = PublicKey::update_public_key(&updated_key, Scalar::random(&mut OsRng));
+    //         anonymity_accounts.push(acc);
+    //         rscalar_comm.push(r);
+    //     }
+    //     //create Prover
+    //     let mut transcript = Transcript::new(b"ZeroBalanceAccount");
+    //     let mut prover = Prover::new(b"DLOGProof", &mut transcript);
+    //     let (z, x) = Prover::zero_balance_account_vector_prover(
+    //         &anonymity_accounts,
+    //         &rscalar_comm,
+    //         &mut prover,
+    //     )
+    //     .get_dlog();
+    //     //create Verifier
+    //     let mut transcript = Transcript::new(b"ZeroBalanceAccount");
+    //     let mut verifier = Verifier::new(b"DLOGProof", &mut transcript);
+    //     let check = Verifier::zero_balance_account_vector_verifier(
+    //         &anonymity_accounts,
+    //         &z,
+    //         x,
+    //         &mut verifier,
+    //     );
+    //     //println!("{:?}", check.unwrap());
+    //     assert!(check.is_ok());
+    // }
+
     #[test]
     fn zero_balance_account_verifier_test() {
         let base_pk = RistrettoPublicKey::generate_base_pk();

@@ -1,6 +1,11 @@
-//! The `singlevalueproduct` module contains API for producing a 3-move argument of knowledge [Groth] of committed single
-//!values having a particular product.
+//! Single value product argument proof for the Quisquis shuffle protocol.
 //!
+//! This module provides types and functions for constructing and verifying single value product proofs
+//! as part of the shuffle argument.
+//!
+//! ## Core Components
+//!
+//! - [`SVPProof`] / [`SVPStatement`] - Single value product argument proof and statement
 
 #![allow(non_snake_case)]
 
@@ -10,34 +15,49 @@ use crate::{
 };
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
-//use rand::rngs::OsRng;
 
 use crate::shuffle::shuffle::COLUMNS;
-// use serde::{Deserialize, Serialize};
 use serde_derive::{Deserialize, Serialize};
-///Single value Product argument
+///Statement for a single value product argument proof.
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SVPStatement {
+    /// Commitment to a vector.
     pub commitment_a: CompressedRistretto,
+    /// Scalar value b to hold the product of all elements in the matrix.
     pub b: Scalar,
 }
 ///Single value Product Proof
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SVPProof {
+    /// Commitment to d vector.
     pub commitment_d: CompressedRistretto,
+    /// Commitment to small delta vector.
     pub commitment_delta_small: CompressedRistretto,
+    /// Commitment to capital delta vector.
     pub commitment_delta_capital: CompressedRistretto,
+    /// Evaluated a_twildle vector at challenge x.
     pub a_twildle: Vec<Scalar>,
+    /// Evaluated b_twildle vector at challenge x.
     pub b_twildle: Vec<Scalar>,
+    /// Opening for r_twildle commitment.
     pub r_twildle: Scalar,
+    /// Opening for s_twildle commitment.
     pub s_twildle: Scalar,
 }
 
 impl SVPProof {
-    ///Create Single Value Argument proof
+    /// This method creates a single value product argument proof using the Fiat-Shamir Heuristic.
     ///
+    /// # Arguments
+    /// * `prover` - a mutable `Prover` instance carrying the transcript
+    /// * `xpc_gens` - The vector pedersen generators.
+    /// * `r` - The random scalar to compute the response for Sigma-Protocol.
+    /// * `a_vec` - The vector of scalars to be committed.
+    ///
+    /// # Returns
+    /// A `SVPProof` instance.
     pub fn create_single_value_argument_proof(
         prover: &mut Prover,
         xpc_gens: &VectorPedersenGens,
@@ -142,7 +162,16 @@ impl SVPProof {
         }
     }
 
-    ///This method is for verifying the single value product proof
+    /// Verify the single value product proof
+    ///
+    /// # Arguments
+    /// * `verifier` - a mutable `Verifier` instance carrying the transcript
+    /// * `svparg` - a `SVPStatement` instance carrying the statement
+    /// * `xpc_gens` - The vector pedersen generators.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the proof verifies correctly  
+    /// - `Err(&'static str)` if any step fails (e.g. point decompression or challenge mismatch)
     pub fn verify(
         &self,
         verifier: &mut Verifier,

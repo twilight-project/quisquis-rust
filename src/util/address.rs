@@ -1,3 +1,8 @@
+//! Address utilities for the Quisquis protocol.
+//!
+//! Provides types and functions for handling network-specific addresses, including
+//! serialization, deserialization, and encoding/decoding in various formats.
+
 use sha3::{Digest, Keccak256};
 use std::fmt;
 
@@ -5,9 +10,9 @@ use crate::{keys::PublicKey, ristretto::RistrettoPublicKey};
 use curve25519_dalek::ristretto::CompressedRistretto;
 
 /// The list of the existing Twilight networks.
+///
 /// Network type: Mainnet, Testnet.
 /// Network implements [`Default`] and returns [`Network::Mainnet`].
-///
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Network {
     /// Mainnet is the "production" network and blockchain.
@@ -16,9 +21,12 @@ pub enum Network {
     /// mainnet.
     Testnet,
 }
+
 impl Network {
     /// Get the associated magic byte given an address type.
-    /// The byte values should be taken from the blockchain config file. The same values should be used here. Sample values are used here
+    ///
+    /// The byte values should be taken from the blockchain config file. The same values should be used here.
+    /// Sample values are used here.
     pub fn as_u8(self, addr_type: &AddressType) -> u8 {
         use AddressType::*;
         match self {
@@ -34,7 +42,13 @@ impl Network {
     }
 
     /// Recover the network type given an address magic byte.
-    /// The byte values should be taken from the blockchain config file. The same values should be used here. Sample values are used here
+    ///
+    /// The byte values should be taken from the blockchain config file. The same values should be used here.
+    /// Sample values are used here.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the byte does not correspond to a known network.
     pub fn from_u8(byte: u8) -> Result<Network, &'static str> {
         use Network::*;
         match byte {
@@ -44,12 +58,14 @@ impl Network {
         }
     }
 }
-
+/// Default network is Mainnet.
 impl Default for Network {
+    /// Returns the default network, which is Mainnet.
     fn default() -> Network {
         Network::Mainnet
     }
 }
+
 /// Address type: standard, contract.
 ///
 /// AddressType implements [`Default`] and returns [`AddressType::Standard`].
@@ -63,6 +79,10 @@ pub enum AddressType {
 
 impl AddressType {
     /// Recover the address type given an address bytes and the network.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the magic byte does not correspond to a known address type.
     pub fn from_slice(bytes: &[u8], net: Network) -> Result<AddressType, &'static str> {
         let byte = bytes[0];
         use AddressType::*;
@@ -81,14 +101,16 @@ impl AddressType {
         }
     }
 }
-
+/// Default address type is Standard.
 impl Default for AddressType {
+    /// Returns the default address type, which is Standard.
     fn default() -> AddressType {
         AddressType::Standard
     }
 }
-
+/// Display the address type.
 impl fmt::Display for AddressType {
+    /// Formats the address type as a string.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             AddressType::Standard => write!(f, "Standard address"),
@@ -98,6 +120,8 @@ impl fmt::Display for AddressType {
 }
 
 /// A complete twilight typed address valid for a specific network.
+///
+/// Contains the network, address type, and the associated public key.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Address {
     /// The network on which the address is valid and should be used.
@@ -110,6 +134,15 @@ pub struct Address {
 
 impl Address {
     /// Create a standard address which is valid on the given network.
+    ///
+    /// # Arguments
+    ///
+    /// * `network` - The network on which the address is valid and should be used.
+    /// * `public_key` - The public key associated with the address.
+    ///
+    /// # Returns
+    ///
+    /// A new `Address` instance with the specified network and public key.
     pub fn standard(network: Network, public_key: RistrettoPublicKey) -> Address {
         Address {
             network,
@@ -119,6 +152,14 @@ impl Address {
     }
 
     /// Create a Contract address which is valid on the given network.
+    ///
+    /// # Arguments
+    ///
+    /// * `network` - The network on which the address is valid and should be used.
+    /// * `public_key` - The public key associated with the address.
+    ///
+    /// # Returns
+    /// A new `Address` instance with the specified network and public key.
     pub fn contract(network: Network, public_key: RistrettoPublicKey) -> Address {
         Address {
             network,
@@ -127,8 +168,26 @@ impl Address {
         }
     }
 
-    /// Parse an address from a vector of bytes, fail if the magic byte is incorrect, if public
-    /// keys are not valid points, and if checksums missmatch.
+    /// Parse an address from a vector of bytes.
+    /// 
+    /// The input bytes are expected to be in the following format:
+    /// [magic byte, public key, checksum]
+    /// 
+    /// The magic byte is used to determine the network and address type.
+    /// The public key is the public key of the address.
+    ///
+    /// # Arguments
+    ///
+    /// * `bytes` - The bytes of the address.
+    ///
+    /// # Returns
+    ///
+    /// A new `Address` instance with the specified network and public key.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the magic byte is incorrect, if public keys are not valid points,
+    /// or if checksums mismatch.
     pub fn from_bytes(bytes: &[u8]) -> Result<Address, &'static str> {
         let network = Network::from_u8(bytes[0])?;
         let addr_type = AddressType::from_slice(&bytes, network)?;
@@ -151,7 +210,11 @@ impl Address {
     }
 
     /// Serialize the address as a vector of bytes.
-    /// Byte Format : [magic byte, public key, checksum]  
+    ///
+    /// # Returns
+    ///
+    /// A vector of bytes representing the address.
+    /// Byte Format: [magic byte, public key, checksum]
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![self.network.as_u8(&self.addr_type)];
         bytes.extend_from_slice(self.public_key.as_bytes().as_slice());
@@ -163,29 +226,63 @@ impl Address {
     }
 
     /// Serialize the address bytes as a hexadecimal string.
+    ///
+    /// # Returns
+    ///
+    /// A hexadecimal string representing the address.
     pub fn as_hex(&self) -> String {
         hex::encode(self.as_bytes())
     }
 
     /// Serialize the address bytes as a BTC-Base58 string.
+    ///
+    /// # Returns
+    ///
+    /// A Base58 string representing the address.
     pub fn as_base58(&self) -> String {
         bs58::encode(self.as_bytes()).into_string()
     }
 
-    /// Convert Hex address string to Address
+    /// Convert Hex address string to Address.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the hex string is invalid or the address cannot be parsed.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The hexadecimal string to parse.
+    ///
+    /// # Returns   
+    ///
+    /// A new `Address` instance with the specified network and public key.
     pub fn from_hex(s: &str) -> Self {
         Self::from_bytes(&hex::decode(s).unwrap().as_slice()).unwrap()
     }
 
-    /// Convert Base58 address string to Address
+    /// Convert Base58 address string to Address.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the base58 string is invalid or the address cannot be parsed.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The base58 string to parse.
+    ///
+    /// # Returns
+    ///
+    /// A new `Address` instance with the specified network and public key.
     pub fn from_base58(s: &str) -> Self {
         let decoded = bs58::decode(s).into_vec().unwrap();
         Self::from_bytes(&decoded).unwrap()
     }
 }
 
-/// Deserialize a public key from a slice. The input slice is 64 bytes
-/// Utility Function
+/// Utility function for deserializing a public key from a slice.
+///
+/// The input slice is 32 bytes.
+/// Returns an error if the key is not the correct length or is not a valid point.
 fn slice_to_pkpoint(data: &[u8]) -> Result<CompressedRistretto, &'static str> {
     if data.len() != 32 {
         return Err("Invalid Key Length");

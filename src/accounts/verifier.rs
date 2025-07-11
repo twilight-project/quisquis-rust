@@ -121,7 +121,7 @@ impl<'a> Verifier<'a> {
     }
 
     /// verify_delta_compact_verifier verifies proves values committed in delta_accounts and epsilon_accounts are the same
-   /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.2>
+    /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-voprf-03#section-5.2>
     ///
     /// # Arguments
     /// * `delta_accounts` - The delta accounts.

@@ -768,7 +768,6 @@ pub fn bilinearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal: Scalar) -> 
     dvec
 }
 
-
 /// This function implements the single bilinear map H(a_i, b_j) = sum_{k=0}^{m-1} a_i^k * b_j^k * y_i^k.
 /// It takes a row of A, a row of B, and a vector of scalar challenges y.
 ///

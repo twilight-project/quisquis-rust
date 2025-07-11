@@ -1018,7 +1018,7 @@ mod test {
     //             coefficients: vec![Scalar::from(1u64), Scalar::from(1u64), Scalar::from(1u64)],
     //             degree: 2,
     //         },
-            
+
     //     ];
     //     assert_eq!(reference, _poly);
     // }

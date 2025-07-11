@@ -1331,7 +1331,7 @@ mod test {
     //     // compare the two vectors of points
     //     let e_k_c_compress: Vec<_> = e_k_c.iter().map(|pt| pt.compress()).collect();
     //     let e_k_d_compress: Vec<_> = e_k_d.iter().map(|pt| pt.compress()).collect();
-        
+
     //     assert_eq!(e_k_c_compress, _e_K_c);
     //     assert_eq!(e_k_d_compress, _e_K_d);
     // }

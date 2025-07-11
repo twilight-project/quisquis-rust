@@ -1,10 +1,16 @@
 # Quisquis Protocol
 
-[![Crates.io](https://img.shields.io/crates/v/quisquis-rust.svg)](https://crates.io/crates/quisquis-rust)
-[![docs.rs](https://docs.rs/quisquis-rust/badge.svg)](https://docs.rs/quisquis-rust)
+<!--[![Crates.io](https://img.shields.io/crates/v/quisquis-rust.svg)](https://crates.io/crates/quisquis-rust)
+[![docs.rs](https://docs.rs/quisquis-rust/badge.svg)](https://docs.rs/quisquis-rust)-->
 [![CI](https://github.com/twilight-project/quisquis-rust/workflows/CI/badge.svg)](https://github.com/twilight-project/quisquis-rust/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+
+> **⚠️ TESTNET‑ONLY (v0.1.x)**  
+> This release is experimental and ships with *known cryptographic vulnerabilities*.  
+> It is intended **solely for research and test‑net use**. **Do not use with real funds.**  
+> See [SECURITY.md](.github/SECURITY.md) for details and the upgrade roadmap.
 
 _A Rust library for privacy-preserving cryptocurrency accounts and transactions._
 
@@ -167,17 +173,30 @@ cargo doc --open
 
 ## Security
 
-⚠️ Experimental research software — do not use in production without review.  
+⚠️ **Testnet‑only:** v0.1.x contains upstream RustSec advisories. Fixes are scheduled for v0.2.0. **Do not use in production or with main‑net assets.**
 See [SECURITY.md](.github/SECURITY.md) for full policy.
 
 
 ## Roadmap
 
-- [ ] Transaction implementation with full privacy guarantees
-- [ ] Network protocol for transaction broadcasting
-- [ ] Performance optimizations and SIMD support
-- [ ] Formal security audit
-- [ ] Mobile-friendly builds (WASM)
+### Security & Stabilization
+- [ ] **v0.1.x‑patch (Aug 2025)** — Back‑port constant‑time mitigations; enable `cargo audit` & `cargo deny` gating in CI  
+- [ ] **v0.2.0 (Oct 2025)** — Upgrade to `curve25519‑dalek ≥ 4.2.0`, `ed25519‑dalek ≥ 2.2.0`; integrate sanitiser (ASan/Miri) and fuzzing jobs  
+- [ ] **v0.2.x** — Enforce reproducible builds and signed commits/tags  
+- [ ] **v1.0.0 (1H 2026)** — Complete independent cryptography/security audit & address findings  
+
+### Documentation & Examples
+- [ ] Improve and reorganise API documentation & guides  
+- [ ] Add complex end‑to‑end examples demonstrating advanced privacy workflows  
+
+### Testing
+- [ ] Refactor test suite into clear unit vs. integration layers  
+- [ ] Raise overall test coverage to ≥ 90 % (lines)  
+
+### Performance, Parallelism & Portability
+- [ ] Introduce safe data‑parallelism (e.g. Rayon) to speed up proof generation & verification  
+- [ ] Performance optimisations (SIMD after constant‑time review)  
+- [ ] Mobile‑friendly builds (WASM)  
 
 ## Contributing
 

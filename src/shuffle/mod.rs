@@ -42,12 +42,15 @@ mod vectorutil;
 
 // Re-export commonly used types for convenience
 pub use self::{
-    shuffle::Permutation,      // Permutation matrix logic
-    shuffle::Shuffle,          // Main shuffle protocol
-    shuffle::ShuffleProof,     // Shuffle argument proof
-    shuffle::ShuffleStatement, // Shuffle argument statement
-    vectorutil::ScalarExp,     // Iterator for scalar exponentiation
-    singlevalueproduct::{SVPProof, SVPStatement}, // Single value product proof and statement
-    product::{ProductProof, ProductStatement, MultiHadamardProof, MultiHadamardStatement, ZeroProof, ZeroStatement}, // Product proof and statement
     multiexponential::MultiexpoProof, // Multiexponential proof
+    product::{
+        MultiHadamardProof, MultiHadamardStatement, ProductProof, ProductStatement, ZeroProof,
+        ZeroStatement,
+    }, // Product proof and statement
+    shuffle::Permutation,             // Permutation matrix logic
+    shuffle::Shuffle,                 // Main shuffle protocol
+    shuffle::ShuffleProof,            // Shuffle argument proof
+    shuffle::ShuffleStatement,        // Shuffle argument statement
+    singlevalueproduct::{SVPProof, SVPStatement}, // Single value product proof and statement
+    vectorutil::ScalarExp,            // Iterator for scalar exponentiation
 };

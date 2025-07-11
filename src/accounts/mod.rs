@@ -17,9 +17,9 @@
 //! ### Basic Account Operations
 //!
 //! ```rust
-//! use quisquis_rust::accounts::Account;
-//! use quisquis_rust::ristretto::{RistrettoSecretKey, RistrettoPublicKey};
-//! use quisquis_rust::keys::{SecretKey, PublicKey};
+//! use quisquislib::accounts::Account;
+//! use quisquislib::ristretto::{RistrettoSecretKey, RistrettoPublicKey};
+//! use quisquislib::keys::{SecretKey, PublicKey};
 //! use rand::rngs::OsRng;
 //!
 //! let mut rng = OsRng;

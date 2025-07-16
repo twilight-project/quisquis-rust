@@ -1,3 +1,9 @@
+//! Schnorr signature implementation used for transaction authentication.
+//!
+//! The signing key is a scalar while the verification key is a pair of
+//! compressed Ristretto points derived from the secret scalar.  Signatures
+//! are generated and verified over Merlin transcripts.
+//! 
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
@@ -17,8 +23,10 @@ pub type SigningKey = Scalar;
 #[derive(Copy, Clone, PartialEq, Eq, Default, Debug)]//, Serialize, Deserialize)]
 //#[serde(from = "CompressedRistretto", into = "CompressedRistretto")]
 pub struct VerificationKey {
-  pub(crate)  g: CompressedRistretto,     //G.r
-  pub(crate)  h: CompressedRistretto,     //(G.r).sk
+    /// Randomized generator `G * r`.
+    pub(crate) g: CompressedRistretto,
+    /// Public key computed as `(G * r) * sk`.
+    pub(crate) h: CompressedRistretto,
 }
 
 impl VerificationKey {
@@ -73,7 +81,7 @@ pub struct Signature {
 }
 #[allow(non_snake_case)]
 impl Signature {
-    /// Creates a signature for a single private key and single message
+    /// Signs the given transcript using the Schnorr scheme.
     pub fn sign(transcript: &mut Transcript, pubkey: VerificationKey, privkey: Scalar) -> Signature {
      //   let X = VerificationKey::from_secret(&privkey); // pubkey
 
@@ -100,9 +108,8 @@ impl Signature {
         Signature { s, R }
     }
 
-    /// Verifies the signature over a transcript using the provided verification key.
-    /// Transcript should be in the same state as it was during the `sign` call
-    /// that created the signature.
+/// Verifies this signature against a transcript and verification key.
+    /// The transcript must be in the same state it was during [`sign`].
     pub fn verify(
         &self,
         transcript: &mut Transcript,
@@ -132,17 +139,19 @@ impl Signature {
 
 // Message-oriented API
 impl Signature {
-    /// Signs a message with a given domain-separation label.
-    /// This is a simpler byte-oriented API over more flexible Transcript-based API.
-    /// Internally it creates a Transcript instance labelled "zkSchnorr.sign_message",
-    /// and appends to it message bytes labelled with a user-provided `label`.
+    /// Signs a message with a domain-separation label.
+    ///
+    /// This is a byte-oriented wrapper over [`sign`]. Internally it creates a
+    /// `Transcript` labelled `"ZkSchnorr.sign_message"` and appends the provided
+    /// message bytes under `label`.
     pub fn sign_message(label: &'static [u8], message: &[u8], pubkey: VerificationKey, privkey: Scalar) -> Signature {
         Self::sign(&mut Self::transcript_for_message(label, message),pubkey, privkey)
     }
 
-    /// Verifies the signature over a message using the provided verification key.
-    /// Internally it creates a Transcript instance labelled "Starsig.sign_message",
-    /// and appends to it message bytes labelled with a user-provided `label`.
+    /// Verifies a message signature using the provided verification key.
+    ///
+    /// Internally it creates a `Transcript` labelled `"ZkSchnorr.sign_message"`
+    /// and appends the message bytes with the given `label`.
     pub fn verify_message(
         &self,
         label: &'static [u8],

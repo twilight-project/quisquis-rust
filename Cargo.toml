@@ -26,7 +26,7 @@ name = "quisquisbin"
 path = "src/bin.rs"
 
 [dependencies]
-hex = "*"
+hex = "0.4"
 merlin = { version = "2", default-features = false }
 bincode = "*"
 rand = "0.7"
@@ -56,4 +56,4 @@ features = ["yoloproofs"]
 
 [dependencies.zkschnorr]
 git = "https://github.com/twilight-project/zk-schnorr.git"
-tag = "v0.1.0"
+tag = "Testnet-v1.0.0"

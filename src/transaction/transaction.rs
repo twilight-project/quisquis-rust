@@ -1,3 +1,9 @@
+//! Utilities for creating and proving Quisquis transactions.
+//!
+//! The functions in this module coordinate account shuffles,
+//! delta/epsilon account creation and range proofs in order to
+//! construct a fully verified [`Transaction`].
+
 use crate::shuffle::shuffle::ROWS;
 use crate::{
     accounts::{Account, Prover, RangeProofProver, RangeProofVerifier, Verifier},
@@ -15,12 +21,22 @@ use merlin::Transcript;
 use rand::rngs::OsRng;
 
 #[derive(Debug, Clone)]
+/// A fully formed Quisquis transaction produced by [`Sender::create_transaction`]
+/// or [`Sender::create_quuisquis_transaction_bulletproof`].
+///
+/// The vectors track accounts as they are shuffled, updated, and proven.
 pub struct Transaction {
+    /// Input accounts supplied by the caller prior to shuffling.
     pub(crate) input_account_vector: Vec<Account>,
+    /// Accounts after the initial shuffle step.
     pub(crate) updated_account_vector: Vec<Account>,
+    /// Delta accounts committing to the value transfer amounts.
     pub(crate) account_delta_vector: Vec<Account>,
+    /// Epsilon accounts committing to the same values under new randomness.
     pub(crate) account_epsilon_vector: Vec<Account>,
+    /// Delta accounts updated with the epsilon randomness.
     pub(crate) account_updated_delta_vector: Vec<Account>,
+    /// Final output accounts after the last shuffle.
     pub(crate) output_account_vector: Vec<Account>,
 }
 
@@ -44,7 +60,11 @@ impl Transaction {
         }
     }
 
-    /// generate_value_vector creates a value vector
+    /// Create a basic value vector for a single sender and receiver.
+    ///
+    /// The first element represents the sender's debit (negative), the second
+    /// the receiver's credit, and the remaining elements are zero valued
+    /// decoys used when building the anonymity set.
     pub fn generate_value_vector(balance: i64) -> Vec<i64> {
         // lets define an vector of values, first place will be for sender, then receiver followed by 7 decoy 0 values
         let value_vector: Vec<i64> = vec![-balance, balance, 0, 0, 0, 0, 0, 0, 0];
@@ -53,19 +73,33 @@ impl Transaction {
 }
 
 #[derive(Debug, Clone)]
+/// Recipient information used when constructing a transaction.
 pub struct Receiver {
+/// Amount to be received by this account.
     amount: i64,
+    /// Public key identifying the recipient account.
     public_key: RistrettoPublicKey,
 }
-
-#[derive(Debug, Clone)]
+/// A sender participating in a transaction together with one or more [`Receiver`]s.
 pub struct Sender {
+    /// Total amount withdrawn from this sender.
     total_amount: i64,
+    /// Account from which the funds are spent.
     account: Account,
+    /// List of receivers paid by this sender.
     receivers: Vec<Receiver>,
 }
 
 impl Sender {
+    /// Build value and account vectors from a list of [`Sender`]s.
+    ///
+    /// This helper converts sender information into the vectors required by the
+    /// transaction creation routines. It also generates additional anonymity
+    /// accounts when the total number of participants is below nine.
+    ///
+    /// Returns the value vector, corresponding account vector, any commitment
+    /// randomness generated for anonymity accounts, the number of anonymity
+    /// accounts added, and counts of senders and receivers.
     pub fn generate_value_and_account_vector(
         tx_vector: Vec<Sender>,
     ) -> Result<(Vec<i64>, Vec<Account>, Vec<Scalar>, usize, usize, usize), &'static str> {
@@ -131,7 +165,22 @@ impl Sender {
     
     
 
-    //create_transaction creates a quisquis transaction using R1CS constraints for rangeproof
+    /// Create a transaction using the R1CS based range proof implementation.
+    ///
+    /// * `value_vector` - Vector of transfer amounts returned by
+    ///   [`generate_value_and_account_vector`].
+    /// * `account_vector` - Accounts corresponding to the values.
+    /// * `sender_updated_balance` - Final balances of the sending accounts
+    ///   after the transfer.
+    /// * `sender_sk` - Secret keys proving ownership of the senders.
+    /// * `anonymity_comm_scalar` - Commitment randomness for anonymity
+    ///   accounts created on the fly.
+    /// * `anonymity_account_diff` - Number of anonymity accounts used.
+    /// * `senders_count` and `receivers_count` - Numbers of real senders and
+    ///   receivers within the vectors.
+    ///
+    /// Returns the newly constructed [`Transaction`] together with the proofs
+    /// required to verify it.    
     pub fn create_transaction(
         value_vector: &[i64],
         account_vector: &[Account],
@@ -424,7 +473,17 @@ impl Sender {
         //  Err("dleq proof failed")
         //}
     }
-    //create_transaction creates a quisquis transaction using bulletproof implementation for rangeproof
+    
+    /// Create a transaction using the Bulletproofs range proof implementation.
+    ///
+    /// This method mirrors [`create_transaction`] but utilises Bulletproofs
+    /// rather than an R1CS gadget for proving non-negativity of account
+    /// balances.
+    /// Parameters have the same meaning as in [`create_transaction`] with the
+    /// additional `reciver_updated_balance` vector used for receiver accounts.
+    ///
+    /// Returns the [`Transaction`] together with the shuffle proofs and the
+    /// generated Bulletproof range proofs.
     pub fn create_quuisquis_transaction_bulletproof(
         value_vector: &[i64],
         account_vector: &[Account],

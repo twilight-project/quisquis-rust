@@ -2,7 +2,6 @@
 name = "quisquis-rust"
 version = "0.1.0"
 edition = "2021"
-authors = ["Twilight Project <hello@twilight-project.org>"]
 description = "A Rust implementation of Quisquis, a privacy-preserving cryptocurrency protocol"
 homepage = "https://github.com/twilight-project/quisquis-rust"
 repository = "https://github.com/twilight-project/quisquis-rust"

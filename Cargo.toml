@@ -7,7 +7,6 @@ homepage = "https://github.com/twilight-project/quisquis-rust"
 repository = "https://github.com/twilight-project/quisquis-rust"
 documentation = "https://docs.rs/quisquis-rust"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
 keywords = ["cryptography", "privacy", "cryptocurrency", "zero-knowledge", "blockchain"]
 categories = ["cryptography", "algorithms", "no-std"]
 exclude = ["target/", ".git/", ".github/"]

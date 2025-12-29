@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 - No pending changes.
 
+## [0.1.1] – 2025-12-29
+### Maintenance
+- Adjusted dependency specification to improve long-term stability:
+  - Replaced `bincode = "*"` with `bincode = "1"` to restrict upgrades to compatible 1.x releases.
+- No public API or behavioral changes are included in this release.
+- Security posture unchanged; this remains an **experimental testnet release**.
+
+---
 ## [0.1.0] – 2025-07-15
 
 ### Security Warning ⚠️

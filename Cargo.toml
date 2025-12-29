@@ -1,6 +1,6 @@
 [package]
 name = "quisquis-rust"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A Rust implementation of Quisquis, a privacy-preserving cryptocurrency protocol"
 homepage = "https://github.com/twilight-project/quisquis-rust"

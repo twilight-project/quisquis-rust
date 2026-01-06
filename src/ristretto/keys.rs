@@ -9,7 +9,8 @@ use crate::{
 };
 use core::ops::{Add, Mul};
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
 };
 use std::convert::TryInto;
 
@@ -99,7 +100,7 @@ impl PublicKey for RistrettoPublicKey {
     /// `gr = random_scalar * basepoint` and `grsk = sk * gr`.
     fn from_secret_key<R: Rng + CryptoRng>(k: &Self::K, rng: &mut R) -> RistrettoPublicKey {
         let random_scalar = Scalar::random(rng);
-        let gr = &random_scalar * &RISTRETTO_BASEPOINT_TABLE;
+        let gr = RistrettoPoint::mul_base(&random_scalar);
         let grsk = &k.0 * &gr;
         RistrettoPublicKey::new_from_pk(gr.compress(), grsk.compress())
     }
@@ -128,8 +129,27 @@ impl PublicKey for RistrettoPublicKey {
         if slice.len() != 64 {
             return Err("slice with incorrect length. Should be 64 bytes");
         }
-        let gr = CompressedRistretto::from_slice(&slice[0..32]);
-        let grsk = CompressedRistretto::from_slice(&slice[32..64]);
+        // Convert slices to CompressedRistretto, handling errors
+        let gr_bytes: [u8; 32] = slice[0..32]
+            .try_into()
+            .map_err(|_| "invalid slice length for gr")?;
+        let grsk_bytes: [u8; 32] = slice[32..64]
+            .try_into()
+            .map_err(|_| "invalid slice length for grsk")?;
+
+        let gr = CompressedRistretto::from_slice(&gr_bytes)
+            .map_err(|_| "invalid compressed ristretto point for gr")?;
+        let grsk = CompressedRistretto::from_slice(&grsk_bytes)
+            .map_err(|_| "invalid compressed ristretto point for grsk")?;
+
+        // Validate that both points decompress successfully (security check)
+        if gr.decompress().is_none() {
+            return Err("gr point does not decompress to a valid ristretto point");
+        }
+        if grsk.decompress().is_none() {
+            return Err("grsk point does not decompress to a valid ristretto point");
+        }
+
         Ok(RistrettoPublicKey::new_from_pk(gr, grsk))
     }
 

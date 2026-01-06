@@ -17,7 +17,7 @@ use crate::{
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 
 use crate::shuffle::shuffle::COLUMNS;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 ///Statement for a single value product argument proof.
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,7 +71,7 @@ impl SVPProof {
         //compute b1 =a1, b2 =a1 ·a2, b3 =b2 ·b3, b4= b3 ·a4
         let mut bvec = Vec::<Scalar>::new();
 
-        let mut prod: Scalar = Scalar::one();
+        let mut prod: Scalar = Scalar::ONE;
         for ai in a_vec.iter() {
             prod = prod * ai;
             bvec.push(prod);
@@ -87,7 +87,7 @@ impl SVPProof {
         //compute random delta of COLUMN size and set delta_1 as d_1 and delta_n as 0
         let mut delta_vec: Vec<_> = (0..COLUMNS).map(|_| Scalar::random(&mut rng)).collect();
         delta_vec[0] = d_vec[0];
-        delta_vec[COLUMNS - 1] = Scalar::zero();
+        delta_vec[COLUMNS - 1] = Scalar::ZERO;
         //pick local random s_1 and s_x to comit on delta_vec_lowecase and delta_vec_uppercase
         let s_1 = Scalar::random(&mut rng);
         let s_x = Scalar::random(&mut rng);
@@ -296,7 +296,7 @@ mod test {
         // cb = com(product (from 1 to m) a1j, ..., product (from 1 to m)
         let mut bvec = Vec::<Scalar>::new();
         for row_iter in pi_2d.rows_iter() {
-            let mut product = Scalar::one();
+            let mut product = Scalar::ONE;
             for element in row_iter {
                 product = product * element;
             }

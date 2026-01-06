@@ -43,7 +43,7 @@ use curve25519_dalek::{
 use rand::rngs::OsRng;
 use rand::{CryptoRng, Rng};
 // use serde::{Deserialize, Serialize};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// Represents a permutation matrix for shuffling accounts in the protocol.
 #[derive(Debug, Clone)]
@@ -71,7 +71,7 @@ impl Permutation {
         let mut permutation: Vec<usize> = (1..n + 1).collect();
         for i in (1..permutation.len()).rev() {
             // invariant: elements with index > i have been locked in place.
-            permutation.swap(i, rng.gen_range(0, i + 1));
+            permutation.swap(i, rng.gen_range(0..=i));
         }
 
         let perm_matrix = Array2D::from_row_major(&permutation, ROWS, COLUMNS);
@@ -593,7 +593,7 @@ impl ShuffleProof {
             let y = verifier.get_challenge(b"yChallenge");
             let z = verifier.get_challenge(b"zChallenge");
             //test prod of i..N (e_i) == prod pf i .. N (yi + x^i -z)
-            let mut product = Scalar::one();
+            let mut product = Scalar::ONE;
             let mut scalar: Scalar;
             for (i, xi) in exp_x.iter().enumerate() {
                 scalar = Scalar::from((i + 1) as u64);
@@ -630,7 +630,7 @@ impl ShuffleProof {
                 let z_neg_2d_as_cols = Array2D::from_row_major(&z_neg, ROWS, COLUMNS).as_columns();
                 let mut comit_z_neg = Vec::<RistrettoPoint>::new();
                 for i in 0..COLUMNS {
-                    comit_z_neg.push(xpc_gens.commit(&z_neg_2d_as_cols[i], Scalar::zero()));
+                    comit_z_neg.push(xpc_gens.commit(&z_neg_2d_as_cols[i], Scalar::ZERO));
                 }
                 //recreate c_E to verified in product proof
                 let c_E: Vec<_> = c_F

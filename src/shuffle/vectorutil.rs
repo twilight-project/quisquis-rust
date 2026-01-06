@@ -52,7 +52,7 @@ impl Iterator for ScalarExp {
 /// An iterator over successive powers of the scalar.
 ///
 pub fn exp_iter(x: Scalar) -> ScalarExp {
-    let next_exp_x = Scalar::one();
+    let next_exp_x = Scalar::ONE;
     ScalarExp { x, next_exp_x }
 }
 
@@ -74,7 +74,7 @@ pub fn vector_multiply(row: &[usize], col: &[Scalar]) -> Scalar {
     }
     row.iter()
         .zip(col.iter())
-        .fold(Scalar::zero(), |sum, (i, j)| {
+        .fold(Scalar::ZERO, |sum, (i, j)| {
             sum + Scalar::from(*i as u64) * j
         })
 }
@@ -97,7 +97,7 @@ pub fn vector_multiply_scalar(row: &[Scalar], col: &[Scalar]) -> Scalar {
     }
     row.iter()
         .zip(col.iter())
-        .fold(Scalar::zero(), |sum, (i, j)| sum + i * j)
+        .fold(Scalar::ZERO, |sum, (i, j)| sum + i * j)
 }
 
 /// Computes the Hadamard (element-wise) product of two vectors of Scalars.

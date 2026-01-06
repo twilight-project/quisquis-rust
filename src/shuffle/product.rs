@@ -126,7 +126,7 @@ impl ProductProof {
         let mut bvec = Vec::<Scalar>::new();
         let mut product: Scalar;
         for row_iter in witness_matrix.rows_iter() {
-            product = Scalar::one();
+            product = Scalar::ONE;
             for element in row_iter {
                 product = product * element;
             }
@@ -299,9 +299,9 @@ impl MultiHadamardProof {
             .collect();
 
         let c_D = RistrettoPoint::multiscalar_mul(&x_exp[0..2], &c_B_inital[1..3]);
-        let scalars_neg_one: Vec<Scalar> = vec![-Scalar::one(); 3];
+        let scalars_neg_one: Vec<Scalar> = vec![-Scalar::ONE; 3];
 
-        let c_minus_one = xpc_gens.commit(&scalars_neg_one, Scalar::zero());
+        let c_minus_one = xpc_gens.commit(&scalars_neg_one, Scalar::ZERO);
         //Calculate openings of c_D1, c_D2, and c_D3
         //d1 = xb1
 
@@ -427,9 +427,9 @@ impl MultiHadamardProof {
                 //c_D = c_B_2 ^ x c_B_3^x^2
                 let c_D = RistrettoPoint::multiscalar_mul(&x_exp[0..2], &commitment_b[1..3]);
                 //redefine c−1 = comck(−~1; 0)
-                let scalar_one_inv = -Scalar::one();
+                let scalar_one_inv = -Scalar::ONE;
                 let scalars: Vec<Scalar> = (0..ROWS).map(|_| scalar_one_inv.clone()).collect();
-                let c_minus_one = xpc_gens.commit(&scalars, Scalar::zero()).compress();
+                let c_minus_one = xpc_gens.commit(&scalars, Scalar::ZERO).compress();
                 //create THESE VECTORS INdependently
                 let commit_D_vec = vec![c_D_multihadamard[0], c_D_multihadamard[1], c_D];
                 let mut c_zero_A = vec![
@@ -529,7 +529,7 @@ impl ZeroProof {
         let mut t: Vec<_> = (0..2 * ROWS + 1)
             .map(|_| Scalar::random(&mut rng))
             .collect();
-        t[ROWS + 1] = Scalar::zero();
+        t[ROWS + 1] = Scalar::ZERO;
 
         //calculate regular committments to all d's
         let c_D: Vec<_> = dv
@@ -571,8 +571,8 @@ impl ZeroProof {
         let mut b_bar_vec = Vec::<Scalar>::new();
         //creating a_bar and b_bar
         for i in 0..ROWS {
-            let mut temp_a = Scalar::zero();
-            let mut temp_b = Scalar::zero();
+            let mut temp_a = Scalar::ZERO;
+            let mut temp_b = Scalar::ZERO;
             for element in ax_2d.column_iter(i) {
                 temp_a += element;
             }
@@ -590,7 +590,7 @@ impl ZeroProof {
         for i in 1..ROWS {
             r_ext_vec.push(r_vec[i]);
         }
-        r_ext_vec.push(Scalar::zero());
+        r_ext_vec.push(Scalar::ZERO);
 
         s_vec.push(s_m);
         //compute r_new = r_i . x^i. where i is [0....m]
@@ -650,7 +650,7 @@ impl ZeroProof {
             let commit_d_m_1 = self.c_D[ROWS + 1]
                 .decompress()
                 .ok_or("ZeroProof Verify: Decompression Failed")?;
-            let commit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
+            let commit_0_0 = pc_gens.commit(Scalar::ZERO, Scalar::ZERO);
             if commit_0_0 == commit_d_m_1 {
                 //Create new transcript
                 verifier.new_domain_sep(b"ZeroArgumentProof");
@@ -752,7 +752,7 @@ pub fn bilinearmap(a: &Array2D<Scalar>, b: &Array2D<Scalar>, y_chal: Scalar) -> 
     let ijiter = ROWS as isize;
     let m = ijiter; //m = ROWS in paper
     for k in 0..kiter {
-        let mut sum = Scalar::zero();
+        let mut sum = Scalar::ZERO;
         for i in 0..=ijiter {
             for j in 0..=ijiter {
                 if j == (m - k + i) {
@@ -841,7 +841,7 @@ mod test {
 
         let mut bvec = Vec::<Scalar>::new();
         for row_iter in pi_2d.rows_iter() {
-            let mut product = Scalar::one();
+            let mut product = Scalar::ONE;
             for element in row_iter {
                 product = product * element;
             }

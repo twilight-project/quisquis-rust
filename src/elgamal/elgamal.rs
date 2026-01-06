@@ -6,8 +6,8 @@
 use crate::ristretto::{RistrettoPublicKey, RistrettoSecretKey};
 use core::ops::{Mul, Sub};
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto,
-    ristretto::RistrettoPoint, scalar::Scalar,
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
@@ -46,7 +46,7 @@ impl ElGamalCommitment {
         // c = k * g
         let c = &rscalar * &p.gr.decompress().unwrap();
         // d = vG + kh
-        let gv = &bl_scalar * &RISTRETTO_BASEPOINT_TABLE;
+        let gv = RistrettoPoint::mul_base(&bl_scalar);
         let kh = &rscalar * &p.grsk.decompress().unwrap();
         let d = &gv + &kh;
         ElGamalCommitment::set_commitment(c.compress(), d.compress())
@@ -84,7 +84,7 @@ impl ElGamalCommitment {
         bl_scalar: Scalar,
     ) -> Result<(), &'static str> {
         if self.d
-            == (&(&bl_scalar * &RISTRETTO_BASEPOINT_TABLE)
+            == (&(RistrettoPoint::mul_base(&bl_scalar))
                 + &(&pr.0 * &self.c.decompress().ok_or("Error::Decompression Failed")?))
                 .compress()
         {
@@ -167,12 +167,11 @@ impl ElGamalCommitment {
 ///
 /// The scalar value if found, or `None` if not found.
 fn brute_force_decrypt(encrypted_key: RistrettoPoint) -> Option<Scalar> {
-    let basepoint = RISTRETTO_BASEPOINT_TABLE;
     let u64_max = u64::MAX;
     let mut scalar: Scalar;
     for val in 0..u64_max {
         scalar = Scalar::from(val);
-        let decrypted_point = &basepoint * &scalar;
+        let decrypted_point = RistrettoPoint::mul_base(&scalar);
 
         if decrypted_point == encrypted_key {
             return Some(scalar);
@@ -242,15 +241,12 @@ impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCommitment {
 /// Returns an error if the input is not 32 bytes or the point is invalid.
 fn slice_to_point(data: &[u8]) -> Result<CompressedRistretto, &'static str> {
     if data.len() != 32 {
-        return Err("Invalid Length");
+        return Err("Invalid slice length for compressed ristretto point. Should be 32 bytes");
     }
-    let pt = CompressedRistretto::from_slice(&data);
-    match pt.decompress() {
-        Some(_) => (),
-        None => {
-            return Err("InvalidPoint");
-        }
-    };
+    let pt =
+        CompressedRistretto::from_slice(&data).map_err(|_| "Invalid compressed ristretto point")?;
+    pt.decompress()
+        .ok_or("Invalid compressed ristretto point")?;
     Ok(pt)
 }
 

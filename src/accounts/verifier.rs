@@ -964,7 +964,7 @@ mod test {
             let comm_scalar = Scalar::random(&mut OsRng);
 
             let updated_account =
-                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
+                Account::update_account(acc, Scalar::ZERO, updated_keys_scalar, comm_scalar);
 
             account_vector.push(updated_account);
         }
@@ -1030,7 +1030,7 @@ mod test {
             let comm_scalar = Scalar::random(&mut OsRng);
 
             let updated_account =
-                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
+                Account::update_account(acc, Scalar::ZERO, updated_keys_scalar, comm_scalar);
 
             updated_accounts.push(updated_account);
         }
@@ -1084,7 +1084,7 @@ mod test {
             let (acc, _) = Account::generate_random_account_with_value(Scalar::from(10u64));
 
             let updated_account =
-                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
+                Account::update_account(acc, Scalar::ZERO, updated_keys_scalar, comm_scalar);
             accounts.push(acc);
             updated_accounts.push(updated_account);
         }
@@ -1507,7 +1507,7 @@ mod test {
             let comm_scalar = Scalar::random(&mut OsRng);
 
             let updated_account =
-                Account::update_account(acc, Scalar::zero(), updated_keys_scalar, comm_scalar);
+                Account::update_account(acc, Scalar::ZERO, updated_keys_scalar, comm_scalar);
 
             account_vector.push(updated_account);
         }

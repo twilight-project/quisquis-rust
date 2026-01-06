@@ -10,12 +10,13 @@ use crate::{accounts::Account, ristretto::RistrettoPublicKey, ristretto::Ristret
 //use bulletproofs::r1cs::*;
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_TABLE, ristretto::CompressedRistretto, scalar::Scalar,
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
 };
 use merlin::Transcript;
 use rand::thread_rng;
 // use serde::{Deserialize, Serialize};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 /// Enum for representing different types of sigma proofs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SigmaProof {
@@ -171,7 +172,7 @@ impl<'a> Prover<'a> {
 
         let gv_doubledash = v_doubledash_vector
             .iter()
-            .map(|vd| &RISTRETTO_BASEPOINT_TABLE * vd)
+            .map(|vd| RistrettoPoint::mul_base(vd))
             .collect::<Vec<_>>();
 
         let h_delta_r1_dash = delta_accounts
@@ -811,7 +812,7 @@ impl<'a> Prover<'a> {
 
         // lets create f_encrypted
 
-        let gv_doubledash = &RISTRETTO_BASEPOINT_TABLE * &v_doubledash;
+        let gv_doubledash = RistrettoPoint::mul_base(&v_doubledash);
 
         let h_delta_r1_dash = enc_account.pk.grsk.decompress().unwrap() * &r1_dash;
 

@@ -13,7 +13,7 @@ use curve25519_dalek::{
 };
 
 // use serde::{Deserialize, Serialize};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 /// Statement for a DDH proof, containing the resulting points after exponentiation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DDHStatement {

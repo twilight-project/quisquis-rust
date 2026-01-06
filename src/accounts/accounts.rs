@@ -10,7 +10,7 @@ use crate::{
 };
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use rand::rngs::OsRng;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// A privacy-preserving account in the Quisquis protocol.
 ///
@@ -42,7 +42,7 @@ use serde_derive::{Deserialize, Serialize};
 /// let (account, commitment_scalar) = Account::generate_account(public_key);
 ///
 /// // Verify the account
-/// assert!(account.verify_account(&secret_key, Scalar::zero()).is_ok());
+/// assert!(account.verify_account(&secret_key, Scalar::ZERO).is_ok());
 /// ```
 #[derive(Clone, Debug, Serialize, Deserialize, Copy)]
 pub struct Account {
@@ -68,7 +68,7 @@ impl Account {
     /// The commitment uses a random scalar for privacy, which is returned alongside the account.
     pub fn generate_account(pk: RistrettoPublicKey) -> (Account, Scalar) {
         let comm_scalar = Scalar::random(&mut OsRng);
-        let comm = ElGamalCommitment::generate_commitment(&pk, comm_scalar, Scalar::zero());
+        let comm = ElGamalCommitment::generate_commitment(&pk, comm_scalar, Scalar::ZERO);
         let account = Account::set_account(pk, comm);
         (account, comm_scalar)
     }
@@ -180,7 +180,7 @@ impl Account {
         for i in 0..9 {
             updated_accounts.push(Account::update_account(
                 accounts[i],
-                Scalar::zero(),
+                Scalar::ZERO,
                 updated_keys_scalar[i],
                 generate_commitment_scalar[i],
             ));
@@ -362,6 +362,11 @@ impl PartialEq for Account {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        keys::{PublicKey, SecretKey},
+        ristretto::{RistrettoPublicKey, RistrettoSecretKey},
+    };
+    use curve25519_dalek::ristretto::RistrettoPoint;
     use rand::rngs::OsRng;
     use std::i64;
     #[test]
@@ -402,16 +407,9 @@ mod test {
             updated_account
                 .decrypt_account_balance(&sk, 16u64.into())
                 .unwrap(),
-            (&bl_scalar * &RISTRETTO_BASEPOINT_TABLE).compress()
+            (RistrettoPoint::mul_base(&bl_scalar)).compress()
         );
     }
-
-    use crate::{
-        keys::{PublicKey, SecretKey},
-        ristretto::{RistrettoPublicKey, RistrettoSecretKey},
-    };
-    use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
-
     #[test]
     fn update_delta_account_test() {
         let generate_base_pk = RistrettoPublicKey::generate_base_pk();
@@ -522,7 +520,7 @@ mod test {
             3u64.into(),
             2u64.into(),
             1u64.into(),
-            Scalar::zero() - Scalar::from(5i64 as u64),
+            Scalar::ZERO - Scalar::from(5i64 as u64),
             -Scalar::from(5u64),
             0u64.into(),
             0u64.into(),

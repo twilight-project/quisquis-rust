@@ -33,7 +33,7 @@ use std::ops::{Sub, SubAssign};
 /// A `Polynomial` instance carrying the polynomial.
 fn create_1d_poly(a: Scalar, b: Scalar) -> Polynomial {
     let coeffiecient: Vec<Scalar> = vec![b, a];
-    if a == Scalar::zero() {
+    if a == Scalar::ZERO {
         Polynomial {
             coefficients: coeffiecient,
             degree: 0,
@@ -57,7 +57,7 @@ fn create_1d_poly(a: Scalar, b: Scalar) -> Polynomial {
 ///
 /// A `Polynomial` instance carrying the polynomial.
 fn create_n_degree_poly(a: Scalar, n: usize) -> Polynomial {
-    let mut coeff: Vec<Scalar> = vec![Scalar::zero(); n + 1];
+    let mut coeff: Vec<Scalar> = vec![Scalar::ZERO; n + 1];
     coeff[n] = a;
     Polynomial {
         coefficients: coeff,
@@ -92,7 +92,7 @@ impl Polynomial {
         let mut h_term: usize = 0;
 
         for i in 0..=self.degree {
-            if self.coefficients[i] == Scalar::zero() {
+            if self.coefficients[i] == Scalar::ZERO {
                 continue;
             } else {
                 h_term = i;
@@ -110,7 +110,7 @@ impl Polynomial {
     /// This ensures that `degree` accurately reflects the highest term with a non-zero coefficient.
     pub fn normalize(&mut self) {
         // Borrow mutably when you mutate the data, but don't want to consume it
-        let zero = Scalar::zero();
+        let zero = Scalar::ZERO;
         while *self.coefficients.last().unwrap() == zero {
             self.coefficients.pop();
             self.degree = self.degree - 1;
@@ -249,7 +249,7 @@ impl Polynomial {
         self.coefficients
             .iter()
             .rev()
-            .fold(Scalar::zero(), |acc, coeff| acc * x + coeff)
+            .fold(Scalar::ZERO, |acc, coeff| acc * x + coeff)
     }
     /// Applies this polynomial to each element of a scalar slice, returning a vector of results.
     ///
@@ -610,9 +610,9 @@ pub fn create_hadamard_proof(
     let x = Scalar::random(&mut OsRng);
 
     //Prover evaluates a_bar, b_bar, c_bar, r_bar, s_bar, t_bar, rho_bar
-    let mut a_bar: [Scalar; 3] = [Scalar::zero(), Scalar::zero(), Scalar::zero()];
-    let mut b_bar: [Scalar; 3] = [Scalar::zero(), Scalar::zero(), Scalar::zero()];
-    let mut c_bar: [Scalar; 3] = [Scalar::zero(), Scalar::zero(), Scalar::zero()];
+    let mut a_bar: [Scalar; 3] = [Scalar::ZERO, Scalar::ZERO, Scalar::ZERO];
+    let mut b_bar: [Scalar; 3] = [Scalar::ZERO, Scalar::ZERO, Scalar::ZERO];
+    let mut c_bar: [Scalar; 3] = [Scalar::ZERO, Scalar::ZERO, Scalar::ZERO];
     for i in 0..3
     // <dim
     {

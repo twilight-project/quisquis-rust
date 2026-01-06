@@ -29,7 +29,7 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 // use serde::{Deserialize, Serialize};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::iter;
 ///Multiexponential Proof
 ///
@@ -86,8 +86,8 @@ impl MultiexpoProof {
         let mut b_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(rng)).collect();
         let mut s_vec: Vec<_> = (0..2 * ROWS).map(|_| Scalar::random(rng)).collect();
         //explicitly set values at index m
-        b_vec[ROWS] = Scalar::zero();
-        s_vec[ROWS] = Scalar::zero();
+        b_vec[ROWS] = Scalar::ZERO;
+        s_vec[ROWS] = Scalar::ZERO;
 
         //compute Xtendedcomit on a_0
         let c_A_0 = xpc_gens.commit(&a_0, r_0).compress();
@@ -323,7 +323,7 @@ impl MultiexpoProof {
             r: r,
             b: bx,
             s: sx,
-            t: Scalar::zero(),
+            t: Scalar::ZERO,
         }
     }
     /// This method is for verifying the multiexponential proof for the committed scalars
@@ -462,7 +462,7 @@ impl MultiexpoProof {
     ) -> Result<(), &'static str> {
         //Check cA0,cB0,...,cB2m−1 ∈ G and E0,...,E2m−1 ∈ H and ~a ∈ Z_q^n
         //accept if cBm = comck(0; 0) and Em = C
-        let comit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
+        let comit_0_0 = pc_gens.commit(Scalar::ZERO, Scalar::ZERO);
         //assert_eq!(comit_0_0.compress(), self.c_B_k[ROWS]);
 
         if self.a_vec.len() == COLUMNS && comit_0_0.compress() == self.c_B_k[ROWS] {
@@ -592,7 +592,7 @@ impl MultiexpoProof {
         pk_GH: &RistrettoPublicKey,
     ) -> Result<(), &'static str> {
         //accept if cBm = comck(0; 0) and Em = C
-        let comit_0_0 = pc_gens.commit(Scalar::zero(), Scalar::zero());
+        let comit_0_0 = pc_gens.commit(Scalar::ZERO, Scalar::ZERO);
         if self.a_vec.len() == COLUMNS && comit_0_0.compress() == self.c_B_k[ROWS] {
             //checking E_m == C
             //recreate C on Verifier as C = prod of i..n {comit_i{x^i}}

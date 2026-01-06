@@ -35,25 +35,27 @@ bs58 = "0.4.0"
 array2d = "0.2.1"
 itertools = "0.10.1"
 serde = { version = "1.0", features=["derive"] }
-#serde = "1.0.131"
-#serde_derive = "1.0.131"
+
 serde_json = "1.0"
 curve25519-dalek = { version = "4", default-features = false, features = ["serde","rand_core", "alloc", "precomputed-tables"] }
-#curve25519-dalek = { version = "3", default-features = false }
-#[dependencies.ed25519-dalek]
-#version = "1"
+
 #bulletproofs = { version = "5.0.0", features = ["yoloproofs"] }
 [dependencies.bulletproofs]
-path = "../bulletproofs"
+# Using git dependency until 5.0.1+ is released to crates.io
+# Issue: 5.0.0 on crates.io has CtOption incompatibility with curve25519-dalek 4.x
+# Fix: Already merged in upstream but not yet released
+# TODO: Switch back to crates.io when 5.0.1+ is released
+git = "https://github.com/dalek-cryptography/bulletproofs.git"
+rev = "04bce4e66013ff857ed462fd4206210544101461"  # Replace with the commit hash that has the fix
 features = ["yoloproofs"]
+
 
 [features]
 debug_print = []  # Define a custom feature for enabling debug prints
 
 
 #[dependencies.bulletproofs]
-#git = "https://github.com/dalek-cryptography/bulletproofs"
-#branch = "develop"
+#path = "../bulletproofs"
 #features = ["yoloproofs"]
 
 [dependencies.zkschnorr]
